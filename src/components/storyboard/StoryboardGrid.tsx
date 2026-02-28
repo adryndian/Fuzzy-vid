@@ -1,5 +1,5 @@
 import useProjectStore from '../../store/projectStore';
-import { SceneCard } from '../scene/SceneCard';
+import SceneCard from '../scene/SceneCard';
 import { GlassCard } from '../glass/GlassCard';
 
 export const StoryboardGrid = () => {

@@ -1,107 +1,43 @@
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
-import useProjectStore from '../store/projectStore';
-import type { VideoModel, Scene } from '../types/schema';
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { api } from '../lib/api'
+import type { VideoModel } from '../types/schema'
 
-// --- Types ---
-interface GenerateVideoParams {
-  image_r2_key: string;
-  model: VideoModel;
-  project_id: string;
-  scene_id: number;
-}
-
-interface GenerateVideoResponse {
-  jobId: string;
+interface GenerateVideoProps {
+  project_id: string
+  scene_id: number
+  video_prompt: unknown
+  model: VideoModel
+  image_r2_key: string
 }
 
 interface VideoStatusResponse {
-  status: 'pending' | 'generating' | 'done' | 'failed';
-  r2Key?: string;
-  progress?: number;
-  error?: string;
+  status: 'processing' | 'done' | 'failed'
+  r2_key?: string
+  video_url?: string
+  error?: string
 }
 
-// --- API Functions ---
-const generateVideo = async (params: GenerateVideoParams): Promise<GenerateVideoResponse> => {
-  return api.post('/api/video/generate', params);
-};
+export function useVideoGenerate() {
+  const mutation = useMutation({
+    mutationFn: async (props: GenerateVideoProps) => {
+      return api.post('/api/video/generate', props) as Promise<{ job_id: string }>
+    }
+  })
 
-const getVideoStatus = async (jobId: string | null): Promise<VideoStatusResponse> => {
-  if (!jobId) return { status: 'pending' };
-  return api.get(`/api/video/status/${jobId}`);
-};
+  return { generate: mutation.mutate, isLoading: mutation.isPending, error: mutation.error, jobId: mutation.data?.job_id }
+}
 
-// --- Hook ---
-export const useVideoGeneration = (sceneId: number) => {
-  const queryClient = useQueryClient();
-  const { updateScene, project } = useProjectStore();
-  const [jobId, setJobId] = useState<string | null>(null);
-
-  const scene = project?.scenes.find(s => s.scene_id === sceneId);
-
-  const mutation = useMutation<GenerateVideoResponse, Error, GenerateVideoParams>({ 
-    mutationFn: generateVideo,
-    onSuccess: (data) => {
-      setJobId(data.jobId);
-      if (scene) {
-        updateScene(sceneId, { 
-          status: { ...scene.status, video: 'generating' } 
-        });
-      }
-      queryClient.invalidateQueries({ queryKey: ['video-status', data.jobId] });
-    },
-    onError: (error) => {
-      console.error("Video generation failed to start:", error);
-      if (scene) {
-        updateScene(sceneId, { 
-          status: { ...scene.status, video: 'failed' } 
-        });
-      }
-    },
-  });
-
-  const { data: statusData, ...query } = useQuery<VideoStatusResponse, Error>({
+export function useVideoStatus(jobId: string | undefined, enabled: boolean) {
+  const query = useQuery({
     queryKey: ['video-status', jobId],
-    queryFn: () => getVideoStatus(jobId),
-    enabled: !!jobId && scene?.status.video === 'generating',
+    queryFn: () => api.get(`/api/video/status/${jobId}`) as Promise<VideoStatusResponse>,
+    enabled: !!jobId && enabled,
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      if (status === 'done' || status === 'failed') {
-        return false; // Stop polling
-      }
-      return 30000; // Poll every 30 seconds for video
-    },
-    refetchIntervalInBackground: true,
-    onSuccess: (data) => {
-      if (data.status === 'done' && data.r2Key) {
-        const presignedUrl = `/api/storage/presign?key=${data.r2Key}`;
-        if (scene) {
-            updateScene(sceneId, {
-                status: { ...scene.status, video: 'done' },
-                assets: { ...scene.assets, video_url: presignedUrl, video_r2_key: data.r2Key }
-            });
-        }
-        setJobId(null);
-      } else if (data.status === 'failed') {
-        console.error('Video generation failed:', data.error);
-        if (scene) {
-            updateScene(sceneId, { 
-              status: { ...scene.status, video: 'failed' } 
-            });
-        }
-        setJobId(null);
-      }
-    },
-  });
+      const data = query.state.data
+      if (data?.status === 'done' || data?.status === 'failed') return false
+      return 30000
+    }
+  })
 
-  return {
-    generate: mutation.mutate,
-    isStarting: mutation.isPending,
-    isGenerating: query.isLoading && scene?.status.video === 'generating',
-    progress: statusData?.progress,
-    status: scene?.status.video,
-    ...query,
-  };
-};
+  return query
+}

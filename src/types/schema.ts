@@ -11,6 +11,7 @@ export type Mood =
 export type BrainModel = 'gemini' | 'llama4_maverick' | 'claude_sonnet'
 export type ImageModel = 'gemini' | 'nova_canvas' | 'titan_v2'
 export type VideoModel = 'nova_reel' | 'runway_gen4' | 'runway_gen4_turbo'
+export type VoiceGender = 'male' | 'female'
 export type AudioModel = 'polly' | 'gemini_tts' | 'elevenlabs'
 
 export type AWSRegion = 

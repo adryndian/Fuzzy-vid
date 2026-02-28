@@ -6,7 +6,7 @@ import useSettingsStore from '../../../store/settingsStore';
 import { Button } from '../../ui/button'; // Corrected import path
 import { Image, Loader, Check, AlertTriangle } from 'lucide-react';
 import { GlassCard } from '../../glass/GlassCard';
-import { ImageSkeleton } from '../../skeletons/ImageSkeleton';
+import ImageSkeleton from '../../skeletons/ImageSkeleton';
 
 interface ImageTabProps {
   scene: Scene;

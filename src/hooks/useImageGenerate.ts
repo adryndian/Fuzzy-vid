@@ -1,110 +1,46 @@
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/api';
-import useProjectStore from '../store/projectStore';
-import type { ImageModel, Scene, AWSRegion } from '../types/schema';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { api } from '../lib/api'
+import type { ImageModel } from '../types/schema'
 
-// --- Types ---
-interface GenerateImageParams {
-  scene: Scene;
-  projectId: string;
-  imageModel: ImageModel;
-  awsRegion: AWSRegion; // Or get from settings store
-}
-
-interface GenerateImageResponse {
-  jobId: string;
+interface GenerateImageProps {
+  project_id: string
+  scene_id: number
+  image_prompt: unknown
+  model: ImageModel
+  character_ref_url?: string
 }
 
 interface ImageStatusResponse {
-  status: 'pending' | 'generating' | 'done' | 'failed';
-  r2Key?: string;
-  error?: string;
+  status: 'processing' | 'done' | 'failed'
+  r2_key?: string
+  image_url?: string
+  error?: string
 }
 
-// --- API Functions ---
-const generateImage = async (params: GenerateImageParams): Promise<GenerateImageResponse> => {
-  return api.post('/api/image/generate', params);
-};
+export function useImageGenerate() {
+  const queryClient = useQueryClient()
 
-const getImageStatus = async (jobId: string | null): Promise<ImageStatusResponse> => {
-  if (!jobId) return { status: 'pending' };
-  return api.get(`/api/image/status/${jobId}`);
-};
+  const mutation = useMutation({
+    mutationFn: async (props: GenerateImageProps) => {
+      return api.post('/api/image/generate', props) as Promise<{ job_id: string }>
+    }
+  })
 
-// --- Hook ---
-export const useImageGeneration = (sceneId: number) => {
-  const queryClient = useQueryClient();
-  const { updateScene, project } = useProjectStore();
-  const [jobId, setJobId] = useState<string | null>(null);
+  return { generate: mutation.mutate, isLoading: mutation.isPending, error: mutation.error, jobId: mutation.data?.job_id }
+}
 
-  const scene = project?.scenes.find(s => s.scene_id === sceneId)
-
-  // Mutation to *start* the image generation job
-  const mutation = useMutation<GenerateImageResponse, Error, GenerateImageParams>({ 
-    mutationFn: generateImage,
-    onSuccess: (data) => {
-      setJobId(data.jobId);
-      // Immediately update scene status to generating
-      if(scene) {
-        updateScene(sceneId, { 
-          status: { ...scene.status, image: 'generating' } 
-        });
-      }
-      queryClient.invalidateQueries({ queryKey: ['image-status', data.jobId] });
-    },
-    onError: (error) => {
-      console.error("Image generation failed to start:", error);
-      if(scene) {
-        updateScene(sceneId, { 
-          status: { ...scene.status, image: 'failed' } 
-        });
-      }
-    },
-  });
-
-  // Query to *poll* the job status
-  const { data: statusData, ...query } = useQuery<ImageStatusResponse, Error>({
+export function useImageStatus(jobId: string | undefined, enabled: boolean) {
+  const query = useQuery({
     queryKey: ['image-status', jobId],
-    queryFn: () => getImageStatus(jobId),
-    enabled: !!jobId && scene?.status.image === 'generating',
+    queryFn: () => api.get(`/api/image/status/${jobId}`) as Promise<ImageStatusResponse>,
+    enabled: !!jobId && enabled,
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      if (status === 'done' || status === 'failed') {
-        return false; // Stop polling
-      }
-      return 5000; // Poll every 5 seconds
-    },
-    refetchIntervalInBackground: true,
-    onSuccess: (data) => {
-      if (data.status === 'done' && data.r2Key) {
-        // On successful completion, update the scene in the store
-        const presignedUrl = `/api/storage/presign?key=${data.r2Key}`;
-        if(scene) {
-            updateScene(sceneId, {
-                status: { ...scene.status, image: 'done' },
-                assets: { ...scene.assets, image_url: presignedUrl, image_r2_key: data.r2Key }
-            });
-        }
-        setJobId(null); // Clear job ID
-      } else if (data.status === 'failed') {
-        // On failure, update the scene and log the error
-        console.error('Image generation failed:', data.error);
-        if(scene) {
-            updateScene(sceneId, { 
-                status: { ...scene.status, image: 'failed' } 
-            });
-        }
-        setJobId(null); // Clear job ID
-      }
-    },
-  });
+      const data = query.state.data
+      if (data?.status === 'done' || data?.status === 'failed') return false
+      return 5000
+    }
+  })
 
-  return {
-    generate: mutation.mutate,
-    isStarting: mutation.isPending,
-    isGenerating: query.isLoading && scene?.status.image === 'generating',
-    status: scene?.status.image,
-    ...query,
-  };
-};
+  return query
+}
