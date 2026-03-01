@@ -3,10 +3,14 @@
 // Based on https://github.com/Cloudflare/workers-sdk/blob/main/templates/worker-aws-s3-presigned-urls/src/aws.ts
 
 function encodeURIPath(path: string): string {
-  return path
+  // Decode first to prevent double-encoding
+  const decodedPath = decodeURIComponent(path);
+  return decodedPath
     .split('/')
     .map(segment => 
       encodeURIComponent(segment)
+        // AWS requires encoding these characters which encodeURIComponent ignores
+        .replace(/[!*'()]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
         .replace(/%3A/gi, ':')  // keep colon literal
         .replace(/%2F/gi, '/')  // keep slash literal
     )

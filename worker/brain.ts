@@ -154,7 +154,7 @@ Language: ${narasi_language}
               // Use Claude as primary (also fallback for gemini when Gemini is down)
               responseText = await callBedrock(
                 creds,
-                'us.anthropic.claude-sonnet-4-6-20251001-v1:0',
+                'us.anthropic.claude-sonnet-4-6',
                 prompt,
                 systemPrompt
               )
@@ -163,7 +163,7 @@ Language: ${narasi_language}
             } else {
               responseText = await callBedrock(
                 creds,
-                'us.anthropic.claude-sonnet-4-6-20251001-v1:0',
+                'us.anthropic.claude-sonnet-4-6',
                 prompt,
                 systemPrompt
               )
