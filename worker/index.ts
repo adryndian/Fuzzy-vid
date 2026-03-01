@@ -1,6 +1,7 @@
 export interface Env {
   JOB_STATUS: KVNamespace;
   STORY_STORAGE: R2Bucket;
+  ASSETS: { fetch: typeof fetch };
   GEMINI_API_KEY: string;
   AWS_ACCESS_KEY_ID: string;
   AWS_SECRET_ACCESS_KEY: string;
@@ -99,11 +100,16 @@ export default {
         response = await handleStorageRequest(request, env, url, ctx, creds)
       }
       // Health check
-      else if (path === '/api/health' || path === '/') {
+      else if (path === '/api/health') {
         response = Response.json({ status: 'ok', worker: 'fuzzy-vid-worker' })
       }
-      else {
+      // API 404
+      else if (path.startsWith('/api/')) {
         response = Response.json({ error: 'Not Found', path }, { status: 404 })
+      }
+      // SPA fallback — serve index.html for all non-API routes
+      else {
+        response = await env.ASSETS.fetch(new Request(new URL('/', request.url), request))
       }
     } catch (error) {
       console.error('Worker error:', error)

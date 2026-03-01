@@ -16,3 +16,7 @@ preview_id = "fc732a268ca9435b8de8e50f34a35365"
 ENVIRONMENT = "production"
 
 workers_dev = true
+
+[assets]
+binding = "ASSETS"
+not_found_handling = "single-page-application"
