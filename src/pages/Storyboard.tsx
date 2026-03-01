@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import type { SceneAssets, SceneAssetsMap, GenerationStatus } from '../types/schema'
 import { defaultSceneAssets } from '../types/schema'
-import { generateImage, generateVideo, generateAudio } from '../lib/api'
+import { generateImage, generateVideo, generateAudio, checkVideoStatus } from '../lib/api'
 import { useHistoryStore } from '../store/historyStore'
 import { useCostStore } from '../store/costStore'
 import { estimateImageCost, estimateVideoCost, estimateAudioCost, formatCost } from '../lib/costEstimate'
@@ -15,11 +15,20 @@ export function Storyboard() {
   const [language, setLanguage] = useState('id')
   const [rawJson, setRawJson] = useState('')
   const [imageModel, setImageModel] = useState<'nova_canvas' | 'titan_v2'>('nova_canvas')
+  const [audioEngine, setAudioEngine] = useState<'polly' | 'elevenlabs'>('polly')
+
+  // Cost tracker UI state
+  const [costExpanded, setCostExpanded] = useState(false)
+  const [costFilter, setCostFilter] = useState<string | null>(null)
+
+  // Video polling refs
+  const videoPollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({})
 
   // Cost tracking
   const addCostEntry = useCostStore((s) => s.addEntry)
   const sessionTotal = useCostStore((s) => s.sessionTotal)
   const costEntries = useCostStore((s) => s.entries)
+  const clearSession = useCostStore((s) => s.clearSession)
 
   // History integration
   const historyItems = useHistoryStore((s) => s.items)
@@ -42,6 +51,13 @@ export function Storyboard() {
     })
     toast.success('Saved to history')
   }
+
+  // Cleanup polling intervals on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(videoPollingRefs.current).forEach(clearInterval)
+    }
+  }, [])
 
   useEffect(() => {
     const raw = sessionStorage.getItem('storyboard_result')
@@ -66,6 +82,15 @@ export function Storyboard() {
         const keys = JSON.parse(stored)
         if (keys.language) setLanguage(keys.language)
       }
+      // Read model selections from Home page
+      const storedImageModel = sessionStorage.getItem('fuzzy_gen_imageModel')
+      if (storedImageModel === 'nova_canvas' || storedImageModel === 'titan_v2') {
+        setImageModel(storedImageModel)
+      }
+      const storedAudioModel = sessionStorage.getItem('fuzzy_gen_audioModel')
+      if (storedAudioModel === 'polly' || storedAudioModel === 'elevenlabs') {
+        setAudioEngine(storedAudioModel)
+      }
     } catch { navigate('/') }
   }, [navigate])
 
@@ -75,6 +100,65 @@ export function Storyboard() {
       [sceneNum]: { ...(prev[sceneNum] || defaultSceneAssets()), ...update }
     }))
   }
+
+  // --- Copy helper ---
+  const handleCopy = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('Copied!')
+    } catch {
+      toast.error('Copy failed')
+    }
+  }, [])
+
+  // --- Download helper ---
+  const handleDownload = useCallback(async (url: string, filename: string) => {
+    toast('Downloading...', { icon: '⬇️', duration: 2000 })
+    try {
+      const res = await fetch(url)
+      const blob = await res.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objectUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(objectUrl)
+      toast.success('Downloaded!')
+    } catch {
+      toast.error('Download failed')
+    }
+  }, [])
+
+  // --- Video polling ---
+  const pollVideoStatus = useCallback((sceneNum: number, jobId: string) => {
+    // Clear any existing poll for this scene
+    if (videoPollingRefs.current[sceneNum]) {
+      clearInterval(videoPollingRefs.current[sceneNum])
+    }
+    const interval = setInterval(async () => {
+      try {
+        const result = await checkVideoStatus(jobId)
+        if (result.status === 'done' && result.video_url) {
+          clearInterval(videoPollingRefs.current[sceneNum])
+          delete videoPollingRefs.current[sceneNum]
+          updateAsset(sceneNum, { videoStatus: 'done', videoUrl: result.video_url, videoJobId: jobId })
+          toast.success(`Scene ${sceneNum} video ready!`)
+        } else if (result.status === 'failed') {
+          clearInterval(videoPollingRefs.current[sceneNum])
+          delete videoPollingRefs.current[sceneNum]
+          updateAsset(sceneNum, { videoStatus: 'error', videoError: result.message || 'Video generation failed', videoJobId: jobId })
+          toast.error(`Scene ${sceneNum} video failed`)
+        }
+        // If still 'processing', keep polling
+      } catch {
+        // Network error — keep polling, don't kill it
+      }
+    }, 8000)
+    videoPollingRefs.current[sceneNum] = interval
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleGenerateImage = async (scene: Record<string, unknown>) => {
     const sceneNum = scene.scene_number as number
@@ -116,9 +200,21 @@ export function Storyboard() {
         aspect_ratio: (data.aspect_ratio as string) || '9_16',
       })
       const vidCost = estimateVideoCost()
-      updateAsset(sceneNum, { videoStatus: 'done', videoUrl: result.video_url })
       addCostEntry({ service: 'video', model: 'Nova Reel', cost: vidCost })
-      toast.success(`Scene ${sceneNum} video started · ${formatCost(vidCost)}`)
+
+      if (result.video_url) {
+        // Synchronous result (unlikely for Nova Reel, but handle it)
+        updateAsset(sceneNum, { videoStatus: 'done', videoUrl: result.video_url })
+        toast.success(`Scene ${sceneNum} video ready · ${formatCost(vidCost)}`)
+      } else if (result.job_id) {
+        // Async — start polling
+        updateAsset(sceneNum, { videoStatus: 'generating', videoJobId: result.job_id })
+        toast(`Scene ${sceneNum} video started · polling every 8s`, { icon: '🎬', duration: 4000 })
+        pollVideoStatus(sceneNum, result.job_id)
+      } else {
+        updateAsset(sceneNum, { videoStatus: 'error', videoError: 'No job_id or video_url returned' })
+        toast.error('Video generation returned no job ID')
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       updateAsset(sceneNum, { videoStatus: 'error', videoError: msg })
@@ -140,11 +236,12 @@ export function Storyboard() {
         language,
         scene_number: sceneNum,
         project_id: (data.project_id as string) || 'storyboard',
-        engine: 'polly',
+        engine: audioEngine,
       })
-      const audCost = estimateAudioCost('polly', text.length)
+      const audCost = estimateAudioCost(audioEngine, text.length)
+      const modelLabel = audioEngine === 'elevenlabs' ? 'ElevenLabs' : 'Polly'
       updateAsset(sceneNum, { audioStatus: 'done', audioUrl: result.audio_url })
-      addCostEntry({ service: 'audio', model: 'Polly', cost: audCost })
+      addCostEntry({ service: 'audio', model: modelLabel, cost: audCost })
       toast.success(`Scene ${sceneNum} audio ready · ${formatCost(audCost)}`)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
@@ -177,7 +274,7 @@ export function Storyboard() {
     overflow: 'hidden',
   }
 
-  const statusBadge = (status: GenerationStatus, label: string) => {
+  const statusBadge = (status: GenerationStatus, label: string, isVideoPolling = false) => {
     const colors: Record<GenerationStatus, string> = {
       idle: 'rgba(239,225,207,0.3)',
       generating: '#F05A25',
@@ -191,7 +288,7 @@ export function Storyboard() {
         textTransform: 'uppercase',
         letterSpacing: '0.08em',
       }}>
-        {status === 'generating' ? 'Generating...' :
+        {status === 'generating' ? (isVideoPolling ? 'Generating (2-5 min)...' : 'Generating...') :
          status === 'done' ? `${label} Ready` :
          status === 'error' ? 'Failed' : label}
       </span>
@@ -226,6 +323,33 @@ export function Storyboard() {
        status === 'done' ? 'Re-generate' : label}
     </button>
   )
+
+  const smallIconBtn: React.CSSProperties = {
+    padding: '4px 10px',
+    borderRadius: '8px',
+    border: '1px solid rgba(255,255,255,0.1)',
+    background: 'rgba(255,255,255,0.06)',
+    color: 'rgba(239,225,207,0.6)',
+    fontSize: '11px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  }
+
+  // Cost tracker data
+  const serviceTotals: Record<string, number> = {}
+  const serviceColors: Record<string, string> = {
+    Brain: '#3FA9F6',
+    image: '#F05A25',
+    video: '#4ade80',
+    audio: '#A855F7',
+  }
+  for (const e of costEntries) {
+    serviceTotals[e.service] = (serviceTotals[e.service] || 0) + e.cost
+  }
+  const filteredEntries = costFilter
+    ? costEntries.filter(e => e.service === costFilter)
+    : costEntries
 
   return (
     <div style={page}>
@@ -275,43 +399,118 @@ export function Storyboard() {
         <span style={{ fontSize: '20px' }}>🎬</span>
       </div>
 
-      {/* Cost Tracker Bar */}
-      {costEntries.length > 0 && (() => {
-        const imageCost = costEntries.filter(e => e.service === 'image').reduce((s, e) => s + e.cost, 0)
-        const videoCost = costEntries.filter(e => e.service === 'video').reduce((s, e) => s + e.cost, 0)
-        const audioCost = costEntries.filter(e => e.service === 'audio').reduce((s, e) => s + e.cost, 0)
-        return (
-          <div style={{
-            background: 'rgba(15,20,35,0.85)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            borderBottom: '1px solid rgba(240,90,37,0.2)',
-            padding: '8px 16px',
-            display: 'flex', alignItems: 'center', gap: '16px',
-            flexWrap: 'wrap',
-            fontSize: '12px',
-          }}>
+      {/* Interactive Cost Tracker */}
+      {costEntries.length > 0 && (
+        <div style={{
+          background: 'rgba(15,20,35,0.85)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          borderBottom: '1px solid rgba(240,90,37,0.2)',
+        }}>
+          {/* Summary bar — always visible, clickable */}
+          <div
+            onClick={() => setCostExpanded(!costExpanded)}
+            style={{
+              padding: '8px 16px',
+              display: 'flex', alignItems: 'center', gap: '12px',
+              flexWrap: 'wrap',
+              fontSize: '12px',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+          >
             <span style={{ color: '#F05A25', fontWeight: 700 }}>
               Session: {formatCost(sessionTotal)}
             </span>
-            {imageCost > 0 && (
-              <span style={{ color: 'rgba(239,225,207,0.5)' }}>
-                Image: {formatCost(imageCost)}
-              </span>
-            )}
-            {videoCost > 0 && (
-              <span style={{ color: 'rgba(239,225,207,0.5)' }}>
-                Video: {formatCost(videoCost)}
-              </span>
-            )}
-            {audioCost > 0 && (
-              <span style={{ color: 'rgba(239,225,207,0.5)' }}>
-                Audio: {formatCost(audioCost)}
-              </span>
-            )}
+            {Object.entries(serviceTotals).map(([svc, total]) => (
+              <button
+                key={svc}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setCostFilter(prev => prev === svc ? null : svc)
+                }}
+                style={{
+                  padding: '2px 8px', borderRadius: '10px',
+                  border: `1px solid ${costFilter === svc ? (serviceColors[svc] || '#EFE1CF') : 'rgba(255,255,255,0.1)'}`,
+                  background: costFilter === svc ? `${serviceColors[svc] || '#EFE1CF'}22` : 'rgba(255,255,255,0.04)',
+                  color: serviceColors[svc] || 'rgba(239,225,207,0.5)',
+                  fontSize: '11px', fontWeight: 500, cursor: 'pointer',
+                }}
+              >
+                {svc}: {formatCost(total)}
+              </button>
+            ))}
+            <span style={{ marginLeft: 'auto', color: 'rgba(239,225,207,0.35)', fontSize: '10px' }}>
+              {costExpanded ? '▲ collapse' : '▼ details'}
+            </span>
           </div>
-        )
-      })()}
+
+          {/* Expanded detail panel */}
+          {costExpanded && (
+            <div style={{
+              padding: '0 16px 12px',
+              maxHeight: '240px',
+              overflowY: 'auto',
+            }}>
+              {costFilter && (
+                <div style={{ marginBottom: '8px' }}>
+                  <button
+                    onClick={() => setCostFilter(null)}
+                    style={{
+                      ...smallIconBtn,
+                      fontSize: '10px',
+                      color: '#3FA9F6',
+                      borderColor: 'rgba(63,169,246,0.3)',
+                    }}
+                  >
+                    Show All
+                  </button>
+                </div>
+              )}
+              {[...filteredEntries].reverse().map((entry, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '5px 0',
+                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  fontSize: '11px',
+                }}>
+                  <span style={{ color: 'rgba(239,225,207,0.3)', fontSize: '10px', minWidth: '50px' }}>
+                    {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  <span style={{
+                    padding: '1px 6px', borderRadius: '6px',
+                    background: `${serviceColors[entry.service] || '#EFE1CF'}18`,
+                    color: serviceColors[entry.service] || '#EFE1CF',
+                    fontSize: '10px', fontWeight: 600,
+                  }}>
+                    {entry.service}
+                  </span>
+                  <span style={{ color: 'rgba(239,225,207,0.5)', flex: 1 }}>
+                    {entry.model}
+                  </span>
+                  <span style={{ color: '#EFE1CF', fontWeight: 600 }}>
+                    {formatCost(entry.cost)}
+                  </span>
+                </div>
+              ))}
+              <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => { clearSession(); setCostExpanded(false); setCostFilter(null) }}
+                  style={{
+                    padding: '5px 12px', borderRadius: '8px',
+                    border: '1px solid rgba(248,113,113,0.3)',
+                    background: 'rgba(248,113,113,0.1)',
+                    color: '#f87171',
+                    fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  Clear Session
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ padding: '20px 16px 0', maxWidth: '720px', margin: '0 auto' }}>
 
@@ -349,6 +548,7 @@ export function Storyboard() {
           const hasImage = sceneAsset.imageStatus === 'done' && sceneAsset.imageUrl
           const hasVideo = sceneAsset.videoStatus === 'done' && sceneAsset.videoUrl
           const hasAudio = sceneAsset.audioStatus === 'done' && sceneAsset.audioUrl
+          const isVideoPolling = sceneAsset.videoStatus === 'generating' && !!sceneAsset.videoJobId
 
           return (
             <div key={sceneNum} style={glassCard}>
@@ -389,9 +589,16 @@ export function Storyboard() {
 
                 {/* Image Prompt */}
                 <div style={{ marginBottom: '12px' }}>
-                  <p style={{ color: 'rgba(239,225,207,0.4)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px', margin: '0 0 4px' }}>
-                    Image Prompt
-                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <p style={{ color: 'rgba(239,225,207,0.4)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                      Image Prompt
+                    </p>
+                    {scene.image_prompt && (
+                      <button onClick={() => handleCopy(scene.image_prompt as string)} style={smallIconBtn}>
+                        Copy
+                      </button>
+                    )}
+                  </div>
                   <p style={{ color: 'rgba(239,225,207,0.75)', fontSize: '12px', lineHeight: '1.5', margin: 0 }}>
                     {scene.image_prompt as string}
                   </p>
@@ -400,9 +607,14 @@ export function Storyboard() {
                 {/* Narration */}
                 {narration && (
                   <div style={{ marginBottom: '16px' }}>
-                    <p style={{ color: 'rgba(239,225,207,0.4)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px', margin: '0 0 4px' }}>
-                      Narration VO
-                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <p style={{ color: 'rgba(239,225,207,0.4)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                        Narration VO
+                      </p>
+                      <button onClick={() => handleCopy(narration)} style={smallIconBtn}>
+                        Copy
+                      </button>
+                    </div>
                     <p style={{ color: '#EFE1CF', fontSize: '13px', lineHeight: '1.6', fontStyle: 'italic', margin: 0 }}>
                       "{narration}"
                     </p>
@@ -426,15 +638,25 @@ export function Storyboard() {
                   </div>
 
                   {hasImage && (
-                    <img
-                      src={sceneAsset.imageUrl}
-                      alt={`Scene ${sceneNum}`}
-                      style={{
-                        width: '100%', borderRadius: '10px',
-                        marginBottom: '10px', display: 'block',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                      }}
-                    />
+                    <>
+                      <img
+                        src={sceneAsset.imageUrl}
+                        alt={`Scene ${sceneNum}`}
+                        style={{
+                          width: '100%', borderRadius: '10px',
+                          marginBottom: '8px', display: 'block',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                        }}
+                      />
+                      <div style={{ marginBottom: '10px' }}>
+                        <button
+                          onClick={() => handleDownload(sceneAsset.imageUrl!, `scene-${sceneNum}-image.png`)}
+                          style={smallIconBtn}
+                        >
+                          Download PNG
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   {sceneAsset.imageError && (
@@ -482,20 +704,48 @@ export function Storyboard() {
                     </div>
                     {!hasImage
                       ? <span style={{ color: 'rgba(239,225,207,0.3)', fontSize: '10px' }}>Generate image first</span>
-                      : statusBadge(sceneAsset.videoStatus, 'Video')
+                      : statusBadge(sceneAsset.videoStatus, 'Video', isVideoPolling)
                     }
                   </div>
 
                   {hasVideo && (
-                    <video
-                      src={sceneAsset.videoUrl}
-                      controls
-                      style={{
-                        width: '100%', borderRadius: '10px',
-                        marginBottom: '10px', display: 'block',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                      }}
-                    />
+                    <>
+                      <video
+                        src={sceneAsset.videoUrl}
+                        controls
+                        style={{
+                          width: '100%', borderRadius: '10px',
+                          marginBottom: '8px', display: 'block',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                        }}
+                      />
+                      <div style={{ marginBottom: '10px' }}>
+                        <button
+                          onClick={() => handleDownload(sceneAsset.videoUrl!, `scene-${sceneNum}-video.mp4`)}
+                          style={smallIconBtn}
+                        >
+                          Download MP4
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {isVideoPolling && !hasVideo && (
+                    <div style={{
+                      padding: '12px',
+                      background: 'rgba(63,169,246,0.08)',
+                      border: '1px solid rgba(63,169,246,0.15)',
+                      borderRadius: '10px',
+                      marginBottom: '10px',
+                      textAlign: 'center',
+                    }}>
+                      <div style={{ color: '#3FA9F6', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
+                        Generating video...
+                      </div>
+                      <div style={{ color: 'rgba(239,225,207,0.4)', fontSize: '11px' }}>
+                        Nova Reel takes 2-5 minutes. Polling every 8s.
+                      </div>
+                    </div>
                   )}
 
                   {sceneAsset.videoError && (
@@ -527,17 +777,29 @@ export function Storyboard() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '14px' }}>🎵</span>
                       <span style={{ color: '#EFE1CF', fontSize: '12px', fontWeight: 600 }}>Audio VO</span>
-                      <span style={{ color: 'rgba(239,225,207,0.3)', fontSize: '10px' }}>AWS Polly</span>
+                      <span style={{ color: 'rgba(239,225,207,0.3)', fontSize: '10px' }}>
+                        {audioEngine === 'elevenlabs' ? 'ElevenLabs' : 'AWS Polly'}
+                      </span>
                     </div>
                     {statusBadge(sceneAsset.audioStatus, 'Audio')}
                   </div>
 
                   {hasAudio && (
-                    <audio
-                      src={sceneAsset.audioUrl}
-                      controls
-                      style={{ width: '100%', marginBottom: '10px' }}
-                    />
+                    <>
+                      <audio
+                        src={sceneAsset.audioUrl}
+                        controls
+                        style={{ width: '100%', marginBottom: '8px' }}
+                      />
+                      <div style={{ marginBottom: '10px' }}>
+                        <button
+                          onClick={() => handleDownload(sceneAsset.audioUrl!, `scene-${sceneNum}-audio.mp3`)}
+                          style={smallIconBtn}
+                        >
+                          Download MP3
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   {sceneAsset.audioError && (
@@ -545,6 +807,24 @@ export function Storyboard() {
                       {sceneAsset.audioError}
                     </p>
                   )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                    {(['polly', 'elevenlabs'] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setAudioEngine(m)}
+                        style={{
+                          padding: '4px 10px', borderRadius: '20px',
+                          border: `1px solid ${audioEngine === m ? 'rgba(168,85,247,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                          background: audioEngine === m ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.04)',
+                          color: audioEngine === m ? '#A855F7' : 'rgba(239,225,207,0.5)',
+                          fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                        }}
+                      >
+                        {m === 'polly' ? 'AWS Polly' : 'ElevenLabs'}
+                      </button>
+                    ))}
+                  </div>
 
                   {actionBtn(
                     'Generate Audio VO',
@@ -554,7 +834,7 @@ export function Storyboard() {
                     '#A855F7'
                   )}
                   <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '6px' }}>
-                    Est. {narration ? formatCost(estimateAudioCost('polly', narration.length)) : '<$0.01'}
+                    Est. {narration ? formatCost(estimateAudioCost(audioEngine, narration.length)) : '<$0.01'}
                   </div>
                 </div>
 

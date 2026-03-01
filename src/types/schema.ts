@@ -39,6 +39,7 @@ export interface SceneAssets {
   imageStatus: GenerationStatus
   imageError?: string
   videoUrl?: string
+  videoJobId?: string
   videoStatus: GenerationStatus
   videoError?: string
   audioUrl?: string

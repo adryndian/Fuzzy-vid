@@ -53,13 +53,25 @@ export async function generateImage(params: {
   return res.json()
 }
 
+export async function checkVideoStatus(jobId: string): Promise<{
+  status: 'processing' | 'done' | 'failed'
+  video_url?: string
+  message?: string
+}> {
+  const res = await fetch(`${WORKER_URL}/api/video/status/${encodeURIComponent(jobId)}`, {
+    headers: { ...getApiHeaders() },
+  })
+  if (!res.ok) throw new Error(`Video status check failed: ${res.status}`)
+  return res.json()
+}
+
 export async function generateVideo(params: {
   image_url: string
   prompt: string
   scene_number: number
   project_id: string
   aspect_ratio: string
-}): Promise<{ video_url: string }> {
+}): Promise<{ video_url: string | null; job_id?: string; status?: string }> {
   const res = await fetch(`${WORKER_URL}/api/video/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getApiHeaders() },

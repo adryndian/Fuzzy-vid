@@ -38,6 +38,8 @@ export function Home() {
   const [language, setLanguage] = useState<Language>('id')
   const [artStyle, setArtStyle] = useState<ArtStyle>('cinematic_realistic')
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9_16')
+  const [imageModel, setImageModel] = useState<'nova_canvas' | 'titan_v2'>('nova_canvas')
+  const [audioModel, setAudioModel] = useState<'polly' | 'elevenlabs'>('polly')
   const [scenes, setScenes] = useState(5)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -123,6 +125,8 @@ export function Home() {
         try {
           JSON.parse(text) // validate
           sessionStorage.setItem('storyboard_result', text)
+          sessionStorage.setItem('fuzzy_gen_imageModel', imageModel)
+          sessionStorage.setItem('fuzzy_gen_audioModel', audioModel)
 
           // Save to history
           addHistoryItem({
@@ -450,6 +454,71 @@ export function Home() {
               </span>
             </span>
           </div>
+        </div>
+
+        {/* Image Model */}
+        <div style={{ marginBottom: '20px' }}>
+          <span style={label}>Image Model</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {([
+              { id: 'nova_canvas', label: 'Nova Canvas', sub: 'Best Quality' },
+              { id: 'titan_v2', label: 'Titan V2', sub: 'Fast & Cheap' },
+            ] as const).map(m => (
+              <button key={m.id} onClick={() => setImageModel(m.id)}
+                style={{
+                  flex: 1,
+                  padding: '10px 6px',
+                  borderRadius: '12px',
+                  border: `1px solid ${imageModel === m.id ? 'rgba(240,90,37,0.4)' : 'rgba(239,225,207,0.08)'}`,
+                  background: imageModel === m.id ? 'rgba(240,90,37,0.12)' : 'rgba(255,255,255,0.03)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}>
+                <div style={{ color: imageModel === m.id ? '#F05A25' : '#EFE1CF', fontSize: '13px', fontWeight: 600 }}>{m.label}</div>
+                <div style={{ color: 'rgba(239,225,207,0.45)', fontSize: '11px', marginTop: '2px' }}>{m.sub}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Audio Engine */}
+        <div style={{ marginBottom: '20px' }}>
+          <span style={label}>Audio Engine</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {([
+              { id: 'polly', label: 'AWS Polly', sub: 'Low Cost' },
+              { id: 'elevenlabs', label: 'ElevenLabs', sub: 'Premium Voice' },
+            ] as const).map(m => (
+              <button key={m.id} onClick={() => setAudioModel(m.id)}
+                style={{
+                  flex: 1,
+                  padding: '10px 6px',
+                  borderRadius: '12px',
+                  border: `1px solid ${audioModel === m.id ? 'rgba(168,85,247,0.4)' : 'rgba(239,225,207,0.08)'}`,
+                  background: audioModel === m.id ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.03)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}>
+                <div style={{ color: audioModel === m.id ? '#A855F7' : '#EFE1CF', fontSize: '13px', fontWeight: 600 }}>{m.label}</div>
+                <div style={{ color: 'rgba(239,225,207,0.45)', fontSize: '11px', marginTop: '2px' }}>{m.sub}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Video Model Info */}
+        <div style={{
+          marginBottom: '20px',
+          padding: '8px 12px',
+          background: 'rgba(63,169,246,0.06)',
+          border: '1px solid rgba(63,169,246,0.12)',
+          borderRadius: '10px',
+          display: 'flex', alignItems: 'center', gap: '6px',
+        }}>
+          <span style={{ fontSize: '12px' }}>🎬</span>
+          <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '11px' }}>
+            Video: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>Nova Reel</span> (only available model)
+          </span>
         </div>
 
         {/* Scenes */}
