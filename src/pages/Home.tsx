@@ -53,24 +53,25 @@ export function Home() {
   }
 
   const card: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.07)',
-    backdropFilter: 'blur(24px) saturate(180%)',
-    WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-    border: '1px solid rgba(239,225,207,0.14)',
+    background: 'rgba(255,255,255,0.08)',
+    backdropFilter: 'blur(40px) saturate(200%)',
+    WebkitBackdropFilter: 'blur(40px) saturate(200%)',
+    border: '1px solid rgba(255,255,255,0.15)',
     borderRadius: '20px',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)',
   }
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
-    background: 'rgba(255,255,255,0.06)',
-    border: '1px solid rgba(239,225,207,0.12)',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '12px',
     padding: '12px 16px',
     color: '#EFE1CF',
     fontSize: '14px',
     outline: 'none',
     fontFamily: 'inherit',
+    transition: 'all 0.2s',
   }
 
   const label: React.CSSProperties = {
@@ -104,9 +105,15 @@ export function Home() {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'flex-start',
-      padding: '48px 16px 40px',
+      padding: '60px 16px 40px',
       fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
     }}>
+      <style>{`
+        .glass-input:focus {
+          outline: none !important;
+          border-color: rgba(240,90,37,0.6) !important;
+        }
+      `}</style>
 
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
@@ -120,13 +127,15 @@ export function Home() {
       </div>
 
       {/* Main Glass Card */}
-      <div style={{ ...card, width: '100%', maxWidth: '440px', padding: '28px 24px' }}>
+      <div style={{ ...card, width: '100%', maxWidth: '440px', padding: '28px 24px', position: 'relative' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)' }} />
 
         {/* Story Title */}
         <div style={{ marginBottom: '20px' }}>
           <span style={label}>Story Title</span>
           <input
             style={inputStyle}
+            className="glass-input"
             type="text"
             value={title}
             onChange={e => setTitle(e.target.value)}
@@ -139,6 +148,7 @@ export function Home() {
           <span style={label}>The Story</span>
           <textarea
             style={{ ...inputStyle, minHeight: '80px', resize: 'none' as const }}
+            className="glass-input"
             value={story}
             onChange={e => setStory(e.target.value)}
             placeholder="Describe your story... AI will build a cinematic storyboard."
@@ -271,8 +281,8 @@ export function Home() {
             padding: '16px',
             borderRadius: '14px',
             border: 'none',
-            background: loading ? 'rgba(240,90,37,0.5)' : '#F05A25',
-            boxShadow: loading ? 'none' : '0 0 28px rgba(240,90,37,0.45)',
+            background: loading ? 'rgba(240,90,37,0.5)' : 'linear-gradient(135deg, #F05A25, #d94e1f)',
+            boxShadow: loading ? 'none' : '0 0 32px rgba(240,90,37,0.5), 0 4px 16px rgba(0,0,0,0.4)',
             color: 'white',
             fontSize: '15px',
             fontWeight: 700,
