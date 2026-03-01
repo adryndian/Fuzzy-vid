@@ -21,7 +21,85 @@ OUTPUT RULES:
   even if narasi_language is set to one language
 `;
 
-export async function handleBrainRequest(request: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
+async function callBedrock(credentials: any, modelId: string, prompt: string, systemPrompt: string): Promise<string> {
+  const region = credentials.awsRegion || 'us-east-1'
+  const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
+  
+  const body = JSON.stringify({
+    anthropic_version: "bedrock-2023-05-31",
+    max_tokens: 8192,
+    system: systemPrompt,
+    messages: [
+      { role: "user", content: prompt }
+    ]
+  })
+
+  const { signRequest } = await import('./lib/aws-signature')
+  const signedHeaders = await signRequest({
+    method: 'POST',
+    url: endpoint,
+    region,
+    service: 'bedrock',
+    accessKeyId: credentials.awsAccessKeyId,
+    secretAccessKey: credentials.awsSecretAccessKey,
+    body,
+    headers: { 'Content-Type': 'application/json' }
+  })
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: signedHeaders,
+    body
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Bedrock error ${res.status}: ${err}`)
+  }
+
+  const data = await res.json() as any
+  return data.content[0].text
+}
+
+async function callBedrockLlama(credentials: any, prompt: string, systemPrompt: string): Promise<string> {
+  const region = credentials.awsRegion || 'us-west-2'
+  const modelId = 'us.meta.llama4-maverick-17b-instruct-v1:0'
+  const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
+
+  const body = JSON.stringify({
+    prompt: `<|system|>${systemPrompt}<|end|><|user|>${prompt}<|end|><|assistant|>`,
+    max_gen_len: 8192,
+    temperature: 0.8
+  })
+
+  const { signRequest } = await import('./lib/aws-signature')
+  const signedHeaders = await signRequest({
+    method: 'POST',
+    url: endpoint,
+    region,
+    service: 'bedrock',
+    accessKeyId: credentials.awsAccessKeyId,
+    secretAccessKey: credentials.awsSecretAccessKey,
+    body,
+    headers: { 'Content-Type': 'application/json' }
+  })
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: signedHeaders,
+    body
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Llama error ${res.status}: ${err}`)
+  }
+
+  const data = await res.json() as any
+  return data.generation
+}
+
+export async function handleBrainRequest(request: Request, credentials: any, url: URL, ctx: ExecutionContext): Promise<Response> {
     const path = url.pathname;
     const corsHeaders = {
         'Access-Control-Allow-Origin': '*',
@@ -39,48 +117,46 @@ export async function handleBrainRequest(request: Request, env: Env, url: URL, c
                 return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
 
-            const { prompt, model, narasi_language = 'en' } = await request.json() as { prompt: string, model: string, narasi_language?: 'id' | 'en' };
+            const { title, story, platform, brain_model: model, language: narasi_language = 'en', art_style, total_scenes } = await request.json() as any;
 
-            if (!prompt || !model) {
-                return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing prompt or model' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            if (!title || !story || !model) {
+                return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing title, story or brain_model' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
 
-            if (model === 'gemini') {
-                const systemPrompt = getSystemPrompt(narasi_language);
-                const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`;
+            const prompt = `
+Title: ${title}
+Story: ${story}
+Platform: ${platform}
+Art Style: ${art_style}
+Total Scenes: ${total_scenes}
+Language: ${narasi_language}
+`;
 
-                const geminiPayload = {
-                    contents: [
-                        { parts: [{ text: systemPrompt }] },
-                        { parts: [{ text: prompt }] }
-                    ],
-                    generationConfig: {
-                        response_mime_type: "application/json",
-                    }
-                };
+            const systemPrompt = getSystemPrompt(narasi_language);
+            let responseText: string
 
-                const geminiRes = await fetch(geminiEndpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(geminiPayload)
-                });
-
-                if (!geminiRes.ok) {
-                    const errorBody = await geminiRes.text();
-                    console.error("Gemini API Error:", errorBody);
-                    return new Response(JSON.stringify({ error: 'Gemini API Error', message: errorBody }), { status: geminiRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                }
-
-                const geminiData = await geminiRes.json() as any;
-                const projectSchemaText = geminiData.candidates[0].content.parts[0].text;
-                
-                // The response is pure JSON, so we can return it directly.
-                return new Response(projectSchemaText, { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            if (model === 'claude_sonnet' || model === 'gemini') {
+              // Use Claude as primary (also fallback for gemini when Gemini is down)
+              responseText = await callBedrock(
+                credentials,
+                'us.anthropic.claude-sonnet-4-6-20251001-v1:0',
+                prompt,
+                systemPrompt
+              )
+            } else if (model === 'llama4_maverick') {
+              responseText = await callBedrockLlama(credentials, prompt, systemPrompt)
+            } else {
+              responseText = await callBedrock(
+                credentials,
+                'us.anthropic.claude-sonnet-4-6-20251001-v1:0',
+                prompt,
+                systemPrompt
+              )
             }
 
-            return new Response(JSON.stringify({ error: 'Not Implemented', message: `Model ${model} is not supported yet` }), { status: 501, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return new Response(responseText, {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            })
 
         } else if (path.startsWith('/api/brain/health')) {
             return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

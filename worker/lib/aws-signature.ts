@@ -153,3 +153,29 @@ export class AwsV4Signer {
         return encodeURIComponent(str).replace(/[!*'()]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
     }
 }
+
+export async function signRequest(params: {
+    method: string;
+    url: string;
+    region: string;
+    service: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+    body: string;
+    headers: Record<string, string>;
+}): Promise<Headers> {
+    const signer = new AwsV4Signer(
+        { awsAccessKeyId: params.accessKeyId, awsSecretKey: params.secretAccessKey },
+        params.region,
+        params.service
+    );
+    
+    const request = new Request(params.url, {
+        method: params.method,
+        headers: params.headers,
+        body: params.body
+    });
+
+    const signedRequest = await signer.sign(request);
+    return signedRequest.headers;
+}

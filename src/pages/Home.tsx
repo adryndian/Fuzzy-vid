@@ -26,9 +26,18 @@ export function Home() {
     setError('')
     setLoading(true)
     try {
+      const stored = localStorage.getItem('fuzzy_short_settings')
+      const keys = stored ? JSON.parse(stored) : {}
+
       const res = await fetch('https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(keys.geminiApiKey && { 'X-Gemini-Key': keys.geminiApiKey }),
+          ...(keys.awsAccessKeyId && { 'X-AWS-Access-Key-Id': keys.awsAccessKeyId }),
+          ...(keys.awsSecretAccessKey && { 'X-AWS-Secret-Access-Key': keys.awsSecretAccessKey }),
+          ...(keys.awsRegion && { 'X-AWS-Region': keys.awsRegion }),
+        },
         body: JSON.stringify({
           title,
           story,
@@ -114,6 +123,31 @@ export function Home() {
           border-color: rgba(240,90,37,0.6) !important;
         }
       `}</style>
+
+      {/* Settings Button */}
+      <button
+        onClick={() => navigate('/settings')}
+        style={{
+          position: 'fixed',
+          top: '16px',
+          right: '16px',
+          background: 'rgba(255,255,255,0.08)',
+          border: '1px solid rgba(255,255,255,0.15)',
+          borderRadius: '12px',
+          padding: '10px',
+          cursor: 'pointer',
+          zIndex: 100,
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          fontSize: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+        }}
+      >
+        ⚙️
+      </button>
 
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>

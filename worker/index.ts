@@ -12,13 +12,28 @@ export interface Env {
   ENVIRONMENT: string;
 }
 
+function getCredentials(request: Request, env: Env) {
+  const h = request.headers
+  return {
+    ...env,
+    geminiApiKey: h.get('X-Gemini-Key') || env.GEMINI_API_KEY,
+    awsAccessKeyId: h.get('X-AWS-Access-Key-Id') || env.AWS_ACCESS_KEY_ID,
+    awsSecretAccessKey: h.get('X-AWS-Secret-Access-Key') || env.AWS_SECRET_ACCESS_KEY,
+    awsRegion: h.get('X-AWS-Region') || 'us-east-1',
+    r2AccountId: h.get('X-R2-Account-Id') || env.R2_ACCOUNT_ID,
+    r2AccessKeyId: h.get('X-R2-Access-Key-Id') || env.R2_ACCESS_KEY_ID,
+    r2SecretAccessKey: h.get('X-R2-Secret-Access-Key') || env.R2_SECRET_ACCESS_KEY,
+    r2Bucket: h.get('X-R2-Bucket') || 'igome-story-storage',
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Gemini-Key, X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key, X-AWS-Region, X-R2-Account-Id, X-R2-Access-Key-Id, X-R2-Secret-Access-Key, X-R2-Bucket',
     }
 
     if (request.method === 'OPTIONS') {
@@ -27,42 +42,44 @@ export default {
 
     const url = new URL(request.url)
     const path = url.pathname
+    
+    const credentials = getCredentials(request, env)
 
     try {
       // Brain routes
       if (path === '/api/brain/generate' || path.startsWith('/api/brain/')) {
         const { handleBrainRequest } = await import('./brain')
-        return handleBrainRequest(request, env, url, ctx)
+        return handleBrainRequest(request, credentials as any, url, ctx)
       }
 
       // Image routes
       if (path.startsWith('/api/image/')) {
         const { handleImageRequest } = await import('./image')
-        return handleImageRequest(request, env, url, ctx)
+        return handleImageRequest(request, credentials as any, url, ctx)
       }
 
       // Video routes
       if (path.startsWith('/api/video/')) {
         const { handleVideoRequest } = await import('./video')
-        return handleVideoRequest(request, env, url, ctx)
+        return handleVideoRequest(request, credentials as any, url, ctx)
       }
 
       // Audio routes
       if (path.startsWith('/api/audio/')) {
         const { handleAudioRequest } = await import('./audio')
-        return handleAudioRequest(request, env, url, ctx)
+        return handleAudioRequest(request, credentials as any, url, ctx)
       }
 
       // Project routes
       if (path.startsWith('/api/project/')) {
         const { handleProjectRequest } = await import('./project')
-        return handleProjectRequest(request, env, url, ctx)
+        return handleProjectRequest(request, credentials as any, url, ctx)
       }
 
       // Storage routes
       if (path.startsWith('/api/storage/')) {
         const { handleStorageRequest } = await import('./storage')
-        return handleStorageRequest(request, env, url, ctx)
+        return handleStorageRequest(request, credentials as any, url, ctx)
       }
 
       // Health check
