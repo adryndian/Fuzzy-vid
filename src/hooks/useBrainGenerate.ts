@@ -1,4 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { api } from '../lib/api';
 import { useProjectStore } from '../store/projectStore';
 import type { ProjectSchema, BrainModel, ArtStyle } from '../types/schema';
@@ -14,7 +15,6 @@ interface GenerateBrainProps {
 }
 
 const generateBrain = async (props: GenerateBrainProps): Promise<ProjectSchema> => {
-  // Map fields if needed or pass as is
   return api.post('/api/brain/generate', props);
 };
 
@@ -23,10 +23,13 @@ export const useBrainGenerate = () => {
 
   const mutation = useMutation({
     mutationFn: generateBrain,
-    onSuccess: (data) => {
-      setProject(data);
-    },
   });
+
+  useEffect(() => {
+    if (mutation.data) {
+      setProject(mutation.data);
+    }
+  }, [mutation.data, setProject]);
 
   return {
     generate: mutation.mutate,

@@ -1,11 +1,33 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import type { AspectRatio } from '../types/schema'
+import { estimateBrainCost, formatCost } from '../lib/costEstimate'
+import { useCostStore } from '../store/costStore'
+import { useHistoryStore } from '../store/historyStore'
+import { GenerationOverlay } from '../components/GenerationOverlay'
+import type { GenStep } from '../components/GenerationOverlay'
+import { useElapsedTimer } from '../hooks/useElapsedTimer'
 
 type Platform = 'youtube_shorts' | 'reels' | 'tiktok'
 type BrainModel = 'gemini' | 'llama4_maverick' | 'claude_sonnet'
 type Language = 'id' | 'en'
 type ArtStyle = 'cinematic_realistic' | 'anime_stylized' | 'comic_book' | '3d_render' | 'oil_painting' | 'pixel_art'
+
+const STEP_LABELS = [
+  'Connecting to AI...',
+  'Sending prompt...',
+  'AI is thinking...',
+  'Parsing response...',
+  'Done!',
+]
+
+function buildSteps(current: number): GenStep[] {
+  return STEP_LABELS.map((label, i) => ({
+    label,
+    status: i < current ? 'done' : i === current ? 'active' : 'pending',
+  }))
+}
 
 export function Home() {
   const navigate = useNavigate()
@@ -19,15 +41,23 @@ export function Home() {
   const [scenes, setScenes] = useState(5)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [currentStep, setCurrentStep] = useState(-1)
+  const stepTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  const addCostEntry = useCostStore((s) => s.addEntry)
+  const addHistoryItem = useHistoryStore((s) => s.addItem)
+  const historyCount = useHistoryStore((s) => s.items.length)
+
+  const elapsedMs = useElapsedTimer(loading)
 
   useEffect(() => {
     const stored = localStorage.getItem('fuzzy_short_settings')
     if (!stored) {
-      setError('⚙️ Please set your API keys in Settings first')
+      setError('Please set your API keys in Settings first')
     } else {
       const keys = JSON.parse(stored)
       if (!keys.geminiApiKey && !keys.awsAccessKeyId) {
-        setError('⚙️ Please set your API keys in Settings first')
+        setError('Please set your API keys in Settings first')
       }
     }
   }, [])
@@ -36,6 +66,7 @@ export function Home() {
     if (!title.trim() || !story.trim()) { setError('Please fill in title and story'); return }
     setError('')
     setLoading(true)
+    setCurrentStep(0) // Connecting to AI...
 
     // Load settings from localStorage
     let apiHeaders: Record<string, string> = {}
@@ -52,16 +83,22 @@ export function Home() {
         if (s.elevenLabsApiKey) apiHeaders['X-ElevenLabs-Key'] = s.elevenLabsApiKey
         if (s.runwayApiKey) apiHeaders['X-Runway-Key'] = s.runwayApiKey
       }
-    } catch {}
+    } catch { /* ignore */ }
 
-    // Check if user has set API keys
     if (!apiHeaders['X-Gemini-Key'] && !apiHeaders['X-AWS-Access-Key-Id']) {
-      setError('⚙️ Please add your API keys in Settings first')
+      setError('Please add your API keys in Settings first')
       setLoading(false)
+      setCurrentStep(-1)
       return
     }
 
+    // Progress step 1 after short delay
+    stepTimerRef.current = setTimeout(() => setCurrentStep(1), 100)
+
     try {
+      // Step 2 after 1.5s
+      const thinkTimer = setTimeout(() => setCurrentStep(2), 1500)
+
       const res = await fetch('https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...apiHeaders },
@@ -77,24 +114,70 @@ export function Home() {
           resolution: '1080p',
         })
       })
+      clearTimeout(thinkTimer)
+
+      setCurrentStep(3) // Parsing response
       const text = await res.text()
+
       if (res.ok) {
         try {
           JSON.parse(text) // validate
           sessionStorage.setItem('storyboard_result', text)
-          navigate('/storyboard')
+
+          // Save to history
+          addHistoryItem({
+            title,
+            platform,
+            art_style: artStyle,
+            language,
+            brain_model: brainModel,
+            scenes_count: scenes,
+            storyboard_data: text,
+          })
+
+          // Cost toast
+          const cost = estimateBrainCost(brainModel, scenes)
+          addCostEntry({ service: 'Brain', model: brainModel, cost })
+          toast(
+            `Storyboard ${formatCost(cost)}`,
+            {
+              icon: '🧠',
+              style: {
+                border: '1px solid rgba(240,90,37,0.3)',
+              },
+              duration: 4000,
+            }
+          )
+
+          setCurrentStep(4) // Done!
+          // Navigate after brief delay to show "Done!"
+          setTimeout(() => {
+            setLoading(false)
+            setCurrentStep(-1)
+            navigate('/storyboard')
+          }, 800)
+          return
         } catch {
           setError('AI returned malformed JSON. Please try again.')
         }
       } else {
         let errData: Record<string, unknown> = {}
-        try { errData = JSON.parse(text) } catch {}
+        try { errData = JSON.parse(text) } catch { /* ignore */ }
         setError((errData?.message as string) || (errData?.error as string) || `Error ${res.status}`)
       }
-    } catch (e: any) {
-      setError(`Request failed: ${e?.message || 'Check Worker deployment'}`)
-    } finally { setLoading(false) }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Check Worker deployment'
+      setError(`Request failed: ${msg}`)
+    }
+    setLoading(false)
+    setCurrentStep(-1)
   }
+
+  useEffect(() => {
+    return () => {
+      if (stepTimerRef.current) clearTimeout(stepTimerRef.current)
+    }
+  }, [])
 
   const card: React.CSSProperties = {
     background: 'rgba(255,255,255,0.08)',
@@ -140,6 +223,19 @@ export function Home() {
     transition: 'all 0.2s',
   })
 
+  const navBtnStyle: React.CSSProperties = {
+    background: 'rgba(255,255,255,0.08)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    border: '1px solid rgba(239,225,207,0.15)',
+    borderRadius: '12px',
+    color: '#EFE1CF',
+    padding: '8px 12px',
+    cursor: 'pointer',
+    fontSize: '18px',
+    position: 'relative' as const,
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -159,21 +255,30 @@ export function Home() {
         }
       `}</style>
 
-      {/* Settings Button */}
-      <button 
-        onClick={() => navigate('/settings')}
-        style={{
-          position: 'fixed', top: '16px', right: '16px', zIndex: 50,
-          background: 'rgba(255,255,255,0.08)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid rgba(239,225,207,0.15)',
-          borderRadius: '12px', color: '#EFE1CF',
-          padding: '8px 12px', cursor: 'pointer',
-          fontSize: '18px',
-        }}>
-        ⚙️
-      </button>
+      {/* Top-right nav buttons */}
+      <div style={{ position: 'fixed', top: '16px', right: '16px', zIndex: 50, display: 'flex', gap: '8px' }}>
+        {/* History Button */}
+        <button onClick={() => navigate('/history')} style={navBtnStyle}>
+          🕐
+          {historyCount > 0 && (
+            <span style={{
+              position: 'absolute', top: '-4px', right: '-4px',
+              background: '#F05A25', color: 'white',
+              fontSize: '9px', fontWeight: 800,
+              width: '18px', height: '18px',
+              borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(240,90,37,0.5)',
+            }}>
+              {historyCount > 99 ? '99' : historyCount}
+            </span>
+          )}
+        </button>
+        {/* Settings Button */}
+        <button onClick={() => navigate('/settings')} style={navBtnStyle}>
+          ⚙️
+        </button>
+      </div>
 
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
@@ -328,7 +433,7 @@ export function Home() {
               </button>
             ))}
           </div>
-          <div style={{ 
+          <div style={{
             marginTop: '8px', padding: '8px 12px',
             background: 'rgba(63,169,246,0.08)',
             border: '1px solid rgba(63,169,246,0.15)',
@@ -339,8 +444,8 @@ export function Home() {
             <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '11px' }}>
               Resolution: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>1080p</span>
               {' · '}Output: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>
-                {aspectRatio === '9_16' ? '1080×1920' : 
-                 aspectRatio === '16_9' ? '1920×1080' : 
+                {aspectRatio === '9_16' ? '1080×1920' :
+                 aspectRatio === '16_9' ? '1920×1080' :
                  aspectRatio === '1_1' ? '1080×1080' : '864×1080'}
               </span>
             </span>
@@ -403,6 +508,14 @@ export function Home() {
       <p style={{ color: 'rgba(239,225,207,0.2)', fontSize: '11px', marginTop: '24px' }}>
         iOS 26 Liquid Glass Edition
       </p>
+
+      {/* Generation Overlay */}
+      <GenerationOverlay
+        isOpen={loading}
+        steps={buildSteps(currentStep)}
+        currentStep={currentStep}
+        elapsedMs={elapsedMs}
+      />
     </div>
   )
 }

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
+import { useHistoryStore } from '../store/historyStore'
 
 interface Scene {
   scene_number: number
@@ -40,6 +42,27 @@ export function Storyboard() {
   const navigate = useNavigate()
   const [data, setData] = useState<StoryboardData | null>(null)
   const [error, setError] = useState('')
+  const [rawJson, setRawJson] = useState('')
+  const historyItems = useHistoryStore((s) => s.items)
+  const addHistoryItem = useHistoryStore((s) => s.addItem)
+
+  const isAlreadySaved = rawJson
+    ? historyItems.some((item) => item.storyboard_data === rawJson)
+    : false
+
+  const handleSave = () => {
+    if (!data || !rawJson || isAlreadySaved) return
+    addHistoryItem({
+      title: data.title || 'Untitled',
+      platform: data.platform || '',
+      art_style: data.art_style || '',
+      language: data.language || 'en',
+      brain_model: '',
+      scenes_count: data.scenes?.length || 0,
+      storyboard_data: rawJson,
+    })
+    toast.success('Saved to history')
+  }
 
   useEffect(() => {
     const raw = sessionStorage.getItem('storyboard_result')
@@ -47,6 +70,7 @@ export function Storyboard() {
       setError('No storyboard data found. Please generate one first.')
       return
     }
+    setRawJson(raw)
     try {
       const parsed = JSON.parse(raw) as any
       // Normalize: handle cases where AI wraps scenes inside a nested object
@@ -171,6 +195,21 @@ export function Storyboard() {
               color: 'rgba(239,225,207,0.5)', fontSize: '11px', letterSpacing: '0.08em',
             }}>{data.scenes?.length} scenes</span>
           </div>
+          {/* Save button */}
+          <button
+            onClick={handleSave}
+            disabled={isAlreadySaved}
+            style={{
+              marginTop: '14px',
+              padding: '8px 20px', borderRadius: '10px',
+              border: `1px solid ${isAlreadySaved ? 'rgba(102,187,106,0.3)' : 'rgba(240,90,37,0.3)'}`,
+              background: isAlreadySaved ? 'rgba(102,187,106,0.12)' : 'rgba(240,90,37,0.12)',
+              color: isAlreadySaved ? '#66bb6a' : '#F05A25',
+              fontSize: '12px', fontWeight: 600, cursor: isAlreadySaved ? 'default' : 'pointer',
+            }}
+          >
+            {isAlreadySaved ? '✓ Saved' : '💾 Save to History'}
+          </button>
         </div>
 
         {/* Scene cards */}

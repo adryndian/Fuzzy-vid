@@ -24,15 +24,20 @@ export function useImageGeneration(sceneId: number) {
 
   const mutation = useMutation({
     mutationFn: async (props: GenerateImageProps) => {
-      return api.post('/api/image/generate', props) as Promise<{ job_id: string }>
+      return api.post('/api/image/generate', props) as Promise<{ job_id: string; _scene: GenerateImageProps }>
     },
-    onSuccess: (data, variables) => {
-      queryClient.setQueryData(['image-status', data.job_id], { status: 'generating' })
+  })
+
+  useEffect(() => {
+    if (mutation.data && mutation.variables) {
+      const { job_id } = mutation.data
+      const variables = mutation.variables
+      queryClient.setQueryData(['image-status', job_id], { status: 'generating' })
       updateScene(variables.scene.scene_id, {
         status: { ...variables.scene.status, image: 'generating' },
       })
-    },
-  })
+    }
+  }, [mutation.data, mutation.variables, queryClient, updateScene])
 
   const { data: statusResponse, isLoading: isCheckingStatus } = useQuery<ImageStatusResponse>(
     {

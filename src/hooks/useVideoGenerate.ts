@@ -27,16 +27,19 @@ export function useVideoGeneration(sceneId: number) {
     mutationFn: async (props: GenerateVideoProps) => {
       return api.post('/api/video/generate', props) as Promise<{ job_id: string }>
     },
-    onSuccess: (data) => {
-      queryClient.setQueryData(['video-status', data.job_id], { status: 'processing', progress: 0 })
+  })
+
+  useEffect(() => {
+    if (mutation.data) {
+      queryClient.setQueryData(['video-status', mutation.data.job_id], { status: 'processing', progress: 0 })
       const currentScene = getScene(sceneId);
       if (currentScene) {
         updateScene(sceneId, {
           status: { ...currentScene.status, video: 'generating' },
         })
       }
-    },
-  })
+    }
+  }, [mutation.data, queryClient, sceneId, getScene, updateScene])
 
   const { data: statusResponse, isLoading: isCheckingStatus } = useQuery<VideoStatusResponse>({
     queryKey: ['video-status', mutation.data?.job_id],
