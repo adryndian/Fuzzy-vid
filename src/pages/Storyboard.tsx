@@ -5,6 +5,8 @@ import type { SceneAssets, SceneAssetsMap, GenerationStatus } from '../types/sch
 import { defaultSceneAssets } from '../types/schema'
 import { generateImage, generateVideo, generateAudio } from '../lib/api'
 import { useHistoryStore } from '../store/historyStore'
+import { useCostStore } from '../store/costStore'
+import { estimateImageCost, estimateVideoCost, estimateAudioCost, formatCost } from '../lib/costEstimate'
 
 export function Storyboard() {
   const navigate = useNavigate()
@@ -12,6 +14,11 @@ export function Storyboard() {
   const [assets, setAssets] = useState<SceneAssetsMap>({})
   const [language, setLanguage] = useState('id')
   const [rawJson, setRawJson] = useState('')
+
+  // Cost tracking
+  const addCostEntry = useCostStore((s) => s.addEntry)
+  const sessionTotal = useCostStore((s) => s.sessionTotal)
+  const costEntries = useCostStore((s) => s.entries)
 
   // History integration
   const historyItems = useHistoryStore((s) => s.items)
@@ -81,6 +88,7 @@ export function Storyboard() {
         art_style: (data.art_style as string) || 'cinematic_realistic',
       })
       updateAsset(sceneNum, { imageStatus: 'done', imageUrl: result.image_url })
+      addCostEntry({ service: 'image', model: 'Nova Canvas', cost: estimateImageCost() })
       toast.success(`Scene ${sceneNum} image ready`)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
@@ -104,6 +112,7 @@ export function Storyboard() {
         aspect_ratio: (data.aspect_ratio as string) || '9_16',
       })
       updateAsset(sceneNum, { videoStatus: 'done', videoUrl: result.video_url })
+      addCostEntry({ service: 'video', model: 'Nova Reel', cost: estimateVideoCost() })
       toast.success(`Scene ${sceneNum} video ready`)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
@@ -129,6 +138,7 @@ export function Storyboard() {
         engine: 'polly',
       })
       updateAsset(sceneNum, { audioStatus: 'done', audioUrl: result.audio_url })
+      addCostEntry({ service: 'audio', model: 'Polly', cost: estimateAudioCost('polly', text.length) })
       toast.success(`Scene ${sceneNum} audio ready`)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
@@ -258,6 +268,44 @@ export function Storyboard() {
         </button>
         <span style={{ fontSize: '20px' }}>🎬</span>
       </div>
+
+      {/* Cost Tracker Bar */}
+      {costEntries.length > 0 && (() => {
+        const imageCost = costEntries.filter(e => e.service === 'image').reduce((s, e) => s + e.cost, 0)
+        const videoCost = costEntries.filter(e => e.service === 'video').reduce((s, e) => s + e.cost, 0)
+        const audioCost = costEntries.filter(e => e.service === 'audio').reduce((s, e) => s + e.cost, 0)
+        return (
+          <div style={{
+            background: 'rgba(15,20,35,0.85)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            borderBottom: '1px solid rgba(240,90,37,0.2)',
+            padding: '8px 16px',
+            display: 'flex', alignItems: 'center', gap: '16px',
+            flexWrap: 'wrap',
+            fontSize: '12px',
+          }}>
+            <span style={{ color: '#F05A25', fontWeight: 700 }}>
+              Session: {formatCost(sessionTotal)}
+            </span>
+            {imageCost > 0 && (
+              <span style={{ color: 'rgba(239,225,207,0.5)' }}>
+                Image: {formatCost(imageCost)}
+              </span>
+            )}
+            {videoCost > 0 && (
+              <span style={{ color: 'rgba(239,225,207,0.5)' }}>
+                Video: {formatCost(videoCost)}
+              </span>
+            )}
+            {audioCost > 0 && (
+              <span style={{ color: 'rgba(239,225,207,0.5)' }}>
+                Audio: {formatCost(audioCost)}
+              </span>
+            )}
+          </div>
+        )
+      })()}
 
       <div style={{ padding: '20px 16px 0', maxWidth: '720px', margin: '0 auto' }}>
 

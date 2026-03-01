@@ -50,8 +50,8 @@ export async function handleImageRequest(
       }
 
       const region = creds.imageRegion || 'us-east-1'
-      const modelId = 'amazon.nova-canvas-v1:0'
-      const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
+      // Nova Canvas model ID contains colon — must use %3A in the URL path
+      const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/amazon.nova-canvas-v1%3A0/invoke`
       const dims = getDimensions(aspect_ratio)
 
       const bedrockBody = JSON.stringify({
@@ -65,7 +65,7 @@ export async function handleImageRequest(
           height: dims.height,
           width: dims.width,
           cfgScale: 8.0,
-          seed: Math.floor(Math.random() * 1000000),
+          seed: Math.floor(Math.random() * 858993459),
         },
       })
 

@@ -87,7 +87,7 @@ async function generateWithPolly(
   const endpoint = `https://polly.${region}.amazonaws.com/v1/speech`
 
   // Pick voice based on language
-  const voiceId = language === 'id' ? 'Andika' : 'Joanna'
+  const voiceId = language === 'id' ? 'Arlet' : 'Joanna'
   const langCode = language === 'id' ? 'id-ID' : 'en-US'
 
   const pollyBody = JSON.stringify({
