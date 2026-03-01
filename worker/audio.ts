@@ -1,189 +1,156 @@
-import { Env } from './index';
-import { corsHeaders } from './lib/cors';
-import { AwsV4Signer } from './lib/aws-signature';
-import { AudioConfig, AWSRegion, Scene } from '../src/types/schema';
+import type { Env, Credentials } from './index'
+import { AwsV4Signer } from './lib/aws-signature'
 
-const nanoid = (size = 8) => crypto.getRandomValues(new Uint8Array(size)).reduce((id, byte) => id + (byte & 63).toString(36), '');
+const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
 
 interface AudioRequestBody {
-  scene: Scene;
-  projectId: string;
-  audioConfig: AudioConfig;
-  awsRegion: AWSRegion;
+  text: string
+  language: string
+  scene_number: number
+  project_id: string
+  engine?: 'polly' | 'elevenlabs'
 }
 
-export async function handleAudioRequest(request: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
-    const { method } = request;
-    const { pathname } = url;
+export async function handleAudioRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  _ctx: ExecutionContext,
+  creds: Credentials
+): Promise<Response> {
+  const path = url.pathname
 
+  // POST /api/audio/generate — synchronous TTS
+  if (path === '/api/audio/generate' && request.method === 'POST') {
     try {
-      if (method === 'POST' && pathname.endsWith('/generate')) {
-        const body = await request.json() as AudioRequestBody;
-        const { scene, projectId, audioConfig, awsRegion } = body;
+      const body = await request.json() as AudioRequestBody
+      const { text, language, scene_number, project_id, engine } = body
 
-        if (!scene || !projectId || !audioConfig) {
-          return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing scene, projectId, or audioConfig' }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-
-        const jobId = `aud_${Date.now()}_${nanoid()}`;
-        const r2Key = `projects/${projectId}/scene_${scene.scene_id}/audio_${Date.now()}.mp3`;
-
-        ctx.waitUntil(generateAudio(jobId, r2Key, body, env));
-
-        return new Response(JSON.stringify({ jobId }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      if (!text) {
+        return Response.json(
+          { error: 'Bad Request', message: 'Missing text' },
+          { status: 400 }
+        )
       }
 
-      if (method === 'GET' && pathname.startsWith('/api/audio/status/')) {
-        const jobId = pathname.split('/').pop();
-        if (!jobId) {
-          return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing job ID' }), { status: 400, headers: corsHeaders });
+      let audioBuffer: ArrayBuffer
+
+      if (engine === 'elevenlabs') {
+        const apiKey = creds.elevenLabsApiKey || env.ELEVENLABS_API_KEY
+        if (!apiKey) {
+          return Response.json(
+            { error: 'Missing ElevenLabs API key', message: 'Add ElevenLabs key in Settings' },
+            { status: 400 }
+          )
         }
-        const jobStatus = await env.JOB_STATUS.get(jobId, { type: 'json' });
-        if (!jobStatus) {
-          return new Response(JSON.stringify({ error: 'Not Found', message: 'Job not found' }), { status: 404, headers: corsHeaders });
+        audioBuffer = await generateWithElevenLabs(text, language, apiKey)
+      } else {
+        // Default: Polly
+        if (!creds.awsAccessKeyId || !creds.awsSecretAccessKey) {
+          return Response.json(
+            { error: 'Missing AWS credentials', message: 'Add AWS credentials in Settings' },
+            { status: 400 }
+          )
         }
-        return new Response(JSON.stringify(jobStatus), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        const region = creds.audioRegion || 'us-west-2'
+        audioBuffer = await generateWithPolly(text, language, region, creds)
       }
 
-      return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: corsHeaders });
+      // Upload to R2
+      const r2Key = `projects/${project_id}/scene_${scene_number}/audio_${Date.now()}.mp3`
+      await env.STORY_STORAGE.put(r2Key, audioBuffer, {
+        httpMetadata: { contentType: 'audio/mpeg' },
+      })
 
-    } catch (e: any) {
-      console.error('Audio Worker Error:', e);
-      return new Response(JSON.stringify({ error: 'Internal Server Error', message: e.message }), { status: 500, headers: corsHeaders });
+      const audioUrl = `${WORKER_URL}/api/storage/file/${r2Key}`
+      return Response.json({ audio_url: audioUrl })
+
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('Audio handler error:', msg)
+      return Response.json(
+        { error: 'Internal Server Error', message: msg },
+        { status: 500 }
+      )
     }
-}
-
-async function generateAudio(jobId: string, r2Key: string, body: AudioRequestBody, env: Env) {
-  const { scene, audioConfig, awsRegion } = body;
-  const model = audioConfig.preferred_model;
-
-  await env.JOB_STATUS.put(jobId, JSON.stringify({ jobId, status: 'generating', model }), { expirationTtl: 3600 });
-
-  try {
-    let audioBuffer: ArrayBuffer;
-    const text = audioConfig.language === 'id' ? scene.narrative_voiceover.text_id : scene.narrative_voiceover.text_en;
-
-    switch (model) {
-      case 'polly':
-        audioBuffer = await generateWithPolly(scene, text, audioConfig, awsRegion, env);
-        break;
-      case 'gemini_tts':
-        audioBuffer = await generateWithGeminiTTS(text, audioConfig, env);
-        break;
-      case 'elevenlabs':
-        audioBuffer = await generateWithElevenLabs(text, audioConfig, env);
-        break;
-      default:
-        throw new Error(`Unsupported audio model: ${model}`);
-    }
-
-    await env.STORY_STORAGE.put(r2Key, audioBuffer, { httpMetadata: { contentType: 'audio/mpeg' } });
-    await env.JOB_STATUS.put(jobId, JSON.stringify({ jobId, status: 'done', r2Key, audioUrl: `/api/storage/presign?key=${r2Key}` }), { expirationTtl: 3600 });
-
-  } catch (e: any) {
-    console.error(`Failed to generate audio for job ${jobId}:`, e);
-    await env.JOB_STATUS.put(jobId, JSON.stringify({ jobId, status: 'failed', error: e.message }), { expirationTtl: 3600 });
-  }
-}
-
-function buildSSML(text: string, hints: Scene['narrative_voiceover']['ssml_hints'], speed: number) {
-  let processedText = text;
-
-  if (hints?.stress?.length) {
-    hints.stress.forEach(word => {
-      processedText = processedText.replace(new RegExp(`\\b${word}\\b`, 'g'), `<emphasis level="strong">${word}</emphasis>`);
-    });
   }
 
-  if (hints?.pause_after?.length) {
-    hints.pause_after.forEach(phrase => {
-      processedText = processedText.replace(phrase, `${phrase} <break time="350ms"/>`);
-    });
-  }
-
-  const rate = Math.max(0.7, Math.min(1.3, speed)) * 100;
-  return `<speak><prosody rate="${rate}%">${processedText}</prosody></speak>`;
+  return Response.json({ error: 'Not Found' }, { status: 404 })
 }
 
-async function generateWithPolly(scene: Scene, text: string, config: AudioConfig, region: AWSRegion, env: Env): Promise<ArrayBuffer> {
-  const endpoint = `https://polly.${region}.amazonaws.com/v1/speech`;
-  const ssml = buildSSML(text, scene.narrative_voiceover.ssml_hints, config.speed);
+async function generateWithPolly(
+  text: string,
+  language: string,
+  region: string,
+  creds: Credentials
+): Promise<ArrayBuffer> {
+  const endpoint = `https://polly.${region}.amazonaws.com/v1/speech`
 
-  const body = JSON.stringify({
+  // Pick voice based on language
+  const voiceId = language === 'id' ? 'Andika' : 'Joanna'
+  const langCode = language === 'id' ? 'id-ID' : 'en-US'
+
+  const pollyBody = JSON.stringify({
     Engine: 'neural',
-    LanguageCode: config.language === 'id' ? 'id-ID' : 'en-US',
+    LanguageCode: langCode,
     OutputFormat: 'mp3',
-    Text: ssml,
-    TextType: 'ssml',
-    VoiceId: config.voice_character,
-  });
+    Text: text,
+    TextType: 'text',
+    VoiceId: voiceId,
+  })
 
-  const signer = new AwsV4Signer({ awsAccessKeyId: env.AWS_ACCESS_KEY_ID, awsSecretKey: env.AWS_SECRET_ACCESS_KEY }, region, 'polly');
-  const request = new Request(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-  const signedRequest = await signer.sign(request);
-  const response = await fetch(signedRequest);
+  const signer = new AwsV4Signer(
+    { awsAccessKeyId: creds.awsAccessKeyId, awsSecretKey: creds.awsSecretAccessKey },
+    region,
+    'polly'
+  )
+  const req = new Request(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: pollyBody,
+  })
+  const signedReq = await signer.sign(req)
+  const res = await fetch(signedReq)
 
-  if (!response.ok) {
-    throw new Error(`Polly API error: ${await response.text()}`);
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`Polly error: ${errText.slice(0, 300)}`)
   }
-  return response.arrayBuffer();
+
+  return res.arrayBuffer()
 }
 
-async function generateWithGeminiTTS(text: string, config: AudioConfig, env: Env): Promise<ArrayBuffer> {
-    const endpoint = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${env.GEMINI_API_KEY}`;
-    const body = JSON.stringify({
-        input: { text },
-        voice: { languageCode: config.language === 'id' ? 'id-ID' : 'en-US', name: config.voice_character },
-        audioConfig: { audioEncoding: 'MP3', speakingRate: config.speed }
-    });
-    
-    const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+async function generateWithElevenLabs(
+  text: string,
+  language: string,
+  apiKey: string
+): Promise<ArrayBuffer> {
+  // Use a multilingual voice
+  const voiceId = language === 'id' ? 'pNInz6obpgDQGcFmaJgB' : 'EXAVITQu4vr4xnSDxMaL'
+  const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`
 
-    if (!response.ok) {
-        throw new Error(`Gemini TTS API error: ${await response.text()}`);
-    }
-    const data = await response.json() as { audioContent: string };
-    const byteString = atob(data.audioContent);
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i++) {
-        ia[i] = byteString.charCodeAt(i);
-    }
-    return ab;
-}
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'xi-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      text,
+      model_id: 'eleven_multilingual_v2',
+      voice_settings: {
+        stability: 0.7,
+        similarity_boost: 0.75,
+        style: 0.5,
+        use_speaker_boost: true,
+      },
+    }),
+  })
 
-async function generateWithElevenLabs(text: string, config: AudioConfig, env: Env): Promise<ArrayBuffer> {
-    if (!env.ELEVENLABS_API_KEY) {
-        throw new Error('ElevenLabs API key is not configured.');
-    }
-    const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${config.voice_character}`;
-    const body = JSON.stringify({
-        text: text,
-        model_id: "eleven_multilingual_v2",
-        voice_settings: {
-            stability: 0.7,
-            similarity_boost: 0.75,
-            style: 0.5,
-            use_speaker_boost: true,
-        }
-    });
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`ElevenLabs error: ${errText.slice(0, 300)}`)
+  }
 
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'xi-api-key': env.ELEVENLABS_API_KEY
-        },
-        body: body,
-    });
-
-    if (!response.ok) {
-        throw new Error(`ElevenLabs API error: ${await response.text()}`);
-    }
-    return response.arrayBuffer();
+  return res.arrayBuffer()
 }

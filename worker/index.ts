@@ -76,17 +76,17 @@ export default {
       // Image routes
       else if (path.startsWith('/api/image/')) {
         const { handleImageRequest } = await import('./image')
-        response = await handleImageRequest(request, env, url, ctx, creds as any)
+        response = await handleImageRequest(request, env, url, ctx, creds)
       }
       // Video routes
       else if (path.startsWith('/api/video/')) {
         const { handleVideoRequest } = await import('./video')
-        response = await handleVideoRequest(request, env, url, ctx, creds as any)
+        response = await handleVideoRequest(request, env, url, ctx, creds)
       }
       // Audio routes
       else if (path.startsWith('/api/audio/')) {
         const { handleAudioRequest } = await import('./audio')
-        response = await handleAudioRequest(request, env, url, ctx, creds as any)
+        response = await handleAudioRequest(request, env, url, ctx, creds)
       }
       // Project routes
       else if (path.startsWith('/api/project/')) {
@@ -96,7 +96,7 @@ export default {
       // Storage routes
       else if (path.startsWith('/api/storage/')) {
         const { handleStorageRequest } = await import('./storage')
-        response = await handleStorageRequest(request, env, url, ctx, creds as any)
+        response = await handleStorageRequest(request, env, url, ctx, creds)
       }
       // Health check
       else if (path === '/api/health' || path === '/') {

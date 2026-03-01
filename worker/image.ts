@@ -1,105 +1,129 @@
-import { Env } from './index';
-import { nanoid } from 'nanoid';
+import type { Env, Credentials } from './index'
+import { AwsV4Signer } from './lib/aws-signature'
 
-async function generateImageWithGemini(env: Env, imagePrompt: string, jobId: string) {
-  const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/projects/fuzzy-pollen/locations/us-central1/publishers/google/models/imagen-3.0-generate-005:generateImage?key=${env.GEMINI_API_KEY}`;
+const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
 
-  const geminiPayload = {
-    "prompt": imagePrompt,
-    "aspect_ratio": "9:16",
-    "negative_prompt": "text, watermark, blur, distortion, lowres",
-    "return_bytes": true,
-  };
-
-  fetch(geminiEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(geminiPayload)
-  }).then(async (res) => {
-    if(!res.ok) {
-        const errorBody = await res.text();
-        console.error("Gemini Image Gen Error:", errorBody);
-        await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'failed', error: errorBody }), { expirationTtl: 3600 });
-    } else {
-        const data = await res.json() as any;
-        const imageBytes = data.images[0].image.b64_encoded;
-        const imageBuffer = Uint8Array.from(atob(imageBytes), c => c.charCodeAt(0));
-
-        const r2Key = `img_${Date.now()}.png`;
-
-        try {
-          await env.STORY_STORAGE.put(r2Key, imageBuffer, {
-            httpMetadata: { contentType: 'image/png' },
-          });
-          await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'done', imageR2Key: r2Key }), { expirationTtl: 3600 });
-        } catch (r2Error) {
-          console.error("R2 Upload Error:", r2Error);
-          await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'failed', error: 'Failed to upload image to storage.' }), { expirationTtl: 3600 });
-        }
-    }
-  }).catch(err => {
-      console.error('Fetch error in Gemini background task:', err);
-      env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'failed', error: 'Failed to invoke Gemini model.' }), { expirationTtl: 3600 });
-  });
+interface ImageRequestBody {
+  prompt: string
+  scene_number: number
+  project_id: string
+  aspect_ratio: string
+  art_style: string
 }
 
-export async function handleImageRequest(request: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
-  const path = url.pathname;
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
-
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+function getDimensions(aspect: string): { width: number; height: number } {
+  switch (aspect) {
+    case '16_9': return { width: 1280, height: 720 }
+    case '1_1':  return { width: 1024, height: 1024 }
+    case '4_5':  return { width: 896, height: 1120 }
+    default:     return { width: 720, height: 1280 } // 9:16
   }
+}
 
-  try {
-    if (path.startsWith('/api/image/generate')) {
-      if (request.method !== 'POST') {
-        return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+export async function handleImageRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  _ctx: ExecutionContext,
+  creds: Credentials
+): Promise<Response> {
+  const path = url.pathname
+
+  // POST /api/image/generate — synchronous Nova Canvas generation
+  if (path === '/api/image/generate' && request.method === 'POST') {
+    try {
+      const body = await request.json() as ImageRequestBody
+      const { prompt, scene_number, project_id, aspect_ratio, art_style } = body
+
+      if (!prompt) {
+        return Response.json(
+          { error: 'Bad Request', message: 'Missing prompt' },
+          { status: 400 }
+        )
       }
 
-      const { image_prompt, model } = await request.json() as { image_prompt: string, model: string };
-
-      if (!image_prompt || !model) {
-        return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing image_prompt or model' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      if (!creds.awsAccessKeyId || !creds.awsSecretAccessKey) {
+        return Response.json(
+          { error: 'Missing AWS credentials', message: 'Add AWS credentials in Settings' },
+          { status: 400 }
+        )
       }
 
-      const jobId = `img_${Date.now()}_${nanoid(6)}`;
-      await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'generating' }), { expirationTtl: 3600 });
+      const region = creds.imageRegion || 'us-east-1'
+      const modelId = 'amazon.nova-canvas-v1:0'
+      const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
+      const dims = getDimensions(aspect_ratio)
 
-      if (model === 'gemini') {
-        ctx.waitUntil(generateImageWithGemini(env, image_prompt, jobId));
-      } else {
-        return new Response(JSON.stringify({ error: 'Not Implemented', message: `Model ${model} is not supported yet` }), { status: 501, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+      const bedrockBody = JSON.stringify({
+        taskType: 'TEXT_IMAGE',
+        textToImageParams: {
+          text: `${art_style} style. ${prompt}`,
+          negativeText: 'blurry, low quality, distorted, watermark, text overlay',
+        },
+        imageGenerationConfig: {
+          numberOfImages: 1,
+          height: dims.height,
+          width: dims.width,
+          cfgScale: 8.0,
+          seed: Math.floor(Math.random() * 1000000),
+        },
+      })
+
+      const signer = new AwsV4Signer(
+        { awsAccessKeyId: creds.awsAccessKeyId, awsSecretKey: creds.awsSecretAccessKey },
+        region,
+        'bedrock'
+      )
+      const req = new Request(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: bedrockBody,
+      })
+      const signedReq = await signer.sign(req)
+      const res = await fetch(signedReq)
+
+      if (!res.ok) {
+        const errText = await res.text()
+        console.error('Nova Canvas error:', errText)
+        return Response.json(
+          { error: 'Image generation failed', message: errText.slice(0, 300) },
+          { status: 502 }
+        )
       }
 
-      return new Response(JSON.stringify({ jobId }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const data = await res.json() as { images: string[] }
+      if (!data.images || !data.images[0]) {
+        return Response.json(
+          { error: 'No image returned from Nova Canvas' },
+          { status: 502 }
+        )
+      }
 
-    } else if (path.startsWith('/api/image/status/')) {
-        if (request.method !== 'GET') {
-            return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
-        
-        const parts = path.split('/');
-        const jobId = parts[parts.length - 1];
-        
-        const status = await env.JOB_STATUS.get(jobId);
+      // Decode base64 and upload to R2
+      const base64 = data.images[0]
+      const byteString = atob(base64)
+      const imageBuffer = new Uint8Array(byteString.length)
+      for (let i = 0; i < byteString.length; i++) {
+        imageBuffer[i] = byteString.charCodeAt(i)
+      }
 
-        if (!status) {
-            return new Response(JSON.stringify({ status: 'pending' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
+      const r2Key = `projects/${project_id}/scene_${scene_number}/img_${Date.now()}.png`
+      await env.STORY_STORAGE.put(r2Key, imageBuffer, {
+        httpMetadata: { contentType: 'image/png' },
+      })
 
-        return new Response(status, { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const imageUrl = `${WORKER_URL}/api/storage/file/${r2Key}`
+      return Response.json({ image_url: imageUrl })
+
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('Image handler error:', msg)
+      return Response.json(
+        { error: 'Internal Server Error', message: msg },
+        { status: 500 }
+      )
     }
-
-    return new Response('Not Found', { status: 404, headers: corsHeaders });
-  } catch (e: any) {
-    console.error('Image handler error:', e);
-    return new Response(JSON.stringify({ error: 'Internal Server Error', message: e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
+
+  return Response.json({ error: 'Not Found' }, { status: 404 })
 }

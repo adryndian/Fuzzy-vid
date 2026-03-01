@@ -32,6 +32,28 @@ export type AWSRegion =
 export type AssetStatus = 'pending' | 'generating' | 'done' | 'approved' | 'failed'
 export type LockedStatus = 'locked'
 
+export type GenerationStatus = 'idle' | 'generating' | 'done' | 'error'
+
+export interface SceneAssets {
+  imageUrl?: string
+  imageStatus: GenerationStatus
+  imageError?: string
+  videoUrl?: string
+  videoStatus: GenerationStatus
+  videoError?: string
+  audioUrl?: string
+  audioStatus: GenerationStatus
+  audioError?: string
+}
+
+export type SceneAssetsMap = Record<number, SceneAssets>
+
+export const defaultSceneAssets = (): SceneAssets => ({
+  imageStatus: 'idle',
+  videoStatus: 'idle',
+  audioStatus: 'idle',
+})
+
 export interface ProjectSchema {
   project_id: string
   metadata: {

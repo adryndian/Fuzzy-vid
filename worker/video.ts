@@ -1,114 +1,204 @@
-import { Env } from './index';
-import { nanoid } from 'nanoid';
-import { AwsV4Signer } from './lib/aws-signature';
-import type { VideoModel } from '../src/types/schema';
+import type { Env, Credentials } from './index'
+import { AwsV4Signer } from './lib/aws-signature'
 
-interface VideoGenerationRequestBody {
-  image_r2_key: string;
-  model: VideoModel;
-  project_id: string;
-  scene_id: number;
+const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
+
+interface VideoRequestBody {
+  image_url: string
+  prompt: string
+  scene_number: number
+  project_id: string
+  aspect_ratio: string
 }
 
+function getDimension(aspect: string): string {
+  switch (aspect) {
+    case '16_9': return '1280x720'
+    default:     return '720x1280' // 9:16 and others
+  }
+}
 
-async function generateVideoWithNovaReel(env: Env, imageR2Key: string, jobId: string, projectId: string, sceneId: number) {
-  const outputR2Key = `projects/${projectId}/scene_${sceneId}/video_${Date.now()}.mp4`;
+export async function handleVideoRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  _ctx: ExecutionContext,
+  creds: Credentials
+): Promise<Response> {
+  const path = url.pathname
 
-  const bedrockEndpoint = new URL('https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.nova-reel-v1:0/invoke');
+  // POST /api/video/generate — start Nova Reel async invocation
+  if (path === '/api/video/generate' && request.method === 'POST') {
+    try {
+      const body = await request.json() as VideoRequestBody
+      const { image_url, prompt, scene_number, project_id, aspect_ratio } = body
 
-  const payload = {
-    "input_image_r2_key": imageR2Key,
-    "output_r2_bucket": "igome-story-storage",
-    "output_r2_key": outputR2Key,
-  };
+      if (!prompt || !image_url) {
+        return Response.json(
+          { error: 'Bad Request', message: 'Missing prompt or image_url' },
+          { status: 400 }
+        )
+      }
 
-  const signer = new AwsV4Signer({
-      awsAccessKeyId: env.AWS_ACCESS_KEY_ID,
-      awsSecretKey: env.AWS_SECRET_ACCESS_KEY,
-  }, 'us-east-1', 'bedrock');
+      if (!creds.awsAccessKeyId || !creds.awsSecretAccessKey) {
+        return Response.json(
+          { error: 'Missing AWS credentials', message: 'Add AWS credentials in Settings' },
+          { status: 400 }
+        )
+      }
 
-  const request = new Request(bedrockEndpoint.toString(), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+      // Nova Reel is ONLY in us-east-1
+      const region = 'us-east-1'
+      const modelId = 'amazon.nova-reel-v1:0'
+      const dimension = getDimension(aspect_ratio)
 
-  const signedRequest = await signer.sign(request);
+      // Output location in R2 via S3-compatible API
+      const r2AccountId = creds.r2AccountId || env.R2_ACCOUNT_ID
+      const outputKey = `projects/${project_id}/scene_${scene_number}/video_${Date.now()}`
+      const s3OutputUri = `s3://igome-story-storage/${outputKey}`
 
-  // Fire-and-forget background fetch
-  return fetch(signedRequest)
-    .then(async res => {
+      // Nova Reel StartAsyncInvoke endpoint
+      const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/async-invoke`
+
+      const bedrockBody = JSON.stringify({
+        modelInput: {
+          taskType: 'TEXT_VIDEO',
+          textToVideoParams: {
+            text: prompt,
+          },
+          videoGenerationConfig: {
+            durationSeconds: 6,
+            fps: 24,
+            dimension,
+            seed: Math.floor(Math.random() * 1000000),
+          },
+        },
+        outputDataConfig: {
+          s3OutputDataConfig: {
+            s3Uri: s3OutputUri,
+          },
+        },
+      })
+
+      const signer = new AwsV4Signer(
+        { awsAccessKeyId: creds.awsAccessKeyId, awsSecretKey: creds.awsSecretAccessKey },
+        region,
+        'bedrock'
+      )
+      const req = new Request(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: bedrockBody,
+      })
+      const signedReq = await signer.sign(req)
+      const res = await fetch(signedReq)
+
       if (!res.ok) {
-        const errorBody = await res.text();
-        console.error('Nova Reel Invocation Error:', errorBody);
-        await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'failed', error: errorBody }), { expirationTtl: 3600 });
-      } else {
-        await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'done', videoR2Key: outputR2Key }), { expirationTtl: 3600 });
-      }
-    }).catch((err: any) => {
-        console.error('Fetch error in Nova Reel background task:', err);
-        env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'failed', error: 'Failed to invoke Nova Reel model.' }), { expirationTtl: 3600 });
-    });
-}
-
-export async function handleVideoRequest(request: Request, env: Env, url: URL, ctx: ExecutionContext) {
-  const path = url.pathname;
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
-
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    if (path.startsWith('/api/video/generate')) {
-      if (request.method !== 'POST') {
-        return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        const errText = await res.text()
+        console.error('Nova Reel StartAsyncInvoke error:', errText)
+        return Response.json(
+          { error: 'Video generation failed to start', message: errText.slice(0, 300) },
+          { status: 502 }
+        )
       }
 
-      const body = await request.json() as VideoGenerationRequestBody;
-      const { image_r2_key, model, project_id, scene_id } = body;
+      const data = await res.json() as { invocationArn: string }
+      const invocationArn = data.invocationArn
 
-      if (!image_r2_key || !model || !project_id || !scene_id) {
-        return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
+      // Store job status in KV for polling
+      const jobId = `vid_${Date.now()}_${scene_number}`
+      await env.JOB_STATUS.put(jobId, JSON.stringify({
+        status: 'processing',
+        invocationArn,
+        outputKey,
+        r2AccountId,
+      }), { expirationTtl: 7200 })
 
-      const jobId = `vid_${Date.now()}_${nanoid(6)}`;
-      await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'generating' }), { expirationTtl: 3600 });
+      // Return job info — video generation is async (takes 2-5 min)
+      return Response.json({
+        video_url: null,
+        job_id: jobId,
+        status: 'processing',
+        message: 'Video generation started. Nova Reel takes 2-5 minutes. Poll /api/video/status/{job_id} for updates.',
+      })
 
-      if (model === 'nova_reel') {
-        ctx.waitUntil(generateVideoWithNovaReel(env, image_r2_key, jobId, project_id, scene_id));
-      } else {
-        return new Response(JSON.stringify({ error: 'Not Implemented', message: `Model ${model} is not supported yet` }), { status: 501, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
-      }
-
-      return new Response(JSON.stringify({ jobId }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-
-    } else if (path.startsWith('/api/video/status/')) {
-        if (request.method !== 'GET') {
-            return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
-        
-        const parts = path.split('/');
-        const jobId = parts[parts.length - 1];
-        
-        const status = await env.JOB_STATUS.get(jobId);
-
-        if (!status) {
-            return new Response(JSON.stringify({ status: 'pending' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
-
-        return new Response(status, { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('Video handler error:', msg)
+      return Response.json(
+        { error: 'Internal Server Error', message: msg },
+        { status: 500 }
+      )
     }
-
-    return new Response('Not Found', { status: 404, headers: corsHeaders });
-  } catch (e: any) {
-    console.error('Video handler error:', e);
-    return new Response(JSON.stringify({ error: 'Internal Server Error', message: e.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
+
+  // GET /api/video/status/:jobId — check async video status
+  if (path.startsWith('/api/video/status/') && request.method === 'GET') {
+    try {
+      const jobId = path.split('/').pop()
+      if (!jobId) {
+        return Response.json({ error: 'Missing job ID' }, { status: 400 })
+      }
+
+      const raw = await env.JOB_STATUS.get(jobId)
+      if (!raw) {
+        return Response.json({ status: 'not_found' }, { status: 404 })
+      }
+
+      const jobData = JSON.parse(raw) as {
+        status: string
+        invocationArn?: string
+        outputKey?: string
+        video_url?: string
+      }
+
+      // If already done or failed, return as-is
+      if (jobData.status === 'done' || jobData.status === 'failed') {
+        return Response.json(jobData)
+      }
+
+      // Poll Bedrock for status
+      if (jobData.invocationArn && creds.awsAccessKeyId && creds.awsSecretAccessKey) {
+        const region = 'us-east-1'
+        const arnEncoded = encodeURIComponent(jobData.invocationArn)
+        const statusEndpoint = `https://bedrock-runtime.${region}.amazonaws.com/async-invoke/${arnEncoded}`
+
+        const signer = new AwsV4Signer(
+          { awsAccessKeyId: creds.awsAccessKeyId, awsSecretKey: creds.awsSecretAccessKey },
+          region,
+          'bedrock'
+        )
+        const req = new Request(statusEndpoint, { method: 'GET' })
+        const signedReq = await signer.sign(req)
+        const res = await fetch(signedReq)
+
+        if (res.ok) {
+          const statusData = await res.json() as { status: string; outputDataConfig?: { s3Uri?: string } }
+          if (statusData.status === 'Completed') {
+            const videoUrl = `${WORKER_URL}/api/storage/file/${jobData.outputKey}/output.mp4`
+            await env.JOB_STATUS.put(jobId, JSON.stringify({
+              ...jobData,
+              status: 'done',
+              video_url: videoUrl,
+            }), { expirationTtl: 7200 })
+            return Response.json({ status: 'done', video_url: videoUrl })
+          } else if (statusData.status === 'Failed') {
+            await env.JOB_STATUS.put(jobId, JSON.stringify({
+              ...jobData,
+              status: 'failed',
+            }), { expirationTtl: 7200 })
+            return Response.json({ status: 'failed' })
+          }
+        }
+      }
+
+      return Response.json({ status: 'processing', message: 'Video still generating...' })
+
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return Response.json({ error: 'Status check failed', message: msg }, { status: 500 })
+    }
+  }
+
+  return Response.json({ error: 'Not Found' }, { status: 404 })
 }
