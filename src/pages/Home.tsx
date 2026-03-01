@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 type Platform = 'youtube_shorts' | 'reels' | 'tiktok'
@@ -17,6 +17,18 @@ export function Home() {
   const [scenes, setScenes] = useState(5)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('fuzzy_short_settings')
+    if (!stored) {
+      setError('⚙️ Please set your API keys in Settings first')
+    } else {
+      const keys = JSON.parse(stored)
+      if (!keys.geminiApiKey && !keys.awsAccessKeyId) {
+        setError('⚙️ Please set your API keys in Settings first')
+      }
+    }
+  }, [])
 
   const handleSubmit = async () => {
     if (!title.trim() || !story.trim()) { setError('Please fill in title and story'); return }
@@ -59,8 +71,9 @@ export function Home() {
       } else {
         setError((data?.message as string) || (data?.error as string) || 'Generation failed')
       }
-    } catch { setError('Network error. Make sure Worker is deployed.') }
-    finally { setLoading(false) }
+    } catch (e: any) {
+      setError(`Error: ${e.message || 'Network failed. Check Settings for API keys.'}`)
+    } finally { setLoading(false) }
   }
 
   const card: React.CSSProperties = {
@@ -69,7 +82,7 @@ export function Home() {
     WebkitBackdropFilter: 'blur(40px) saturate(200%)',
     border: '1px solid rgba(255,255,255,0.15)',
     borderRadius: '20px',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)',
+    boxShadow: '0 8px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
   }
 
   const inputStyle: React.CSSProperties = {
@@ -111,7 +124,7 @@ export function Home() {
     <div style={{
       minHeight: '100vh',
       width: '100%',
-      background: '#000000',
+      background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1527 40%, #0a1020 100%)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',

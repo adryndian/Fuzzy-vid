@@ -64,57 +64,63 @@ export default {
     const path = url.pathname
     
     const creds = extractCredentials(request, env)
+    let response: Response;
 
     try {
       // Brain routes
       if (path === '/api/brain/generate' || path.startsWith('/api/brain/')) {
         const { handleBrainRequest } = await import('./brain')
-        return handleBrainRequest(request, env, url, ctx, creds)
+        response = await handleBrainRequest(request, env, url, ctx, creds)
       }
-
       // Image routes
-      if (path.startsWith('/api/image/')) {
+      else if (path.startsWith('/api/image/')) {
         const { handleImageRequest } = await import('./image')
-        return handleImageRequest(request, env, url, ctx, creds as any)
+        response = await handleImageRequest(request, env, url, ctx, creds as any)
       }
-
       // Video routes
-      if (path.startsWith('/api/video/')) {
+      else if (path.startsWith('/api/video/')) {
         const { handleVideoRequest } = await import('./video')
-        return handleVideoRequest(request, env, url, ctx, creds as any)
+        response = await handleVideoRequest(request, env, url, ctx, creds as any)
       }
-
       // Audio routes
-      if (path.startsWith('/api/audio/')) {
+      else if (path.startsWith('/api/audio/')) {
         const { handleAudioRequest } = await import('./audio')
-        return handleAudioRequest(request, env, url, ctx, creds as any)
+        response = await handleAudioRequest(request, env, url, ctx, creds as any)
       }
-
       // Project routes
-      if (path.startsWith('/api/project/')) {
+      else if (path.startsWith('/api/project/')) {
         const { handleProjectRequest } = await import('./project')
-        return handleProjectRequest(request, env, url, ctx, creds as any)
+        response = await handleProjectRequest(request, env, url, ctx, creds as any)
       }
-
       // Storage routes
-      if (path.startsWith('/api/storage/')) {
+      else if (path.startsWith('/api/storage/')) {
         const { handleStorageRequest } = await import('./storage')
-        return handleStorageRequest(request, env, url, ctx, creds as any)
+        response = await handleStorageRequest(request, env, url, ctx, creds as any)
       }
-
       // Health check
-      if (path === '/api/health' || path === '/') {
-        return Response.json({ status: 'ok', worker: 'fuzzy-vid-worker' }, { headers: corsHeaders })
+      else if (path === '/api/health' || path === '/') {
+        response = Response.json({ status: 'ok', worker: 'fuzzy-vid-worker' })
       }
-
-      return Response.json({ error: 'Not Found', path }, { status: 404, headers: corsHeaders })
-
+      else {
+        response = Response.json({ error: 'Not Found', path }, { status: 404 })
+      }
     } catch (error) {
       console.error('Worker error:', error)
-      return Response.json(
+      response = Response.json(
         { error: 'Internal Server Error', message: String(error) },
-        { status: 500, headers: corsHeaders }
+        { status: 500 }
       )
     }
+
+    const finalHeaders = new Headers(response.headers);
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+      finalHeaders.set(key, value);
+    });
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: finalHeaders
+    });
   }
 }
