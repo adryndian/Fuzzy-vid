@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { AppSettings, BrainModel, ImageModel, VideoModel, AudioModel, AWSRegion } from '../types/schema';
+import type { StoreSettings, BrainModel, ImageModel, VideoModel, AudioModel, AWSRegion } from '../types/schema';
 
-type SettingsState = AppSettings;
+type SettingsState = StoreSettings;
 
 type SettingsActions = {
   setGeminiApiKey: (key: string) => void;

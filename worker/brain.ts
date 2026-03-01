@@ -21,8 +21,8 @@ OUTPUT RULES:
   even if narasi_language is set to one language
 `;
 
-async function callBedrock(credentials: any, modelId: string, prompt: string, systemPrompt: string): Promise<string> {
-  const region = credentials.awsRegion || 'us-east-1'
+async function callBedrock(creds: import('./index').Credentials, modelId: string, prompt: string, systemPrompt: string): Promise<string> {
+  const region = creds.brainRegion || 'us-east-1'
   const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
   
   const body = JSON.stringify({
@@ -40,8 +40,8 @@ async function callBedrock(credentials: any, modelId: string, prompt: string, sy
     url: endpoint,
     region,
     service: 'bedrock',
-    accessKeyId: credentials.awsAccessKeyId,
-    secretAccessKey: credentials.awsSecretAccessKey,
+    accessKeyId: creds.awsAccessKeyId,
+    secretAccessKey: creds.awsSecretAccessKey,
     body,
     headers: { 'Content-Type': 'application/json' }
   })
@@ -61,8 +61,8 @@ async function callBedrock(credentials: any, modelId: string, prompt: string, sy
   return data.content[0].text
 }
 
-async function callBedrockLlama(credentials: any, prompt: string, systemPrompt: string): Promise<string> {
-  const region = credentials.awsRegion || 'us-west-2'
+async function callBedrockLlama(creds: import('./index').Credentials, prompt: string, systemPrompt: string): Promise<string> {
+  const region = creds.brainRegion || 'us-west-2'
   const modelId = 'us.meta.llama4-maverick-17b-instruct-v1:0'
   const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
 
@@ -78,8 +78,8 @@ async function callBedrockLlama(credentials: any, prompt: string, systemPrompt: 
     url: endpoint,
     region,
     service: 'bedrock',
-    accessKeyId: credentials.awsAccessKeyId,
-    secretAccessKey: credentials.awsSecretAccessKey,
+    accessKeyId: creds.awsAccessKeyId,
+    secretAccessKey: creds.awsSecretAccessKey,
     body,
     headers: { 'Content-Type': 'application/json' }
   })
@@ -99,7 +99,13 @@ async function callBedrockLlama(credentials: any, prompt: string, systemPrompt: 
   return data.generation
 }
 
-export async function handleBrainRequest(request: Request, credentials: any, url: URL, ctx: ExecutionContext): Promise<Response> {
+export async function handleBrainRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  ctx: ExecutionContext,
+  creds: import('./index').Credentials
+): Promise<Response> {
     const path = url.pathname;
     const corsHeaders = {
         'Access-Control-Allow-Origin': '*',
@@ -117,7 +123,16 @@ export async function handleBrainRequest(request: Request, credentials: any, url
                 return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
 
-            const { title, story, platform, brain_model: model, language: narasi_language = 'en', art_style, total_scenes } = await request.json() as any;
+            const body = await request.json() as any;
+            const { title, story, platform, brain_model: model, language: narasi_language = 'en', art_style, total_scenes } = body;
+
+            const selectedModel = model || 'gemini'
+            if (selectedModel === 'gemini' && !creds.geminiApiKey) {
+              return Response.json({ error: 'Missing Gemini API Key', message: 'Please add your Gemini API Key in Settings' }, { status: 400, headers: corsHeaders })
+            }
+            if ((selectedModel === 'claude_sonnet' || selectedModel === 'llama4_maverick') && (!creds.awsAccessKeyId || !creds.awsSecretAccessKey)) {
+              return Response.json({ error: 'Missing AWS Credentials', message: 'Please add your AWS credentials in Settings' }, { status: 400, headers: corsHeaders })
+            }
 
             if (!title || !story || !model) {
                 return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing title, story or brain_model' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -138,16 +153,16 @@ Language: ${narasi_language}
             if (model === 'claude_sonnet' || model === 'gemini') {
               // Use Claude as primary (also fallback for gemini when Gemini is down)
               responseText = await callBedrock(
-                credentials,
+                creds,
                 'us.anthropic.claude-sonnet-4-6-20251001-v1:0',
                 prompt,
                 systemPrompt
               )
             } else if (model === 'llama4_maverick') {
-              responseText = await callBedrockLlama(credentials, prompt, systemPrompt)
+              responseText = await callBedrockLlama(creds, prompt, systemPrompt)
             } else {
               responseText = await callBedrock(
-                credentials,
+                creds,
                 'us.anthropic.claude-sonnet-4-6-20251001-v1:0',
                 prompt,
                 systemPrompt

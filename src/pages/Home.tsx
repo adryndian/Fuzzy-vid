@@ -19,46 +19,48 @@ export function Home() {
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async () => {
-    if (!title.trim() || !story.trim()) {
-      setError('Please fill in title and story')
-      return
-    }
+    if (!title.trim() || !story.trim()) { setError('Please fill in title and story'); return }
     setError('')
     setLoading(true)
+
+    // Load settings from localStorage
+    let apiHeaders: Record<string, string> = {}
     try {
       const stored = localStorage.getItem('fuzzy_short_settings')
-      const keys = stored ? JSON.parse(stored) : {}
+      if (stored) {
+        const s = JSON.parse(stored)
+        if (s.geminiApiKey) apiHeaders['X-Gemini-Key'] = s.geminiApiKey
+        if (s.awsAccessKeyId) apiHeaders['X-AWS-Access-Key-Id'] = s.awsAccessKeyId
+        if (s.awsSecretAccessKey) apiHeaders['X-AWS-Secret-Access-Key'] = s.awsSecretAccessKey
+        if (s.brainRegion) apiHeaders['X-Brain-Region'] = s.brainRegion
+        if (s.imageRegion) apiHeaders['X-Image-Region'] = s.imageRegion
+        if (s.audioRegion) apiHeaders['X-Audio-Region'] = s.audioRegion
+        if (s.elevenLabsApiKey) apiHeaders['X-ElevenLabs-Key'] = s.elevenLabsApiKey
+        if (s.runwayApiKey) apiHeaders['X-Runway-Key'] = s.runwayApiKey
+      }
+    } catch {}
 
+    // Check if user has set API keys
+    if (!apiHeaders['X-Gemini-Key'] && !apiHeaders['X-AWS-Access-Key-Id']) {
+      setError('Please add your API keys in Settings first')
+      setLoading(false)
+      return
+    }
+
+    try {
       const res = await fetch('https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(keys.geminiApiKey && { 'X-Gemini-Key': keys.geminiApiKey }),
-          ...(keys.awsAccessKeyId && { 'X-AWS-Access-Key-Id': keys.awsAccessKeyId }),
-          ...(keys.awsSecretAccessKey && { 'X-AWS-Secret-Access-Key': keys.awsSecretAccessKey }),
-          ...(keys.awsRegion && { 'X-AWS-Region': keys.awsRegion }),
-        },
-        body: JSON.stringify({
-          title,
-          story,
-          platform,
-          brain_model: brainModel,
-          language,
-          art_style: artStyle,
-          total_scenes: scenes,
-        })
+        headers: { 'Content-Type': 'application/json', ...apiHeaders },
+        body: JSON.stringify({ title, story, platform, brain_model: brainModel, language, art_style: artStyle, total_scenes: scenes })
       })
-      const data = await res.json()
-      if (data?.project_id) {
-        navigate(`/storyboard/${data.project_id}`)
+      const data = await res.json() as Record<string, unknown>
+      if (res.ok && data?.project_id) {
+        navigate(`/storyboard/${data.project_id as string}`)
       } else {
-        setError(data?.error || 'Generation failed. Check your API keys in Settings.')
+        setError((data?.message as string) || (data?.error as string) || 'Generation failed')
       }
-    } catch (e) {
-      setError('Network error. Make sure the Worker is deployed.')
-    } finally {
-      setLoading(false)
-    }
+    } catch { setError('Network error. Make sure Worker is deployed.') }
+    finally { setLoading(false) }
   }
 
   const card: React.CSSProperties = {
@@ -125,27 +127,18 @@ export function Home() {
       `}</style>
 
       {/* Settings Button */}
-      <button
+      <button 
         onClick={() => navigate('/settings')}
         style={{
-          position: 'fixed',
-          top: '16px',
-          right: '16px',
+          position: 'fixed', top: '16px', right: '16px', zIndex: 50,
           background: 'rgba(255,255,255,0.08)',
-          border: '1px solid rgba(255,255,255,0.15)',
-          borderRadius: '12px',
-          padding: '10px',
-          cursor: 'pointer',
-          zIndex: 100,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          fontSize: '20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-        }}
-      >
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '1px solid rgba(239,225,207,0.15)',
+          borderRadius: '12px', color: '#EFE1CF',
+          padding: '8px 12px', cursor: 'pointer',
+          fontSize: '18px',
+        }}>
         ⚙️
       </button>
 

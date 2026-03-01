@@ -132,7 +132,7 @@ export interface AudioConfig {
 }
 
 // Settings Store Types
-export interface AppSettings {
+export interface StoreSettings {
   // AI Brain
   default_brain_model: BrainModel
   gemini_api_key: string
@@ -163,4 +163,58 @@ export interface AppSettings {
 
   // General
   default_narasi_language: 'id' | 'en'
+}
+
+export interface AppSettings {
+  // AI Keys
+  geminiApiKey: string
+  awsAccessKeyId: string
+  awsSecretAccessKey: string
+  // Region per service
+  brainRegion: 'us-east-1' | 'us-west-2' | 'ap-southeast-1'
+  imageRegion: 'us-east-1' | 'us-west-2' | 'ap-southeast-1'
+  audioRegion: 'us-east-1' | 'us-west-2' | 'ap-southeast-1'
+  videoRegion: 'us-east-1' // always fixed
+  // Optional
+  elevenLabsApiKey: string
+  runwayApiKey: string
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  geminiApiKey: '',
+  awsAccessKeyId: '',
+  awsSecretAccessKey: '',
+  brainRegion: 'us-east-1',
+  imageRegion: 'us-east-1',
+  audioRegion: 'us-west-2',
+  videoRegion: 'us-east-1',
+  elevenLabsApiKey: '',
+  runwayApiKey: '',
+}
+
+export const SETTINGS_STORAGE_KEY = 'fuzzy_short_settings'
+
+export function loadSettings(): AppSettings {
+  try {
+    const stored = localStorage.getItem(SETTINGS_STORAGE_KEY)
+    if (stored) return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) }
+  } catch {}
+  return DEFAULT_SETTINGS
+}
+
+export function saveSettings(settings: AppSettings): void {
+  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+}
+
+export function buildApiHeaders(settings: AppSettings): Record<string, string> {
+  const headers: Record<string, string> = {}
+  if (settings.geminiApiKey) headers['X-Gemini-Key'] = settings.geminiApiKey
+  if (settings.awsAccessKeyId) headers['X-AWS-Access-Key-Id'] = settings.awsAccessKeyId
+  if (settings.awsSecretAccessKey) headers['X-AWS-Secret-Access-Key'] = settings.awsSecretAccessKey
+  if (settings.brainRegion) headers['X-Brain-Region'] = settings.brainRegion
+  if (settings.imageRegion) headers['X-Image-Region'] = settings.imageRegion
+  if (settings.audioRegion) headers['X-Audio-Region'] = settings.audioRegion
+  if (settings.elevenLabsApiKey) headers['X-ElevenLabs-Key'] = settings.elevenLabsApiKey
+  if (settings.runwayApiKey) headers['X-Runway-Key'] = settings.runwayApiKey
+  return headers
 }
