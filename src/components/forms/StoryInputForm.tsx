@@ -1,236 +1,209 @@
-import React, { useState } from 'react';
-import { GlassCard } from '../glass/GlassCard';
-import { GlassButton } from '../glass/GlassButton';
-import { GlassInput } from '../glass/GlassInput';
-import { useSettingsStore } from '../../store/settingsStore';
-import type { BrainModel, ArtStyle } from '../../types/schema';
-import { Bot, Loader, Monitor, Smartphone, MessageSquare, Globe, Image as ImageIcon, Layers } from 'lucide-react';
-import { useBrainGenerate } from '../../hooks/useBrainGenerate';
-import { useNavigate } from 'react-router-dom';
-import { cn } from '../../lib/utils';
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useBrainGenerate } from '../../hooks/useBrainGenerate'
 
-const ART_STYLES: { id: ArtStyle; label: string; icon: string }[] = [
-  { id: 'cinematic_realistic', label: 'Cinematic', icon: '🎬' },
-  { id: 'anime_stylized', label: 'Anime', icon: '🎎' },
-  { id: 'comic_book', label: 'Comic', icon: '💥' },
-  { id: '3d_render', label: '3D Render', icon: '🧊' },
-  { id: 'oil_painting', label: 'Oil Painting', icon: '🎨' },
-  { id: 'pixel_art', label: 'Pixel Art', icon: '👾' },
-];
+type Platform = 'youtube_shorts' | 'reels' | 'tiktok'
+type BrainModel = 'gemini' | 'llama4_maverick' | 'claude_sonnet'
+type Language = 'id' | 'en'
+type ArtStyle = 'cinematic_realistic' | 'anime_stylized' | 'comic_book' | '3d_render' | 'oil_painting' | 'pixel_art'
 
-export const StoryInputForm: React.FC = () => {
-  const [storyPrompt, setStoryPrompt] = useState('');
-  const [title, setTitle] = useState('');
-  const [platform, setPlatform] = useState<'youtube_shorts' | 'reels' | 'tiktok'>('youtube_shorts');
-  const [artStyle, setArtStyle] = useState<ArtStyle>('cinematic_realistic');
-  const [numScenes, setNumScenes] = useState(5);
-  
-  const { 
-    default_brain_model, 
-    default_narasi_language, 
-    setDefaultBrainModel, 
-    setDefaultNarasiLanguage 
-  } = useSettingsStore();
-  
-  const brainGenerateMutation = useBrainGenerate();
-  const navigate = useNavigate();
+const platforms: { id: Platform; label: string; emoji: string }[] = [
+  { id: 'youtube_shorts', label: 'YouTube Shorts', emoji: '▶️' },
+  { id: 'reels', label: 'Reels', emoji: '📸' },
+  { id: 'tiktok', label: 'TikTok', emoji: '🎵' },
+]
 
-  const handleGenerate = async () => {
-    try {
-      const result = await brainGenerateMutation.mutateAsync({
-        prompt: `Title: ${title}. Story: ${storyPrompt}. Art Style: ${artStyle}. Scenes: ${numScenes}. Platform: ${platform}`,
-        model: default_brain_model,
-        narasi_language: default_narasi_language,
-      });
-      navigate(`/storyboard/${result.project_id}`);
-    } catch (error) {
-      console.error('Failed to generate storyboard:', error);
+const brainModels: { id: BrainModel; label: string; desc: string; color: string }[] = [
+  { id: 'gemini', label: 'Gemini', desc: 'Fast & Free', color: '#3FA9F6' },
+  { id: 'llama4_maverick', label: 'Llama 4', desc: 'Balanced', color: '#A855F7' },
+  { id: 'claude_sonnet', label: 'Claude', desc: 'Best Quality', color: '#F05A25' },
+]
+
+const artStyles: { id: ArtStyle; label: string; emoji: string }[] = [
+  { id: 'cinematic_realistic', label: 'Cinematic', emoji: '🎬' },
+  { id: 'anime_stylized', label: 'Anime', emoji: '⛩️' },
+  { id: 'comic_book', label: 'Comic', emoji: '💥' },
+  { id: '3d_render', label: '3D Render', emoji: '🎮' },
+  { id: 'oil_painting', label: 'Oil Paint', emoji: '🎨' },
+  { id: 'pixel_art', label: 'Pixel Art', emoji: '👾' },
+]
+
+export function StoryInputForm() {
+  const navigate = useNavigate()
+  const [title, setTitle] = useState('')
+  const [story, setStory] = useState('')
+  const [platform, setPlatform] = useState<Platform>('youtube_shorts')
+  const [brainModel, setBrainModel] = useState<BrainModel>('gemini')
+  const [language, setLanguage] = useState<Language>('id')
+  const [artStyle, setArtStyle] = useState<ArtStyle>('cinematic_realistic')
+  const [scenes, setScenes] = useState(5)
+  const [error, setError] = useState('')
+
+  const { generate, isLoading } = useBrainGenerate()
+
+  const handleSubmit = () => {
+    if (!title.trim() || !story.trim()) {
+      setError('Please fill in title and story')
+      return
     }
-  };
+    setError('')
+    generate({
+      title,
+      story,
+      platform,
+      brain_model: brainModel,
+      language,
+      art_style: artStyle,
+      total_scenes: scenes,
+    }, {
+      onSuccess: (data) => {
+        if (data?.project_id) {
+          navigate(`/storyboard/${data.project_id}`)
+        }
+      },
+      onError: (err) => {
+        setError('Failed to generate. Check your API settings.')
+        console.error(err)
+      }
+    })
+  }
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Title Input */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-[var(--text-secondary)] ml-1">Story Title</label>
-        <GlassInput 
-          placeholder="Enter a catchy title..." 
+    <div className="flex flex-col gap-5">
+      {/* Title */}
+      <div>
+        <label className="text-xs text-[rgba(239,225,207,0.6)] uppercase tracking-widest mb-1.5 block">
+          Story Title
+        </label>
+        <input
+          type="text"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="text-lg py-4 px-6 rounded-2xl bg-[var(--glass-02)] border-[var(--glass-border-02)]"
+          onChange={e => setTitle(e.target.value)}
+          placeholder="Enter a catchy title..."
+          className="w-full bg-[rgba(255,255,255,0.06)] border border-[rgba(239,225,207,0.12)] rounded-xl px-4 py-3 text-[#EFE1CF] placeholder-[rgba(239,225,207,0.3)] text-sm outline-none focus:border-[rgba(240,90,37,0.5)] focus:bg-[rgba(255,255,255,0.08)] transition-all"
         />
       </div>
 
-      {/* Platform Selector */}
-      <div className="space-y-3">
-        <label className="text-sm font-medium text-[var(--text-secondary)] ml-1 flex items-center gap-2">
-          <Monitor size={14} /> Target Platform
-        </label>
-        <div className="flex p-1.5 bg-[var(--glass-01)] border border-[var(--glass-border-01)] rounded-2xl gap-1">
-          {(['youtube_shorts', 'reels', 'tiktok'] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPlatform(p)}
-              className={cn(
-                "flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all duration-300 capitalize",
-                platform === p 
-                  ? "bg-[var(--accent-blue)] text-white shadow-[var(--glow-blue)]" 
-                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--glass-01)]"
-              )}
-            >
-              {p.replace('_', ' ')}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Story Prompt */}
-      <div className="space-y-3">
-        <label className="text-sm font-medium text-[var(--text-secondary)] ml-1 flex items-center gap-2">
-          <MessageSquare size={14} /> The Story
+      {/* Story */}
+      <div>
+        <label className="text-xs text-[rgba(239,225,207,0.6)] uppercase tracking-widest mb-1.5 block">
+          The Story
         </label>
         <textarea
-          className="w-full min-h-[160px] rounded-2xl border border-[var(--glass-border-02)] bg-[var(--glass-02)] p-6 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-blue)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-blue)] transition-all resize-none"
-          placeholder="Describe your story in detail... The AI will build a visual storyboard from this."
-          value={storyPrompt}
-          onChange={(e) => setStoryPrompt(e.target.value)}
+          value={story}
+          onChange={e => setStory(e.target.value)}
+          placeholder="Describe your story in detail... The AI will build a cinematic storyboard."
+          rows={3}
+          className="w-full bg-[rgba(255,255,255,0.06)] border border-[rgba(239,225,207,0.12)] rounded-xl px-4 py-3 text-[#EFE1CF] placeholder-[rgba(239,225,207,0.3)] text-sm outline-none focus:border-[rgba(240,90,37,0.5)] focus:bg-[rgba(255,255,255,0.08)] transition-all resize-none"
         />
       </div>
 
-      {/* Brain Model Selector */}
-      <div className="space-y-3">
-        <label className="text-sm font-medium text-[var(--text-secondary)] ml-1 flex items-center gap-2">
-          <Bot size={14} /> AI Brain
+      {/* Platform */}
+      <div>
+        <label className="text-xs text-[rgba(239,225,207,0.6)] uppercase tracking-widest mb-1.5 block">
+          Target Platform
         </label>
-        <div className="grid grid-cols-3 gap-3">
-          {(['gemini', 'llama4_maverick', 'claude_sonnet'] as BrainModel[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => setDefaultBrainModel(m)}
-              className={cn(
-                "p-4 rounded-2xl border transition-all duration-300 text-center flex flex-col items-center gap-2",
-                default_brain_model === m
-                  ? "bg-[var(--glass-03)] border-[var(--accent-orange)] shadow-[0_0_15px_rgba(240,90,37,0.2)]"
-                  : "bg-[var(--glass-01)] border-[var(--glass-border-01)] hover:border-[var(--glass-border-03)]"
-              )}
-            >
-              <div className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
-                default_brain_model === m ? "bg-[var(--accent-orange)] text-white" : "bg-[var(--glass-02)] text-[var(--text-muted)]"
-              )}>
-                {m[0].toUpperCase()}
-              </div>
-              <span className={cn(
-                "text-[10px] font-bold uppercase tracking-wider",
-                default_brain_model === m ? "text-[var(--accent-orange)]" : "text-[var(--text-muted)]"
-              )}>
-                {m.split('_')[0]}
-              </span>
+        <div className="flex gap-2">
+          {platforms.map(p => (
+            <button key={p.id} onClick={() => setPlatform(p.id)}
+              className={`flex-1 py-2 px-2 rounded-xl text-xs font-medium border transition-all ${
+                platform === p.id
+                  ? 'bg-[rgba(240,90,37,0.2)] border-[#F05A25] text-[#F05A25]'
+                  : 'bg-[rgba(255,255,255,0.04)] border-[rgba(239,225,207,0.1)] text-[rgba(239,225,207,0.6)]'
+              }`}>
+              {p.emoji} {p.label}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* Language Toggle */}
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-[var(--text-secondary)] ml-1 flex items-center gap-2">
-            <Globe size={14} /> Narration
-          </label>
-          <div className="flex p-1 bg-[var(--glass-01)] border border-[var(--glass-border-01)] rounded-xl gap-1">
-            {(['id', 'en'] as const).map((l) => (
-              <button
-                key={l}
-                onClick={() => setDefaultNarasiLanguage(l)}
-                className={cn(
-                  "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
-                  default_narasi_language === l
-                    ? "bg-white/10 text-[var(--text-primary)]"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                )}
-              >
-                {l === 'id' ? '🇮🇩 Indo' : '🇬🇧 English'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Scene Slider */}
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-[var(--text-secondary)] ml-1 flex items-center gap-2">
-            <Layers size={14} /> {numScenes} Scenes
-          </label>
-          <input
-            type="range"
-            min="3"
-            max="15"
-            value={numScenes}
-            onChange={(e) => setNumScenes(parseInt(e.target.value))}
-            className="w-full h-1.5 bg-[var(--glass-02)] rounded-lg appearance-none cursor-pointer accent-[var(--accent-blue)]"
-          />
-        </div>
-      </div>
-
-      {/* Art Style Grid */}
-      <div className="space-y-3">
-        <label className="text-sm font-medium text-[var(--text-secondary)] ml-1 flex items-center gap-2">
-          <ImageIcon size={14} /> Art Style
+      {/* AI Brain */}
+      <div>
+        <label className="text-xs text-[rgba(239,225,207,0.6)] uppercase tracking-widest mb-1.5 block">
+          AI Brain
         </label>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-          {ART_STYLES.map((style) => (
-            <button
-              key={style.id}
-              onClick={() => setArtStyle(style.id)}
-              className={cn(
-                "flex flex-col items-center gap-1.5 p-2 rounded-xl border transition-all duration-300",
-                artStyle === style.id
-                  ? "bg-[var(--glass-03)] border-[var(--accent-blue)]"
-                  : "bg-[var(--glass-01)] border-[var(--glass-border-01)] hover:border-[var(--glass-border-02)]"
-              )}
-            >
-              <span className="text-lg">{style.icon}</span>
-              <span className={cn(
-                "text-[9px] font-semibold text-center leading-tight",
-                artStyle === style.id ? "text-[var(--accent-blue)]" : "text-[var(--text-muted)]"
-              )}>
-                {style.label}
-              </span>
+        <div className="flex gap-2">
+          {brainModels.map(m => (
+            <button key={m.id} onClick={() => setBrainModel(m.id)}
+              className={`flex-1 py-2.5 px-2 rounded-xl text-xs border transition-all ${
+                brainModel === m.id
+                  ? 'border-[rgba(255,255,255,0.3)] bg-[rgba(255,255,255,0.1)]'
+                  : 'border-[rgba(239,225,207,0.08)] bg-[rgba(255,255,255,0.03)]'
+              }`}>
+              <div className="font-semibold text-[#EFE1CF]">{m.label}</div>
+              <div className="text-[rgba(239,225,207,0.5)] mt-0.5">{m.desc}</div>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Generate Button */}
-      <div className="pt-4">
-        <button
-          onClick={handleGenerate}
-          disabled={brainGenerateMutation.isPending || !storyPrompt || !title}
-          className={cn(
-            "group relative w-full py-5 rounded-2xl font-bold text-lg transition-all duration-500 flex items-center justify-center gap-3 overflow-hidden",
-            "bg-[var(--accent-orange)] text-white shadow-[var(--glow-orange)]",
-            "hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100 disabled:shadow-none"
-          )}
-        >
-          {brainGenerateMutation.isPending ? (
-            <>
-              <Loader className="animate-spin" size={20} />
-              <span>Architecting Story...</span>
-            </>
-          ) : (
-            <>
-              <Bot size={20} className="group-hover:rotate-12 transition-transform" />
-              <span>Generate Storyboard</span>
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite]" />
-            </>
-          )}
-        </button>
+      {/* Language */}
+      <div>
+        <label className="text-xs text-[rgba(239,225,207,0.6)] uppercase tracking-widest mb-1.5 block">
+          Narration Language
+        </label>
+        <div className="flex gap-2">
+          {[{id:'id',label:'🇮🇩 Indonesia'},{id:'en',label:'🇬🇧 English'}].map(l => (
+            <button key={l.id} onClick={() => setLanguage(l.id as Language)}
+              className={`flex-1 py-2 rounded-xl text-sm border transition-all ${
+                language === l.id
+                  ? 'bg-[rgba(63,169,246,0.2)] border-[#3FA9F6] text-[#3FA9F6]'
+                  : 'bg-[rgba(255,255,255,0.04)] border-[rgba(239,225,207,0.1)] text-[rgba(239,225,207,0.6)]'
+              }`}>
+              {l.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes shimmer {
-          100% { transform: translateX(100%); }
-        }
-      `}} />
+      {/* Art Style */}
+      <div>
+        <label className="text-xs text-[rgba(239,225,207,0.6)] uppercase tracking-widest mb-1.5 block">
+          Art Style
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {artStyles.map(s => (
+            <button key={s.id} onClick={() => setArtStyle(s.id)}
+              className={`py-2 px-1 rounded-xl text-xs border transition-all ${
+                artStyle === s.id
+                  ? 'bg-[rgba(240,90,37,0.2)] border-[#F05A25] text-[#EFE1CF]'
+                  : 'bg-[rgba(255,255,255,0.04)] border-[rgba(239,225,207,0.08)] text-[rgba(239,225,207,0.5)]'
+              }`}>
+              {s.emoji} {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Scenes */}
+      <div>
+        <label className="text-xs text-[rgba(239,225,207,0.6)] uppercase tracking-widest mb-1.5 block">
+          Scenes: <span className="text-[#F05A25] font-bold">{scenes}</span>
+        </label>
+        <input type="range" min={3} max={15} value={scenes}
+          onChange={e => setScenes(Number(e.target.value))}
+          className="w-full accent-[#F05A25]" />
+        <div className="flex justify-between text-xs text-[rgba(239,225,207,0.3)] mt-1">
+          <span>3</span><span>15</span>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] rounded-xl px-4 py-2 text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Submit */}
+      <button onClick={handleSubmit} disabled={isLoading}
+        className="w-full py-4 rounded-xl font-semibold text-white text-sm transition-all disabled:opacity-50"
+        style={{
+          background: isLoading ? 'rgba(240,90,37,0.5)' : '#F05A25',
+          boxShadow: isLoading ? 'none' : '0 0 24px rgba(240,90,37,0.4)',
+        }}>
+        {isLoading ? '✨ Generating...' : '🎬 Generate Storyboard'}
+      </button>
     </div>
-  );
-};
+  )
+}

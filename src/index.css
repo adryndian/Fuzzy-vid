@@ -1,7 +1,11 @@
-* {
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*, *::before, *::after {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
 }
 
 html, body, #root {
@@ -10,22 +14,5 @@ html, body, #root {
   background-color: #000000;
   color: #EFE1CF;
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
-  overflow-x: hidden;
-}
-
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(239, 225, 207, 0.1);
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(239, 225, 207, 0.2);
+  -webkit-font-smoothing: antialiased;
 }
