@@ -15,7 +15,7 @@ export function Home() {
   const [brainModel, setBrainModel] = useState<BrainModel>('gemini')
   const [language, setLanguage] = useState<Language>('id')
   const [artStyle, setArtStyle] = useState<ArtStyle>('cinematic_realistic')
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16')
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9_16')
   const [scenes, setScenes] = useState(5)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -299,10 +299,10 @@ export function Home() {
           <span style={label}>Aspect Ratio</span>
           <div style={{ display: 'flex', gap: '8px' }}>
             {([
-              { id: '9:16', label: '9:16', desc: 'Vertical', icon: '📱' },
-              { id: '16:9', label: '16:9', desc: 'Landscape', icon: '🖥️' },
-              { id: '1:1', label: '1:1', desc: 'Square', icon: '⬜' },
-              { id: '4:5', label: '4:5', desc: 'Portrait', icon: '🖼️' },
+              { id: '9_16', label: '9:16', desc: 'Vertical', icon: '📱' },
+              { id: '16_9', label: '16:9', desc: 'Landscape', icon: '🖥️' },
+              { id: '1_1', label: '1:1', desc: 'Square', icon: '⬜' },
+              { id: '4_5', label: '4:5', desc: 'Portrait', icon: '🖼️' },
             ] as const).map(r => (
               <button key={r.id} onClick={() => setAspectRatio(r.id)}
                 style={{
@@ -331,9 +331,9 @@ export function Home() {
             <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '11px' }}>
               Resolution: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>1080p</span>
               {' · '}Output: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>
-                {aspectRatio === '9:16' ? '1080×1920' : 
-                 aspectRatio === '16:9' ? '1920×1080' : 
-                 aspectRatio === '1:1' ? '1080×1080' : '864×1080'}
+                {aspectRatio === '9_16' ? '1080×1920' : 
+                 aspectRatio === '16_9' ? '1920×1080' : 
+                 aspectRatio === '1_1' ? '1080×1080' : '864×1080'}
               </span>
             </span>
           </div>

@@ -4,14 +4,14 @@ export type ArtStyle =
   | 'cinematic_realistic' | 'anime_stylized' | 'comic_book'
   | 'oil_painting' | 'watercolor' | 'pixel_art' | '3d_render'
 
-export type AspectRatio = '9:16' | '16:9' | '1:1' | '4:5'
+export type AspectRatio = '9_16' | '16_9' | '1_1' | '4_5'
 export type Resolution = '1080p'
 
 export const ASPECT_RATIOS: { id: AspectRatio; label: string; desc: string; icon: string }[] = [
-  { id: '9:16', label: '9:16', desc: 'Vertical', icon: '📱' },
-  { id: '16:9', label: '16:9', desc: 'Landscape', icon: '🖥️' },
-  { id: '1:1', label: '1:1', desc: 'Square', icon: '⬜' },
-  { id: '4:5', label: '4:5', desc: 'Portrait', icon: '🖼️' },
+  { id: '9_16', label: '9:16', desc: 'Vertical', icon: '📱' },
+  { id: '16_9', label: '16:9', desc: 'Landscape', icon: '🖥️' },
+  { id: '1_1', label: '1:1', desc: 'Square', icon: '⬜' },
+  { id: '4_5', label: '4:5', desc: 'Portrait', icon: '🖼️' },
 ]
 
 export const RESOLUTION = '1080p'
@@ -38,7 +38,7 @@ export interface ProjectSchema {
     title: string
     created_at: string
     target_platform: 'youtube_shorts' | 'reels' | 'tiktok'
-    aspect_ratio: '9:16'
+    aspect_ratio: AspectRatio
     art_style: ArtStyle
     mood: Mood
     brain_model: BrainModel

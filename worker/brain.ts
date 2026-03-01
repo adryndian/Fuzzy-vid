@@ -148,15 +148,15 @@ Language: ${narasi_language}
 `;
 
             const aspectRatioMap: Record<string, string> = {
-              '9:16': '1080x1920 vertical (9:16) - optimized for mobile full screen',
-              '16:9': '1920x1080 landscape (16:9) - optimized for desktop/TV',
-              '1:1': '1080x1080 square (1:1) - optimized for social feed',
-              '4:5': '864x1080 portrait (4:5) - optimized for Instagram feed',
+              '9_16': '1080x1920 vertical (9:16) - optimized for mobile full screen',
+              '16_9': '1920x1080 landscape (16:9) - optimized for desktop/TV',
+              '1_1': '1080x1080 square (1:1) - optimized for social feed',
+              '4_5': '864x1080 portrait (4:5) - optimized for Instagram feed',
             }
 
-            const aspectRatio = body.aspect_ratio || '9:16'
+            const aspectRatio = body.aspect_ratio || '9_16'
             const resolution = body.resolution || '1080p'
-            const frameSpec = aspectRatioMap[aspectRatio] || aspectRatioMap['9:16']
+            const frameSpec = aspectRatioMap[aspectRatio] || aspectRatioMap['9_16']
 
             const promptWithContext = `
 Title: ${title}
@@ -169,10 +169,10 @@ Frame Specification: ${frameSpec}
 Resolution: ${resolution}
 
 IMPORTANT: All image prompts must be composed for ${frameSpec}.
-${aspectRatio === '9:16' ? 'Use vertical composition - subjects centered, portrait orientation.' : ''}
-${aspectRatio === '16:9' ? 'Use horizontal composition - wide establishing shots, landscape orientation.' : ''}
-${aspectRatio === '1:1' ? 'Use square composition - centered subjects, balanced framing.' : ''}
-${aspectRatio === '4:5' ? 'Use portrait composition - slightly wider than phone screen.' : ''}
+${aspectRatio === '9_16' ? 'Use vertical composition - subjects centered, portrait orientation.' : ''}
+${aspectRatio === '16_9' ? 'Use horizontal composition - wide establishing shots, landscape orientation.' : ''}
+${aspectRatio === '1_1' ? 'Use square composition - centered subjects, balanced framing.' : ''}
+${aspectRatio === '4_5' ? 'Use portrait composition - slightly wider than phone screen.' : ''}
 `;
 
             const systemPrompt = getSystemPrompt(narasi_language);
