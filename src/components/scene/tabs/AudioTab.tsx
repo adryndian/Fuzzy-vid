@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Scene } from '../../../types/schema';
-import useProjectStore from '../../../store/projectStore';
+import { useProjectStore } from '../../../store/projectStore';
 import { useAudioGenerate } from '../../../hooks/useAudioGenerate';
 import { GlassButton } from '../../glass/GlassButton';
 

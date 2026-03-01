@@ -23,5 +23,3 @@ export function Button({ className, variant = 'default', size = 'md', ...props }
     />
   )
 }
-
-export default Button

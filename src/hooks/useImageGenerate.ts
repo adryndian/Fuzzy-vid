@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { api } from '../lib/api'
 import type { ImageModel, Scene } from '../types/schema'
-import useProjectStore from '../store/projectStore'
+import { useProjectStore } from '../store/projectStore'
 
 interface GenerateImageProps {
   projectId: string

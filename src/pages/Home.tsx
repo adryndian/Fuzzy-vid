@@ -1,5 +1,5 @@
 import React from 'react';
-import StoryInputForm from '../components/forms/StoryInputForm';
+import { StoryInputForm } from '../components/forms/StoryInputForm';
 
 export const Home: React.FC = () => {
   return (

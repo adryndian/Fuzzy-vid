@@ -1,6 +1,6 @@
 
 import React from 'react';
-import useSettingsStore from '../store/settingsStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { GlassCard } from '../components/glass/GlassCard';
 import { GlassInput } from '../components/glass/GlassInput';
 

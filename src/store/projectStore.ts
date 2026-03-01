@@ -11,7 +11,7 @@ interface ProjectState {
   getScene: (sceneId: number) => Scene | undefined;
 }
 
-const useProjectStore = create<ProjectState>()(
+export const useProjectStore = create<ProjectState>()(
   devtools(
     (set, get) => ({
       project: null,
@@ -39,5 +39,3 @@ const useProjectStore = create<ProjectState>()(
     { name: 'ProjectStore' }
   )
 );
-
-export default useProjectStore;

@@ -1,4 +1,4 @@
-import useProjectStore from '../../store/projectStore';
+import { useProjectStore } from '../../store/projectStore';
 import { GlassCard } from '../glass/GlassCard';
 import { ImageTab } from './tabs/ImageTab';
 import { VideoTab } from './tabs/VideoTab';

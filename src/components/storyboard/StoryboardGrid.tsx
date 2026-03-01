@@ -1,4 +1,4 @@
-import useProjectStore from '../../store/projectStore';
+import { useProjectStore } from '../../store/projectStore';
 import { SceneCard } from '../scene/SceneCard';
 import { GlassCard } from '../glass/GlassCard';
 

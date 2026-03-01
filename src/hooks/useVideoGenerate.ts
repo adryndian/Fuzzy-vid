@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { api } from '../lib/api'
-import useProjectStore from '../store/projectStore'
+import { useProjectStore } from '../store/projectStore'
 import type { VideoModel } from '../types/schema'
 
 interface GenerateVideoProps {

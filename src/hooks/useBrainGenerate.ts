@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import useProjectStore from '../store/projectStore';
+import { useProjectStore } from '../store/projectStore';
 import type { ProjectSchema, BrainModel } from '../types/schema';
 
 interface GenerateBrainProps {

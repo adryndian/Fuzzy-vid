@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { GlassCard } from '../glass/GlassCard';
 import { GlassButton } from '../glass/GlassButton';
-import useSettingsStore from '../../store/settingsStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import type { BrainModel } from '../../types/schema';
 import { Bot, Loader } from 'lucide-react';
 import { useBrainGenerate } from '../../hooks/useBrainGenerate';
 import { useNavigate } from 'react-router-dom';
 
-const StoryInputForm: React.FC = () => {
+export const StoryInputForm: React.FC = () => {
   const [storyPrompt, setStoryPrompt] = useState('');
   const { default_brain_model, default_narasi_language, setDefaultBrainModel } = useSettingsStore();
   const brainGenerateMutation = useBrainGenerate();
@@ -15,12 +15,12 @@ const StoryInputForm: React.FC = () => {
 
   const handleGenerate = async () => {
     try {
-      await brainGenerateMutation.mutateAsync({
+      const result = await brainGenerateMutation.mutateAsync({
         prompt: storyPrompt,
         model: default_brain_model,
         narasi_language: default_narasi_language,
       });
-      navigate('/storyboard');
+      navigate(`/storyboard/${result.project_id}`);
     } catch (error) {
       console.error('Failed to generate storyboard:', error);
     }
@@ -69,5 +69,3 @@ const StoryInputForm: React.FC = () => {
     </GlassCard>
   );
 };
-
-export default StoryInputForm;

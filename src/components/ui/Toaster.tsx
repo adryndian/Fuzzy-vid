@@ -1,7 +1,7 @@
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 
-const Toaster = () => {
+export const Toaster = () => {
   return (
     <HotToaster
       position="bottom-right"
@@ -15,5 +15,3 @@ const Toaster = () => {
     />
   );
 };
-
-export default Toaster;

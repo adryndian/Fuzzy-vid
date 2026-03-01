@@ -23,7 +23,7 @@ type SettingsActions = {
   setDefaultNarasiLanguage: (lang: 'id' | 'en') => void;
 };
 
-const useSettingsStore = create<SettingsState & SettingsActions>()(
+export const useSettingsStore = create<SettingsState & SettingsActions>()(
   persist(
     (set) => ({
       // AI Brain
@@ -79,5 +79,3 @@ const useSettingsStore = create<SettingsState & SettingsActions>()(
     }
   )
 );
-
-export default useSettingsStore;

@@ -1,8 +1,8 @@
 import React from 'react';
 import type { Scene } from '../../../types/schema';
 import { useVideoGeneration } from '../../../hooks/useVideoGenerate';
-import useProjectStore from '../../../store/projectStore';
-import useSettingsStore from '../../../store/settingsStore';
+import { useProjectStore } from '../../../store/projectStore';
+import { useSettingsStore } from '../../../store/settingsStore';
 import { Button } from '../../ui/button';
 import { Video, Loader, Check, AlertTriangle, Download } from 'lucide-react';
 import { GlassCard } from '../../glass/GlassCard';

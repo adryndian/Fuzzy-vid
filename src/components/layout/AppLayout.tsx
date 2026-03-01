@@ -1,10 +1,10 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import Header from './Header';
-import Toaster from '../ui/Toaster';
-import ErrorBoundary from '../ErrorBoundary';
+import { Header } from './Header';
+import { Toaster } from '../ui/Toaster';
+import { ErrorBoundary } from '../ErrorBoundary';
 
-const AppLayout: React.FC = () => {
+export const AppLayout: React.FC = () => {
   return (
     <ErrorBoundary fallback={<div>Something went wrong</div>}>
       <div className="min-h-screen bg-bg-deep text-text-primary">
@@ -17,5 +17,3 @@ const AppLayout: React.FC = () => {
     </ErrorBoundary>
   );
 };
-
-export default AppLayout;

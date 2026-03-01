@@ -1,5 +1,5 @@
 import React from 'react';
-import useProjectStore from '../../store/projectStore';
+import { useProjectStore } from '../../store/projectStore';
 import { GlassCard } from '../glass/GlassCard';
 import { Badge } from '../ui/badge'; // Assuming you have a Badge component
 
