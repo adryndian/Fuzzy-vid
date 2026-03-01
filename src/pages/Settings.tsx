@@ -4,7 +4,7 @@ import useSettingsStore from '../store/settingsStore';
 import { GlassCard } from '../components/glass/GlassCard';
 import { GlassInput } from '../components/glass/GlassInput';
 
-const Settings: React.FC = () => {
+export const Settings: React.FC = () => {
   const settings = useSettingsStore();
 
   return (
@@ -163,5 +163,3 @@ const Settings: React.FC = () => {
     </div>
   );
 };
-
-export default Settings;
