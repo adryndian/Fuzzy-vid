@@ -147,6 +147,34 @@ Total Scenes: ${total_scenes}
 Language: ${narasi_language}
 `;
 
+            const aspectRatioMap: Record<string, string> = {
+              '9:16': '1080x1920 vertical (9:16) - optimized for mobile full screen',
+              '16:9': '1920x1080 landscape (16:9) - optimized for desktop/TV',
+              '1:1': '1080x1080 square (1:1) - optimized for social feed',
+              '4:5': '864x1080 portrait (4:5) - optimized for Instagram feed',
+            }
+
+            const aspectRatio = body.aspect_ratio || '9:16'
+            const resolution = body.resolution || '1080p'
+            const frameSpec = aspectRatioMap[aspectRatio] || aspectRatioMap['9:16']
+
+            const promptWithContext = `
+Title: ${title}
+Story: ${story}
+Platform: ${platform}
+Art Style: ${art_style}
+Total Scenes: ${total_scenes}
+Language: ${narasi_language}
+Frame Specification: ${frameSpec}
+Resolution: ${resolution}
+
+IMPORTANT: All image prompts must be composed for ${frameSpec}.
+${aspectRatio === '9:16' ? 'Use vertical composition - subjects centered, portrait orientation.' : ''}
+${aspectRatio === '16:9' ? 'Use horizontal composition - wide establishing shots, landscape orientation.' : ''}
+${aspectRatio === '1:1' ? 'Use square composition - centered subjects, balanced framing.' : ''}
+${aspectRatio === '4:5' ? 'Use portrait composition - slightly wider than phone screen.' : ''}
+`;
+
             const systemPrompt = getSystemPrompt(narasi_language);
             let responseText: string
 
@@ -155,16 +183,16 @@ Language: ${narasi_language}
               responseText = await callBedrock(
                 creds,
                 'us.anthropic.claude-sonnet-4-6',
-                prompt,
+                promptWithContext,
                 systemPrompt
               )
             } else if (model === 'llama4_maverick') {
-              responseText = await callBedrockLlama(creds, prompt, systemPrompt)
+              responseText = await callBedrockLlama(creds, promptWithContext, systemPrompt)
             } else {
               responseText = await callBedrock(
                 creds,
                 'us.anthropic.claude-sonnet-4-6',
-                prompt,
+                promptWithContext,
                 systemPrompt
               )
             }

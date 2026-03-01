@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import type { AspectRatio } from '../types/schema'
 
 type Platform = 'youtube_shorts' | 'reels' | 'tiktok'
 type BrainModel = 'gemini' | 'llama4_maverick' | 'claude_sonnet'
@@ -14,6 +15,7 @@ export function Home() {
   const [brainModel, setBrainModel] = useState<BrainModel>('gemini')
   const [language, setLanguage] = useState<Language>('id')
   const [artStyle, setArtStyle] = useState<ArtStyle>('cinematic_realistic')
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16')
   const [scenes, setScenes] = useState(5)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -63,7 +65,17 @@ export function Home() {
       const res = await fetch('https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...apiHeaders },
-        body: JSON.stringify({ title, story, platform, brain_model: brainModel, language, art_style: artStyle, total_scenes: scenes })
+        body: JSON.stringify({
+          title,
+          story,
+          platform,
+          brain_model: brainModel,
+          language,
+          art_style: artStyle,
+          total_scenes: scenes,
+          aspect_ratio: aspectRatio,
+          resolution: '1080p',
+        })
       })
       const data = await res.json() as Record<string, unknown>
       if (res.ok && data?.project_id) {
@@ -279,6 +291,51 @@ export function Home() {
                 {s.label}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Aspect Ratio */}
+        <div style={{ marginBottom: '20px' }}>
+          <span style={label}>Aspect Ratio</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {([
+              { id: '9:16', label: '9:16', desc: 'Vertical', icon: '📱' },
+              { id: '16:9', label: '16:9', desc: 'Landscape', icon: '🖥️' },
+              { id: '1:1', label: '1:1', desc: 'Square', icon: '⬜' },
+              { id: '4:5', label: '4:5', desc: 'Portrait', icon: '🖼️' },
+            ] as const).map(r => (
+              <button key={r.id} onClick={() => setAspectRatio(r.id)}
+                style={{
+                  flex: 1,
+                  padding: '10px 4px',
+                  borderRadius: '12px',
+                  border: `1px solid ${aspectRatio === r.id ? '#F05A25' : 'rgba(239,225,207,0.08)'}`,
+                  background: aspectRatio === r.id ? 'rgba(240,90,37,0.18)' : 'rgba(255,255,255,0.04)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}>
+                <div style={{ fontSize: '16px', marginBottom: '2px' }}>{r.icon}</div>
+                <div style={{ color: aspectRatio === r.id ? '#F05A25' : '#EFE1CF', fontSize: '12px', fontWeight: 700 }}>{r.label}</div>
+                <div style={{ color: 'rgba(239,225,207,0.4)', fontSize: '10px' }}>{r.desc}</div>
+              </button>
+            ))}
+          </div>
+          <div style={{ 
+            marginTop: '8px', padding: '8px 12px',
+            background: 'rgba(63,169,246,0.08)',
+            border: '1px solid rgba(63,169,246,0.15)',
+            borderRadius: '10px',
+            display: 'flex', alignItems: 'center', gap: '6px'
+          }}>
+            <span style={{ fontSize: '12px' }}>🎬</span>
+            <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '11px' }}>
+              Resolution: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>1080p</span>
+              {' · '}Output: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>
+                {aspectRatio === '9:16' ? '1080×1920' : 
+                 aspectRatio === '16:9' ? '1920×1080' : 
+                 aspectRatio === '1:1' ? '1080×1080' : '864×1080'}
+              </span>
+            </span>
           </div>
         </div>
 

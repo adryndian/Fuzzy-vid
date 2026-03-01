@@ -4,6 +4,18 @@ export type ArtStyle =
   | 'cinematic_realistic' | 'anime_stylized' | 'comic_book'
   | 'oil_painting' | 'watercolor' | 'pixel_art' | '3d_render'
 
+export type AspectRatio = '9:16' | '16:9' | '1:1' | '4:5'
+export type Resolution = '1080p'
+
+export const ASPECT_RATIOS: { id: AspectRatio; label: string; desc: string; icon: string }[] = [
+  { id: '9:16', label: '9:16', desc: 'Vertical', icon: '📱' },
+  { id: '16:9', label: '16:9', desc: 'Landscape', icon: '🖥️' },
+  { id: '1:1', label: '1:1', desc: 'Square', icon: '⬜' },
+  { id: '4:5', label: '4:5', desc: 'Portrait', icon: '🖼️' },
+]
+
+export const RESOLUTION = '1080p'
+
 export type Mood = 
   | 'epic' | 'mysterious' | 'romantic' | 'horror' | 'comedy'
   | 'inspirational' | 'melancholic' | 'action'
