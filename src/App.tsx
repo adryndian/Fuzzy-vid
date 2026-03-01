@@ -9,7 +9,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/storyboard/:id" element={<Storyboard />} />
+        <Route path="/storyboard" element={<Storyboard />} />
         <Route path="/project/:id" element={<Project />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
