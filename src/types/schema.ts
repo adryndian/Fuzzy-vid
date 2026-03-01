@@ -34,6 +34,13 @@ export type LockedStatus = 'locked'
 
 export type GenerationStatus = 'idle' | 'generating' | 'done' | 'error'
 
+export interface AudioHistoryItem {
+  url: string
+  engine: 'polly' | 'elevenlabs'
+  voice: string
+  timestamp: string
+}
+
 export interface SceneAssets {
   imageUrl?: string
   imageStatus: GenerationStatus
@@ -45,6 +52,7 @@ export interface SceneAssets {
   audioUrl?: string
   audioStatus: GenerationStatus
   audioError?: string
+  audioHistory: AudioHistoryItem[]
 }
 
 export type SceneAssetsMap = Record<number, SceneAssets>
@@ -53,6 +61,7 @@ export const defaultSceneAssets = (): SceneAssets => ({
   imageStatus: 'idle',
   videoStatus: 'idle',
   audioStatus: 'idle',
+  audioHistory: [],
 })
 
 export interface ProjectSchema {

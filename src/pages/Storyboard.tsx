@@ -1,12 +1,31 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import type { SceneAssets, SceneAssetsMap, GenerationStatus } from '../types/schema'
+import type { SceneAssets, SceneAssetsMap, GenerationStatus, AudioHistoryItem } from '../types/schema'
 import { defaultSceneAssets } from '../types/schema'
 import { generateImage, generateVideo, generateAudio, checkVideoStatus } from '../lib/api'
 import { useHistoryStore } from '../store/historyStore'
 import { useCostStore } from '../store/costStore'
 import { estimateImageCost, estimateVideoCost, estimateAudioCost, formatCost } from '../lib/costEstimate'
+
+const POLLY_VOICES = ['Ruth', 'Joanna', 'Matthew', 'Joey'] as const
+const ELEVENLABS_VOICES = ['Bella', 'Adam', 'Rachel', 'Antoni'] as const
+
+const dropdownStyle: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.12)',
+  borderRadius: '8px',
+  padding: '5px 24px 5px 8px',
+  color: '#EFE1CF',
+  fontSize: '11px',
+  outline: 'none',
+  cursor: 'pointer',
+  appearance: 'none',
+  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23EFE1CF' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 7px center',
+  fontFamily: 'inherit',
+}
 
 export function Storyboard() {
   const navigate = useNavigate()
@@ -16,6 +35,10 @@ export function Storyboard() {
   const [rawJson, setRawJson] = useState('')
   const [imageModel, setImageModel] = useState<'nova_canvas' | 'titan_v2'>('nova_canvas')
   const [audioEngine, setAudioEngine] = useState<'polly' | 'elevenlabs'>('polly')
+  const [audioVoice, setAudioVoice] = useState('Ruth')
+
+  // Poll counts for display
+  const [videoPollDisplayCounts, setVideoPollDisplayCounts] = useState<Record<number, number>>({})
 
   // Cost tracker UI state
   const [costExpanded, setCostExpanded] = useState(false)
@@ -36,6 +59,11 @@ export function Storyboard() {
   const isAlreadySaved = rawJson
     ? historyItems.some((item) => item.storyboard_data === rawJson)
     : false
+
+  // Reset voice when engine changes
+  useEffect(() => {
+    setAudioVoice(audioEngine === 'polly' ? 'Ruth' : 'Bella')
+  }, [audioEngine])
 
   const handleSave = () => {
     if (!storyboard || !rawJson || isAlreadySaved) return
@@ -65,7 +93,6 @@ export function Storyboard() {
     setRawJson(raw)
     try {
       const parsed = JSON.parse(raw)
-      // Normalize nested wrappers
       let data = parsed
       if (!data.scenes) {
         if (Array.isArray(parsed.storyboard?.scenes)) data = parsed.storyboard
@@ -82,7 +109,6 @@ export function Storyboard() {
         const keys = JSON.parse(stored)
         if (keys.language) setLanguage(keys.language)
       }
-      // Read model selections from Home page
       const storedImageModel = sessionStorage.getItem('fuzzy_gen_imageModel')
       if (storedImageModel === 'nova_canvas' || storedImageModel === 'titan_v2') {
         setImageModel(storedImageModel)
@@ -94,12 +120,12 @@ export function Storyboard() {
     } catch { navigate('/') }
   }, [navigate])
 
-  const updateAsset = (sceneNum: number, update: Partial<SceneAssets>) => {
+  const updateAsset = useCallback((sceneNum: number, update: Partial<SceneAssets>) => {
     setAssets(prev => ({
       ...prev,
       [sceneNum]: { ...(prev[sceneNum] || defaultSceneAssets()), ...update }
     }))
-  }
+  }, [])
 
   // --- Copy helper ---
   const handleCopy = useCallback(async (text: string) => {
@@ -131,33 +157,68 @@ export function Storyboard() {
     }
   }, [])
 
+  // --- Cancel video polling ---
+  const handleCancelVideo = useCallback((sceneNum: number) => {
+    if (videoPollingRefs.current[sceneNum]) {
+      clearInterval(videoPollingRefs.current[sceneNum])
+      delete videoPollingRefs.current[sceneNum]
+    }
+    setVideoPollDisplayCounts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })
+    setAssets(prev => ({
+      ...prev,
+      [sceneNum]: { ...(prev[sceneNum] || defaultSceneAssets()), videoStatus: 'error', videoError: 'Cancelled' }
+    }))
+  }, [])
+
   // --- Video polling ---
   const pollVideoStatus = useCallback((sceneNum: number, jobId: string) => {
-    // Clear any existing poll for this scene
     if (videoPollingRefs.current[sceneNum]) {
       clearInterval(videoPollingRefs.current[sceneNum])
     }
+    let pollCount = 0
     const interval = setInterval(async () => {
+      pollCount++
+      setVideoPollDisplayCounts(prev => ({ ...prev, [sceneNum]: pollCount }))
+
+      // Timeout after 90 polls (12 min)
+      if (pollCount > 90) {
+        clearInterval(interval)
+        delete videoPollingRefs.current[sceneNum]
+        setVideoPollDisplayCounts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })
+        setAssets(prev => ({
+          ...prev,
+          [sceneNum]: { ...(prev[sceneNum] || defaultSceneAssets()), videoStatus: 'error', videoError: 'Timed out after 12 min' }
+        }))
+        toast.error(`Scene ${sceneNum} video timed out`)
+        return
+      }
+
       try {
         const result = await checkVideoStatus(jobId)
         if (result.status === 'done' && result.video_url) {
-          clearInterval(videoPollingRefs.current[sceneNum])
+          clearInterval(interval)
           delete videoPollingRefs.current[sceneNum]
-          updateAsset(sceneNum, { videoStatus: 'done', videoUrl: result.video_url, videoJobId: jobId })
+          setVideoPollDisplayCounts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })
+          setAssets(prev => ({
+            ...prev,
+            [sceneNum]: { ...(prev[sceneNum] || defaultSceneAssets()), videoStatus: 'done', videoUrl: result.video_url, videoJobId: jobId }
+          }))
           toast.success(`Scene ${sceneNum} video ready!`)
         } else if (result.status === 'failed') {
-          clearInterval(videoPollingRefs.current[sceneNum])
+          clearInterval(interval)
           delete videoPollingRefs.current[sceneNum]
-          updateAsset(sceneNum, { videoStatus: 'error', videoError: result.message || 'Video generation failed', videoJobId: jobId })
+          setVideoPollDisplayCounts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })
+          setAssets(prev => ({
+            ...prev,
+            [sceneNum]: { ...(prev[sceneNum] || defaultSceneAssets()), videoStatus: 'error', videoError: result.message || 'Video generation failed', videoJobId: jobId }
+          }))
           toast.error(`Scene ${sceneNum} video failed`)
         }
-        // If still 'processing', keep polling
       } catch {
-        // Network error — keep polling, don't kill it
+        // Network error — keep polling
       }
     }, 8000)
     videoPollingRefs.current[sceneNum] = interval
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleGenerateImage = async (scene: Record<string, unknown>) => {
@@ -203,11 +264,9 @@ export function Storyboard() {
       addCostEntry({ service: 'video', model: 'Nova Reel', cost: vidCost })
 
       if (result.video_url) {
-        // Synchronous result (unlikely for Nova Reel, but handle it)
         updateAsset(sceneNum, { videoStatus: 'done', videoUrl: result.video_url })
         toast.success(`Scene ${sceneNum} video ready · ${formatCost(vidCost)}`)
       } else if (result.job_id) {
-        // Async — start polling
         updateAsset(sceneNum, { videoStatus: 'generating', videoJobId: result.job_id })
         toast(`Scene ${sceneNum} video started · polling every 8s`, { icon: '🎬', duration: 4000 })
         pollVideoStatus(sceneNum, result.job_id)
@@ -237,10 +296,29 @@ export function Storyboard() {
         scene_number: sceneNum,
         project_id: (data.project_id as string) || 'storyboard',
         engine: audioEngine,
+        voice: audioVoice,
       })
       const audCost = estimateAudioCost(audioEngine, text.length)
       const modelLabel = audioEngine === 'elevenlabs' ? 'ElevenLabs' : 'Polly'
-      updateAsset(sceneNum, { audioStatus: 'done', audioUrl: result.audio_url })
+      const newHistoryItem: AudioHistoryItem = {
+        url: result.audio_url,
+        engine: audioEngine,
+        voice: audioVoice,
+        timestamp: new Date().toISOString(),
+      }
+      setAssets(prev => {
+        const current = prev[sceneNum] || defaultSceneAssets()
+        const newHistory = [newHistoryItem, ...(current.audioHistory || [])].slice(0, 5)
+        return {
+          ...prev,
+          [sceneNum]: {
+            ...current,
+            audioStatus: 'done',
+            audioUrl: result.audio_url,
+            audioHistory: newHistory,
+          }
+        }
+      })
       addCostEntry({ service: 'audio', model: modelLabel, cost: audCost })
       toast.success(`Scene ${sceneNum} audio ready · ${formatCost(audCost)}`)
     } catch (e: unknown) {
@@ -270,7 +348,7 @@ export function Storyboard() {
     border: '1px solid rgba(255,255,255,0.12)',
     borderRadius: '20px',
     boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)',
-    marginBottom: '16px',
+    marginBottom: '11px',
     overflow: 'hidden',
   }
 
@@ -306,7 +384,7 @@ export function Storyboard() {
       onClick={onClick}
       disabled={status === 'generating' || disabled}
       style={{
-        padding: '10px 16px',
+        padding: '7px 11px',
         borderRadius: '12px',
         border: `1px solid ${status === 'done' ? '#4ade80' : disabled ? 'rgba(239,225,207,0.1)' : color + '66'}`,
         background: status === 'done' ? 'rgba(74,222,128,0.12)' :
@@ -325,7 +403,7 @@ export function Storyboard() {
   )
 
   const smallIconBtn: React.CSSProperties = {
-    padding: '4px 10px',
+    padding: '3px 8px',
     borderRadius: '8px',
     border: '1px solid rgba(255,255,255,0.1)',
     background: 'rgba(255,255,255,0.06)',
@@ -361,32 +439,31 @@ export function Storyboard() {
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         borderBottom: '1px solid rgba(255,255,255,0.08)',
-        padding: '14px 16px',
-        display: 'flex', alignItems: 'center', gap: '12px',
+        padding: '10px 11px',
+        display: 'flex', alignItems: 'center', gap: '10px',
       }}>
         <button onClick={() => navigate('/')} style={{
           background: 'rgba(255,255,255,0.08)',
           border: '1px solid rgba(239,225,207,0.15)',
           borderRadius: '10px', color: '#EFE1CF',
-          padding: '8px 14px', cursor: 'pointer',
+          padding: '6px 12px', cursor: 'pointer',
           fontSize: '13px', fontWeight: 600,
         }}>
           ← Back
         </button>
         <div style={{ flex: 1 }}>
-          <div style={{ color: '#EFE1CF', fontSize: '16px', fontWeight: 700 }}>
+          <div style={{ color: '#EFE1CF', fontSize: '15px', fontWeight: 700 }}>
             {storyboard.title as string}
           </div>
           <div style={{ color: 'rgba(239,225,207,0.4)', fontSize: '11px' }}>
             {scenes.length} scenes · Storyboard
           </div>
         </div>
-        {/* Save to history */}
         <button
           onClick={handleSave}
           disabled={isAlreadySaved}
           style={{
-            padding: '8px 14px', borderRadius: '10px',
+            padding: '6px 12px', borderRadius: '10px',
             border: `1px solid ${isAlreadySaved ? 'rgba(102,187,106,0.3)' : 'rgba(240,90,37,0.3)'}`,
             background: isAlreadySaved ? 'rgba(102,187,106,0.12)' : 'rgba(240,90,37,0.12)',
             color: isAlreadySaved ? '#66bb6a' : '#F05A25',
@@ -396,7 +473,7 @@ export function Storyboard() {
         >
           {isAlreadySaved ? '✓ Saved' : 'Save'}
         </button>
-        <span style={{ fontSize: '20px' }}>🎬</span>
+        <span style={{ fontSize: '18px' }}>🎬</span>
       </div>
 
       {/* Interactive Cost Tracker */}
@@ -407,12 +484,11 @@ export function Storyboard() {
           WebkitBackdropFilter: 'blur(16px)',
           borderBottom: '1px solid rgba(240,90,37,0.2)',
         }}>
-          {/* Summary bar — always visible, clickable */}
           <div
             onClick={() => setCostExpanded(!costExpanded)}
             style={{
-              padding: '8px 16px',
-              display: 'flex', alignItems: 'center', gap: '12px',
+              padding: '6px 12px',
+              display: 'flex', alignItems: 'center', gap: '10px',
               flexWrap: 'wrap',
               fontSize: '12px',
               cursor: 'pointer',
@@ -430,7 +506,7 @@ export function Storyboard() {
                   setCostFilter(prev => prev === svc ? null : svc)
                 }}
                 style={{
-                  padding: '2px 8px', borderRadius: '10px',
+                  padding: '2px 7px', borderRadius: '10px',
                   border: `1px solid ${costFilter === svc ? (serviceColors[svc] || '#EFE1CF') : 'rgba(255,255,255,0.1)'}`,
                   background: costFilter === svc ? `${serviceColors[svc] || '#EFE1CF'}22` : 'rgba(255,255,255,0.04)',
                   color: serviceColors[svc] || 'rgba(239,225,207,0.5)',
@@ -445,15 +521,14 @@ export function Storyboard() {
             </span>
           </div>
 
-          {/* Expanded detail panel */}
           {costExpanded && (
             <div style={{
-              padding: '0 16px 12px',
+              padding: '0 12px 10px',
               maxHeight: '240px',
               overflowY: 'auto',
             }}>
               {costFilter && (
-                <div style={{ marginBottom: '8px' }}>
+                <div style={{ marginBottom: '7px' }}>
                   <button
                     onClick={() => setCostFilter(null)}
                     style={{
@@ -470,7 +545,7 @@ export function Storyboard() {
               {[...filteredEntries].reverse().map((entry, i) => (
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
-                  padding: '5px 0',
+                  padding: '4px 0',
                   borderBottom: '1px solid rgba(255,255,255,0.04)',
                   fontSize: '11px',
                 }}>
@@ -493,11 +568,11 @@ export function Storyboard() {
                   </span>
                 </div>
               ))}
-              <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   onClick={() => { clearSession(); setCostExpanded(false); setCostFilter(null) }}
                   style={{
-                    padding: '5px 12px', borderRadius: '8px',
+                    padding: '4px 10px', borderRadius: '8px',
                     border: '1px solid rgba(248,113,113,0.3)',
                     background: 'rgba(248,113,113,0.1)',
                     color: '#f87171',
@@ -512,18 +587,18 @@ export function Storyboard() {
         </div>
       )}
 
-      <div style={{ padding: '20px 16px 0', maxWidth: '720px', margin: '0 auto' }}>
+      <div style={{ padding: '14px 11px 0', maxWidth: '720px', margin: '0 auto' }}>
 
         {/* Production Notes */}
         {productionNotes && (
-          <div style={{ ...glassCard, padding: '16px', marginBottom: '20px' }}>
-            <p style={{ color: 'rgba(239,225,207,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px', margin: '0 0 10px' }}>
+          <div style={{ ...glassCard, padding: '11px', marginBottom: '14px' }}>
+            <p style={{ color: 'rgba(239,225,207,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '7px', margin: '0 0 7px' }}>
               Production Notes
             </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
               {(productionNotes.color_palette as string[] || []).map((c: string, i: number) => (
                 <span key={i} style={{
-                  padding: '3px 10px', borderRadius: '20px',
+                  padding: '2px 8px', borderRadius: '20px',
                   background: 'rgba(255,255,255,0.06)',
                   border: '1px solid rgba(255,255,255,0.1)',
                   color: '#EFE1CF', fontSize: '11px',
@@ -549,35 +624,36 @@ export function Storyboard() {
           const hasVideo = sceneAsset.videoStatus === 'done' && sceneAsset.videoUrl
           const hasAudio = sceneAsset.audioStatus === 'done' && sceneAsset.audioUrl
           const isVideoPolling = sceneAsset.videoStatus === 'generating' && !!sceneAsset.videoJobId
+          const pollCount = videoPollDisplayCounts[sceneNum] || 0
 
           return (
             <div key={sceneNum} style={glassCard}>
 
               {/* Scene Header */}
               <div style={{
-                padding: '14px 16px 10px',
+                padding: '10px 11px 7px',
                 borderBottom: '1px solid rgba(255,255,255,0.06)',
-                display: 'flex', alignItems: 'center', gap: '10px',
+                display: 'flex', alignItems: 'center', gap: '8px',
               }}>
                 <div style={{
-                  width: '32px', height: '32px', borderRadius: '10px',
+                  width: '28px', height: '28px', borderRadius: '9px',
                   background: 'rgba(240,90,37,0.2)',
                   border: '1px solid rgba(240,90,37,0.4)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#F05A25', fontSize: '13px', fontWeight: 700, flexShrink: 0,
+                  color: '#F05A25', fontSize: '12px', fontWeight: 700, flexShrink: 0,
                 }}>{sceneNum}</div>
                 <div>
                   <div style={{ color: '#EFE1CF', fontSize: '13px', fontWeight: 600 }}>
                     Scene {sceneNum}
                   </div>
-                  <div style={{ color: '#3FA9F6', fontSize: '11px' }}>
+                  <div style={{ color: '#3FA9F6', fontSize: '10px' }}>
                     {(scene.scene_type as string || '').replace(/_/g, ' ')}
                   </div>
                 </div>
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
                   {scene.mood && (
                     <span style={{
-                      padding: '3px 8px', borderRadius: '20px',
+                      padding: '2px 7px', borderRadius: '20px',
                       background: 'rgba(255,255,255,0.06)',
                       color: 'rgba(239,225,207,0.5)', fontSize: '10px',
                     }}>{scene.mood as string}</span>
@@ -585,11 +661,11 @@ export function Storyboard() {
                 </div>
               </div>
 
-              <div style={{ padding: '14px 16px' }}>
+              <div style={{ padding: '10px 11px' }}>
 
                 {/* Image Prompt */}
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
                     <p style={{ color: 'rgba(239,225,207,0.4)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
                       Image Prompt
                     </p>
@@ -606,8 +682,8 @@ export function Storyboard() {
 
                 {/* Narration */}
                 {narration && (
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <div style={{ marginBottom: '11px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
                       <p style={{ color: 'rgba(239,225,207,0.4)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
                         Narration VO
                       </p>
@@ -625,13 +701,13 @@ export function Storyboard() {
                 <div style={{
                   background: 'rgba(255,255,255,0.04)',
                   border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: '14px',
-                  padding: '12px',
-                  marginBottom: '10px',
+                  borderRadius: '12px',
+                  padding: '8px',
+                  marginBottom: '7px',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '14px' }}>🖼️</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span style={{ fontSize: '13px' }}>🖼️</span>
                       <span style={{ color: '#EFE1CF', fontSize: '12px', fontWeight: 600 }}>Image</span>
                     </div>
                     {statusBadge(sceneAsset.imageStatus, 'Image')}
@@ -643,12 +719,12 @@ export function Storyboard() {
                         src={sceneAsset.imageUrl}
                         alt={`Scene ${sceneNum}`}
                         style={{
-                          width: '100%', borderRadius: '10px',
-                          marginBottom: '8px', display: 'block',
+                          width: '100%', borderRadius: '9px',
+                          marginBottom: '6px', display: 'block',
                           border: '1px solid rgba(255,255,255,0.1)',
                         }}
                       />
-                      <div style={{ marginBottom: '10px' }}>
+                      <div style={{ marginBottom: '8px' }}>
                         <button
                           onClick={() => handleDownload(sceneAsset.imageUrl!, `scene-${sceneNum}-image.png`)}
                           style={smallIconBtn}
@@ -660,30 +736,24 @@ export function Storyboard() {
                   )}
 
                   {sceneAsset.imageError && (
-                    <p style={{ color: '#f87171', fontSize: '11px', marginBottom: '8px', margin: '0 0 8px' }}>
+                    <p style={{ color: '#f87171', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
                       {sceneAsset.imageError}
                     </p>
                   )}
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                    {(['nova_canvas', 'titan_v2'] as const).map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => setImageModel(m)}
-                        style={{
-                          padding: '4px 10px', borderRadius: '20px',
-                          border: `1px solid ${imageModel === m ? 'rgba(240,90,37,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                          background: imageModel === m ? 'rgba(240,90,37,0.15)' : 'rgba(255,255,255,0.04)',
-                          color: imageModel === m ? '#F05A25' : 'rgba(239,225,207,0.5)',
-                          fontSize: '10px', fontWeight: 600, cursor: 'pointer',
-                        }}
-                      >
-                        {m === 'nova_canvas' ? 'Nova Canvas' : 'Titan V2'}
-                      </button>
-                    ))}
+                  {/* Image model dropdown */}
+                  <div style={{ marginBottom: '7px' }}>
+                    <select
+                      value={imageModel}
+                      onChange={e => setImageModel(e.target.value as 'nova_canvas' | 'titan_v2')}
+                      style={{ ...dropdownStyle, width: 'auto' }}
+                    >
+                      <option value="nova_canvas">Nova Canvas</option>
+                      <option value="titan_v2">Titan V2</option>
+                    </select>
                   </div>
                   {actionBtn('Generate Image', () => handleGenerateImage(scene), sceneAsset.imageStatus)}
-                  <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '6px' }}>
+                  <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '5px' }}>
                     Est. {formatCost(estimateImageCost(imageModel))}
                   </div>
                 </div>
@@ -692,14 +762,14 @@ export function Storyboard() {
                 <div style={{
                   background: 'rgba(255,255,255,0.04)',
                   border: `1px solid ${hasImage ? 'rgba(63,169,246,0.2)' : 'rgba(255,255,255,0.06)'}`,
-                  borderRadius: '14px',
-                  padding: '12px',
-                  marginBottom: '10px',
+                  borderRadius: '12px',
+                  padding: '8px',
+                  marginBottom: '7px',
                   opacity: hasImage ? 1 : 0.5,
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '14px' }}>🎬</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span style={{ fontSize: '13px' }}>🎬</span>
                       <span style={{ color: '#EFE1CF', fontSize: '12px', fontWeight: 600 }}>Video</span>
                     </div>
                     {!hasImage
@@ -714,12 +784,12 @@ export function Storyboard() {
                         src={sceneAsset.videoUrl}
                         controls
                         style={{
-                          width: '100%', borderRadius: '10px',
-                          marginBottom: '8px', display: 'block',
+                          width: '100%', borderRadius: '9px',
+                          marginBottom: '6px', display: 'block',
                           border: '1px solid rgba(255,255,255,0.1)',
                         }}
                       />
-                      <div style={{ marginBottom: '10px' }}>
+                      <div style={{ marginBottom: '8px' }}>
                         <button
                           onClick={() => handleDownload(sceneAsset.videoUrl!, `scene-${sceneNum}-video.mp4`)}
                           style={smallIconBtn}
@@ -732,24 +802,42 @@ export function Storyboard() {
 
                   {isVideoPolling && !hasVideo && (
                     <div style={{
-                      padding: '12px',
+                      padding: '8px',
                       background: 'rgba(63,169,246,0.08)',
                       border: '1px solid rgba(63,169,246,0.15)',
-                      borderRadius: '10px',
-                      marginBottom: '10px',
-                      textAlign: 'center',
+                      borderRadius: '9px',
+                      marginBottom: '8px',
                     }}>
-                      <div style={{ color: '#3FA9F6', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
-                        Generating video...
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
+                        <div style={{ color: '#3FA9F6', fontSize: '12px', fontWeight: 600 }}>
+                          Generating video...
+                        </div>
+                        <button
+                          onClick={() => handleCancelVideo(sceneNum)}
+                          style={{
+                            padding: '2px 8px', borderRadius: '8px',
+                            border: '1px solid rgba(248,113,113,0.4)',
+                            background: 'rgba(248,113,113,0.1)',
+                            color: '#f87171',
+                            fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                          }}
+                        >
+                          Cancel
+                        </button>
                       </div>
                       <div style={{ color: 'rgba(239,225,207,0.4)', fontSize: '11px' }}>
                         Nova Reel takes 2-5 minutes. Polling every 8s.
                       </div>
+                      {pollCount > 0 && (
+                        <div style={{ color: 'rgba(239,225,207,0.3)', fontSize: '10px', marginTop: '3px' }}>
+                          Checked {pollCount} time{pollCount !== 1 ? 's' : ''}
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {sceneAsset.videoError && (
-                    <p style={{ color: '#f87171', fontSize: '11px', marginBottom: '8px', margin: '0 0 8px' }}>
+                    <p style={{ color: '#f87171', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
                       {sceneAsset.videoError}
                     </p>
                   )}
@@ -761,7 +849,7 @@ export function Storyboard() {
                     !hasImage,
                     '#3FA9F6'
                   )}
-                  <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '6px' }}>
+                  <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '5px' }}>
                     Est. {formatCost(estimateVideoCost())}
                   </div>
                 </div>
@@ -770,28 +858,59 @@ export function Storyboard() {
                 <div style={{
                   background: 'rgba(255,255,255,0.04)',
                   border: '1px solid rgba(168,85,247,0.2)',
-                  borderRadius: '14px',
-                  padding: '12px',
+                  borderRadius: '12px',
+                  padding: '8px',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '14px' }}>🎵</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span style={{ fontSize: '13px' }}>🎵</span>
                       <span style={{ color: '#EFE1CF', fontSize: '12px', fontWeight: 600 }}>Audio VO</span>
-                      <span style={{ color: 'rgba(239,225,207,0.3)', fontSize: '10px' }}>
-                        {audioEngine === 'elevenlabs' ? 'ElevenLabs' : 'AWS Polly'}
-                      </span>
                     </div>
                     {statusBadge(sceneAsset.audioStatus, 'Audio')}
                   </div>
 
-                  {hasAudio && (
+                  {/* Audio history (newest first) */}
+                  {sceneAsset.audioHistory && sceneAsset.audioHistory.length > 0 && (
+                    <div style={{ marginBottom: '8px' }}>
+                      {sceneAsset.audioHistory.map((item, idx) => (
+                        <div key={idx} style={{
+                          marginBottom: '6px',
+                          padding: '6px',
+                          background: 'rgba(168,85,247,0.06)',
+                          border: '1px solid rgba(168,85,247,0.15)',
+                          borderRadius: '8px',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '10px' }}>
+                              {idx === 0 ? '▶ Latest' : `Take ${sceneAsset.audioHistory.length - idx}`}
+                              {' · '}{item.engine === 'elevenlabs' ? 'ElevenLabs' : 'Polly'}
+                              {' · '}{item.voice}
+                            </span>
+                            <span style={{ color: 'rgba(239,225,207,0.3)', fontSize: '10px' }}>
+                              {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <audio src={item.url} controls style={{ width: '100%', height: '28px' }} />
+                          <button
+                            onClick={() => handleDownload(item.url, `scene-${sceneNum}-audio-take${sceneAsset.audioHistory.length - idx}.mp3`)}
+                            style={{ ...smallIconBtn, marginTop: '4px' }}
+                          >
+                            Download MP3
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Legacy single audio (if no history yet but has audioUrl) */}
+                  {hasAudio && (!sceneAsset.audioHistory || sceneAsset.audioHistory.length === 0) && (
                     <>
                       <audio
                         src={sceneAsset.audioUrl}
                         controls
-                        style={{ width: '100%', marginBottom: '8px' }}
+                        style={{ width: '100%', marginBottom: '6px' }}
                       />
-                      <div style={{ marginBottom: '10px' }}>
+                      <div style={{ marginBottom: '8px' }}>
                         <button
                           onClick={() => handleDownload(sceneAsset.audioUrl!, `scene-${sceneNum}-audio.mp3`)}
                           style={smallIconBtn}
@@ -803,27 +922,30 @@ export function Storyboard() {
                   )}
 
                   {sceneAsset.audioError && (
-                    <p style={{ color: '#f87171', fontSize: '11px', marginBottom: '8px', margin: '0 0 8px' }}>
+                    <p style={{ color: '#f87171', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
                       {sceneAsset.audioError}
                     </p>
                   )}
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                    {(['polly', 'elevenlabs'] as const).map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => setAudioEngine(m)}
-                        style={{
-                          padding: '4px 10px', borderRadius: '20px',
-                          border: `1px solid ${audioEngine === m ? 'rgba(168,85,247,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                          background: audioEngine === m ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.04)',
-                          color: audioEngine === m ? '#A855F7' : 'rgba(239,225,207,0.5)',
-                          fontSize: '10px', fontWeight: 600, cursor: 'pointer',
-                        }}
-                      >
-                        {m === 'polly' ? 'AWS Polly' : 'ElevenLabs'}
-                      </button>
-                    ))}
+                  {/* Engine + voice dropdowns */}
+                  <div style={{ display: 'flex', gap: '6px', marginBottom: '7px', flexWrap: 'wrap' }}>
+                    <select
+                      value={audioEngine}
+                      onChange={e => setAudioEngine(e.target.value as 'polly' | 'elevenlabs')}
+                      style={dropdownStyle}
+                    >
+                      <option value="polly">AWS Polly</option>
+                      <option value="elevenlabs">ElevenLabs</option>
+                    </select>
+                    <select
+                      value={audioVoice}
+                      onChange={e => setAudioVoice(e.target.value)}
+                      style={dropdownStyle}
+                    >
+                      {(audioEngine === 'polly' ? POLLY_VOICES : ELEVENLABS_VOICES).map(v => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {actionBtn(
@@ -833,16 +955,16 @@ export function Storyboard() {
                     false,
                     '#A855F7'
                   )}
-                  <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '6px' }}>
+                  <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '5px' }}>
                     Est. {narration ? formatCost(estimateAudioCost(audioEngine, narration.length)) : '<$0.01'}
                   </div>
                 </div>
 
                 {/* Camera + Transition info */}
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
                   {scene.camera_angle && (
                     <span style={{
-                      padding: '4px 10px', borderRadius: '20px',
+                      padding: '3px 8px', borderRadius: '20px',
                       background: 'rgba(255,255,255,0.05)',
                       border: '1px solid rgba(255,255,255,0.08)',
                       color: 'rgba(239,225,207,0.45)', fontSize: '11px',
@@ -850,7 +972,7 @@ export function Storyboard() {
                   )}
                   {scene.transition && (
                     <span style={{
-                      padding: '4px 10px', borderRadius: '20px',
+                      padding: '3px 8px', borderRadius: '20px',
                       background: 'rgba(255,255,255,0.05)',
                       border: '1px solid rgba(255,255,255,0.08)',
                       color: 'rgba(239,225,207,0.45)', fontSize: '11px',
@@ -863,10 +985,12 @@ export function Storyboard() {
         })}
 
         {/* Footer */}
-        <p style={{ textAlign: 'center', color: 'rgba(239,225,207,0.2)', fontSize: '11px', marginTop: '24px' }}>
+        <p style={{ textAlign: 'center', color: 'rgba(239,225,207,0.2)', fontSize: '11px', marginTop: '17px' }}>
           {scenes.length} scenes · Fuzzy Short
         </p>
       </div>
+
+      <style>{`select option { background: #0d1527; color: #EFE1CF; }`}</style>
     </div>
   )
 }

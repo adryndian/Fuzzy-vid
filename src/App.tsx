@@ -4,6 +4,7 @@ import { Home } from './pages/Home'
 import { Storyboard } from './pages/Storyboard'
 import { History } from './pages/History'
 import { Settings } from './pages/Settings'
+import { GenTaskBar } from './components/GenTaskBar'
 
 export function App() {
   return (
@@ -28,6 +29,7 @@ export function App() {
         <Route path="/history" element={<History />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
+      <GenTaskBar />
     </BrowserRouter>
   )
 }

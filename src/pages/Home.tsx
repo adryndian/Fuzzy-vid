@@ -5,6 +5,7 @@ import type { AspectRatio } from '../types/schema'
 import { estimateBrainCost, formatCost } from '../lib/costEstimate'
 import { useCostStore } from '../store/costStore'
 import { useHistoryStore } from '../store/historyStore'
+import { useGenTaskStore } from '../store/genTaskStore'
 import { GenerationOverlay } from '../components/GenerationOverlay'
 import type { GenStep } from '../components/GenerationOverlay'
 import { useElapsedTimer } from '../hooks/useElapsedTimer'
@@ -29,6 +30,23 @@ function buildSteps(current: number): GenStep[] {
   }))
 }
 
+const dropdownStyle: React.CSSProperties = {
+  width: '100%',
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.12)',
+  borderRadius: '10px',
+  padding: '9px 32px 9px 12px',
+  color: '#EFE1CF',
+  fontSize: '13px',
+  outline: 'none',
+  cursor: 'pointer',
+  appearance: 'none',
+  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23EFE1CF' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 12px center',
+  fontFamily: 'inherit',
+}
+
 export function Home() {
   const navigate = useNavigate()
   const [title, setTitle] = useState('')
@@ -43,12 +61,16 @@ export function Home() {
   const [scenes, setScenes] = useState(5)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [overlayMinimized, setOverlayMinimized] = useState(false)
   const [currentStep, setCurrentStep] = useState(-1)
   const stepTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const taskIdRef = useRef<string>('')
 
   const addCostEntry = useCostStore((s) => s.addEntry)
   const addHistoryItem = useHistoryStore((s) => s.addItem)
   const historyCount = useHistoryStore((s) => s.items.length)
+  const addTask = useGenTaskStore((s) => s.addTask)
+  const updateTask = useGenTaskStore((s) => s.updateTask)
 
   const elapsedMs = useElapsedTimer(loading)
 
@@ -68,7 +90,12 @@ export function Home() {
     if (!title.trim() || !story.trim()) { setError('Please fill in title and story'); return }
     setError('')
     setLoading(true)
-    setCurrentStep(0) // Connecting to AI...
+    setOverlayMinimized(false)
+    setCurrentStep(0)
+
+    // Create queue task
+    const taskId = addTask({ title, status: 'running', currentStep: 0 })
+    taskIdRef.current = taskId
 
     // Load settings from localStorage
     let apiHeaders: Record<string, string> = {}
@@ -91,15 +118,20 @@ export function Home() {
       setError('Please add your API keys in Settings first')
       setLoading(false)
       setCurrentStep(-1)
+      updateTask(taskId, { status: 'error', error: 'Missing API keys' })
       return
     }
 
-    // Progress step 1 after short delay
-    stepTimerRef.current = setTimeout(() => setCurrentStep(1), 100)
+    stepTimerRef.current = setTimeout(() => {
+      setCurrentStep(1)
+      updateTask(taskId, { currentStep: 1 })
+    }, 100)
 
     try {
-      // Step 2 after 1.5s
-      const thinkTimer = setTimeout(() => setCurrentStep(2), 1500)
+      const thinkTimer = setTimeout(() => {
+        setCurrentStep(2)
+        updateTask(taskId, { currentStep: 2 })
+      }, 1500)
 
       const res = await fetch('https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/generate', {
         method: 'POST',
@@ -118,7 +150,8 @@ export function Home() {
       })
       clearTimeout(thinkTimer)
 
-      setCurrentStep(3) // Parsing response
+      setCurrentStep(3)
+      updateTask(taskId, { currentStep: 3 })
       const text = await res.text()
 
       if (res.ok) {
@@ -128,7 +161,6 @@ export function Home() {
           sessionStorage.setItem('fuzzy_gen_imageModel', imageModel)
           sessionStorage.setItem('fuzzy_gen_audioModel', audioModel)
 
-          // Save to history
           addHistoryItem({
             title,
             platform,
@@ -139,41 +171,45 @@ export function Home() {
             storyboard_data: text,
           })
 
-          // Cost toast
           const cost = estimateBrainCost(brainModel, scenes)
           addCostEntry({ service: 'Brain', model: brainModel, cost })
           toast(
             `Storyboard ${formatCost(cost)}`,
             {
               icon: '🧠',
-              style: {
-                border: '1px solid rgba(240,90,37,0.3)',
-              },
+              style: { border: '1px solid rgba(240,90,37,0.3)' },
               duration: 4000,
             }
           )
 
-          setCurrentStep(4) // Done!
-          // Navigate after brief delay to show "Done!"
+          setCurrentStep(4)
+          updateTask(taskId, { status: 'done', currentStep: 4, resultJson: text })
+
           setTimeout(() => {
             setLoading(false)
+            setOverlayMinimized(false)
             setCurrentStep(-1)
             navigate('/storyboard')
           }, 800)
           return
         } catch {
           setError('AI returned malformed JSON. Please try again.')
+          updateTask(taskId, { status: 'error', error: 'Malformed JSON response' })
         }
       } else {
         let errData: Record<string, unknown> = {}
         try { errData = JSON.parse(text) } catch { /* ignore */ }
-        setError((errData?.message as string) || (errData?.error as string) || `Error ${res.status}`)
+        const msg = (errData?.message as string) || (errData?.error as string) || `Error ${res.status}`
+        setError(msg)
+        updateTask(taskId, { status: 'error', error: msg })
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Check Worker deployment'
       setError(`Request failed: ${msg}`)
+      updateTask(taskId, { status: 'error', error: msg })
     }
     setLoading(false)
+    setOverlayMinimized(false)
     setCurrentStep(-1)
   }
 
@@ -197,7 +233,7 @@ export function Home() {
     background: 'rgba(255,255,255,0.05)',
     border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '12px',
-    padding: '12px 16px',
+    padding: '8px 11px',
     color: '#EFE1CF',
     fontSize: '14px',
     outline: 'none',
@@ -210,13 +246,13 @@ export function Home() {
     color: 'rgba(239,225,207,0.5)',
     textTransform: 'uppercase' as const,
     letterSpacing: '0.1em',
-    marginBottom: '8px',
+    marginBottom: '6px',
     display: 'block',
   }
 
   const pillBtn = (active: boolean, color = '#F05A25'): React.CSSProperties => ({
     flex: 1,
-    padding: '8px 4px',
+    padding: '6px 3px',
     borderRadius: '10px',
     border: `1px solid ${active ? color : 'rgba(239,225,207,0.1)'}`,
     background: active ? `${color}22` : 'rgba(255,255,255,0.04)',
@@ -249,7 +285,7 @@ export function Home() {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'flex-start',
-      padding: '60px 16px 40px',
+      padding: '42px 11px 28px',
       fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
     }}>
       <style>{`
@@ -257,11 +293,11 @@ export function Home() {
           outline: none !important;
           border-color: rgba(240,90,37,0.6) !important;
         }
+        select option { background: #0d1527; color: #EFE1CF; }
       `}</style>
 
       {/* Top-right nav buttons */}
       <div style={{ position: 'fixed', top: '16px', right: '16px', zIndex: 50, display: 'flex', gap: '8px' }}>
-        {/* History Button */}
         <button onClick={() => navigate('/history')} style={navBtnStyle}>
           🕐
           {historyCount > 0 && (
@@ -278,29 +314,28 @@ export function Home() {
             </span>
           )}
         </button>
-        {/* Settings Button */}
         <button onClick={() => navigate('/settings')} style={navBtnStyle}>
           ⚙️
         </button>
       </div>
 
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-        <div style={{ fontSize: '44px', marginBottom: '8px' }}>🎬</div>
-        <h1 style={{ fontSize: '36px', fontWeight: 800, color: '#EFE1CF', letterSpacing: '-0.02em', margin: 0 }}>
+      <div style={{ textAlign: 'center', marginBottom: '22px' }}>
+        <div style={{ fontSize: '40px', marginBottom: '6px' }}>🎬</div>
+        <h1 style={{ fontSize: '34px', fontWeight: 800, color: '#EFE1CF', letterSpacing: '-0.02em', margin: 0 }}>
           Fuzzy <span style={{ color: '#F05A25' }}>Short</span>
         </h1>
-        <p style={{ color: 'rgba(239,225,207,0.5)', fontSize: '14px', marginTop: '6px' }}>
+        <p style={{ color: 'rgba(239,225,207,0.5)', fontSize: '13px', marginTop: '5px' }}>
           AI-powered short video production
         </p>
       </div>
 
       {/* Main Glass Card */}
-      <div style={{ ...card, width: '100%', maxWidth: '440px', padding: '28px 24px', position: 'relative' }}>
+      <div style={{ ...card, width: '100%', maxWidth: '440px', padding: '20px 17px', position: 'relative' }}>
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)' }} />
 
         {/* Story Title */}
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '14px' }}>
           <span style={label}>Story Title</span>
           <input
             style={inputStyle}
@@ -313,10 +348,10 @@ export function Home() {
         </div>
 
         {/* Story */}
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '14px' }}>
           <span style={label}>The Story</span>
           <textarea
-            style={{ ...inputStyle, minHeight: '80px', resize: 'none' as const }}
+            style={{ ...inputStyle, minHeight: '72px', resize: 'none' as const }}
             className="glass-input"
             value={story}
             onChange={e => setStory(e.target.value)}
@@ -325,9 +360,9 @@ export function Home() {
         </div>
 
         {/* Platform */}
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '14px' }}>
           <span style={label}>Target Platform</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '6px' }}>
             {([
               { id: 'youtube_shorts', label: '▶️ Shorts' },
               { id: 'reels', label: '📸 Reels' },
@@ -340,36 +375,24 @@ export function Home() {
           </div>
         </div>
 
-        {/* AI Brain */}
-        <div style={{ marginBottom: '20px' }}>
+        {/* AI Brain — dropdown */}
+        <div style={{ marginBottom: '14px' }}>
           <span style={label}>AI Brain</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {([
-              { id: 'gemini', label: 'Gemini', sub: 'Fast & Free' },
-              { id: 'llama4_maverick', label: 'Llama 4', sub: 'Balanced' },
-              { id: 'claude_sonnet', label: 'Claude', sub: 'Best Quality' },
-            ] as const).map(m => (
-              <button key={m.id} onClick={() => setBrainModel(m.id)}
-                style={{
-                  flex: 1,
-                  padding: '10px 6px',
-                  borderRadius: '12px',
-                  border: `1px solid ${brainModel === m.id ? 'rgba(255,255,255,0.3)' : 'rgba(239,225,207,0.08)'}`,
-                  background: brainModel === m.id ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.03)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}>
-                <div style={{ color: '#EFE1CF', fontSize: '13px', fontWeight: 600 }}>{m.label}</div>
-                <div style={{ color: 'rgba(239,225,207,0.45)', fontSize: '11px', marginTop: '2px' }}>{m.sub}</div>
-              </button>
-            ))}
-          </div>
+          <select
+            value={brainModel}
+            onChange={e => setBrainModel(e.target.value as BrainModel)}
+            style={dropdownStyle}
+          >
+            <option value="gemini">Gemini — Fast &amp; Free</option>
+            <option value="llama4_maverick">Llama 4 — Balanced</option>
+            <option value="claude_sonnet">Claude Sonnet — Best Quality</option>
+          </select>
         </div>
 
         {/* Language */}
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '14px' }}>
           <span style={label}>Narration Language</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '6px' }}>
             {([
               { id: 'id', label: '🇮🇩 Indonesia' },
               { id: 'en', label: '🇬🇧 English' },
@@ -383,9 +406,9 @@ export function Home() {
         </div>
 
         {/* Art Style */}
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '14px' }}>
           <span style={label}>Art Style</span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
             {([
               { id: 'cinematic_realistic', label: '🎬 Cinematic' },
               { id: 'anime_stylized', label: '⛩️ Anime' },
@@ -396,7 +419,7 @@ export function Home() {
             ] as const).map(s => (
               <button key={s.id} onClick={() => setArtStyle(s.id)}
                 style={{
-                  padding: '9px 4px',
+                  padding: '7px 3px',
                   borderRadius: '10px',
                   border: `1px solid ${artStyle === s.id ? '#F05A25' : 'rgba(239,225,207,0.08)'}`,
                   background: artStyle === s.id ? 'rgba(240,90,37,0.18)' : 'rgba(255,255,255,0.04)',
@@ -412,9 +435,9 @@ export function Home() {
         </div>
 
         {/* Aspect Ratio */}
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '14px' }}>
           <span style={label}>Aspect Ratio</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '6px' }}>
             {([
               { id: '9_16', label: '9:16', desc: 'Vertical', icon: '📱' },
               { id: '16_9', label: '16:9', desc: 'Landscape', icon: '🖥️' },
@@ -424,27 +447,27 @@ export function Home() {
               <button key={r.id} onClick={() => setAspectRatio(r.id)}
                 style={{
                   flex: 1,
-                  padding: '10px 4px',
+                  padding: '7px 3px',
                   borderRadius: '12px',
                   border: `1px solid ${aspectRatio === r.id ? '#F05A25' : 'rgba(239,225,207,0.08)'}`,
                   background: aspectRatio === r.id ? 'rgba(240,90,37,0.18)' : 'rgba(255,255,255,0.04)',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                 }}>
-                <div style={{ fontSize: '16px', marginBottom: '2px' }}>{r.icon}</div>
+                <div style={{ fontSize: '15px', marginBottom: '2px' }}>{r.icon}</div>
                 <div style={{ color: aspectRatio === r.id ? '#F05A25' : '#EFE1CF', fontSize: '12px', fontWeight: 700 }}>{r.label}</div>
                 <div style={{ color: 'rgba(239,225,207,0.4)', fontSize: '10px' }}>{r.desc}</div>
               </button>
             ))}
           </div>
           <div style={{
-            marginTop: '8px', padding: '8px 12px',
+            marginTop: '6px', padding: '6px 10px',
             background: 'rgba(63,169,246,0.08)',
             border: '1px solid rgba(63,169,246,0.15)',
             borderRadius: '10px',
             display: 'flex', alignItems: 'center', gap: '6px'
           }}>
-            <span style={{ fontSize: '12px' }}>🎬</span>
+            <span style={{ fontSize: '11px' }}>🎬</span>
             <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '11px' }}>
               Resolution: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>1080p</span>
               {' · '}Output: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>
@@ -456,73 +479,49 @@ export function Home() {
           </div>
         </div>
 
-        {/* Image Model */}
-        <div style={{ marginBottom: '20px' }}>
+        {/* Image Model — dropdown */}
+        <div style={{ marginBottom: '14px' }}>
           <span style={label}>Image Model</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {([
-              { id: 'nova_canvas', label: 'Nova Canvas', sub: 'Best Quality' },
-              { id: 'titan_v2', label: 'Titan V2', sub: 'Fast & Cheap' },
-            ] as const).map(m => (
-              <button key={m.id} onClick={() => setImageModel(m.id)}
-                style={{
-                  flex: 1,
-                  padding: '10px 6px',
-                  borderRadius: '12px',
-                  border: `1px solid ${imageModel === m.id ? 'rgba(240,90,37,0.4)' : 'rgba(239,225,207,0.08)'}`,
-                  background: imageModel === m.id ? 'rgba(240,90,37,0.12)' : 'rgba(255,255,255,0.03)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}>
-                <div style={{ color: imageModel === m.id ? '#F05A25' : '#EFE1CF', fontSize: '13px', fontWeight: 600 }}>{m.label}</div>
-                <div style={{ color: 'rgba(239,225,207,0.45)', fontSize: '11px', marginTop: '2px' }}>{m.sub}</div>
-              </button>
-            ))}
-          </div>
+          <select
+            value={imageModel}
+            onChange={e => setImageModel(e.target.value as 'nova_canvas' | 'titan_v2')}
+            style={dropdownStyle}
+          >
+            <option value="nova_canvas">Nova Canvas — Best Quality</option>
+            <option value="titan_v2">Titan V2 — Fast &amp; Cheap</option>
+          </select>
         </div>
 
-        {/* Audio Engine */}
-        <div style={{ marginBottom: '20px' }}>
+        {/* Audio Engine — dropdown */}
+        <div style={{ marginBottom: '14px' }}>
           <span style={label}>Audio Engine</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {([
-              { id: 'polly', label: 'AWS Polly', sub: 'Low Cost' },
-              { id: 'elevenlabs', label: 'ElevenLabs', sub: 'Premium Voice' },
-            ] as const).map(m => (
-              <button key={m.id} onClick={() => setAudioModel(m.id)}
-                style={{
-                  flex: 1,
-                  padding: '10px 6px',
-                  borderRadius: '12px',
-                  border: `1px solid ${audioModel === m.id ? 'rgba(168,85,247,0.4)' : 'rgba(239,225,207,0.08)'}`,
-                  background: audioModel === m.id ? 'rgba(168,85,247,0.12)' : 'rgba(255,255,255,0.03)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}>
-                <div style={{ color: audioModel === m.id ? '#A855F7' : '#EFE1CF', fontSize: '13px', fontWeight: 600 }}>{m.label}</div>
-                <div style={{ color: 'rgba(239,225,207,0.45)', fontSize: '11px', marginTop: '2px' }}>{m.sub}</div>
-              </button>
-            ))}
-          </div>
+          <select
+            value={audioModel}
+            onChange={e => setAudioModel(e.target.value as 'polly' | 'elevenlabs')}
+            style={dropdownStyle}
+          >
+            <option value="polly">AWS Polly — Low Cost</option>
+            <option value="elevenlabs">ElevenLabs — Premium Voice</option>
+          </select>
         </div>
 
         {/* Video Model Info */}
         <div style={{
-          marginBottom: '20px',
-          padding: '8px 12px',
+          marginBottom: '14px',
+          padding: '7px 10px',
           background: 'rgba(63,169,246,0.06)',
           border: '1px solid rgba(63,169,246,0.12)',
           borderRadius: '10px',
           display: 'flex', alignItems: 'center', gap: '6px',
         }}>
-          <span style={{ fontSize: '12px' }}>🎬</span>
+          <span style={{ fontSize: '11px' }}>🎬</span>
           <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '11px' }}>
             Video: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>Nova Reel</span> (only available model)
           </span>
         </div>
 
         {/* Scenes */}
-        <div style={{ marginBottom: '24px' }}>
+        <div style={{ marginBottom: '17px' }}>
           <span style={label}>
             Scenes: <span style={{ color: '#F05A25', fontWeight: 700 }}>{scenes}</span>
           </span>
@@ -531,7 +530,7 @@ export function Home() {
             onChange={e => setScenes(Number(e.target.value))}
             style={{ width: '100%', accentColor: '#F05A25' }}
           />
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(239,225,207,0.3)', fontSize: '11px', marginTop: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(239,225,207,0.3)', fontSize: '11px', marginTop: '3px' }}>
             <span>3</span><span>15</span>
           </div>
         </div>
@@ -542,10 +541,10 @@ export function Home() {
             background: 'rgba(239,68,68,0.1)',
             border: '1px solid rgba(239,68,68,0.3)',
             borderRadius: '12px',
-            padding: '10px 14px',
+            padding: '8px 12px',
             color: '#f87171',
             fontSize: '13px',
-            marginBottom: '16px',
+            marginBottom: '11px',
           }}>
             {error}
           </div>
@@ -557,7 +556,7 @@ export function Home() {
           disabled={loading}
           style={{
             width: '100%',
-            padding: '16px',
+            padding: '11px',
             borderRadius: '14px',
             border: 'none',
             background: loading ? 'rgba(240,90,37,0.5)' : 'linear-gradient(135deg, #F05A25, #d94e1f)',
@@ -574,16 +573,17 @@ export function Home() {
       </div>
 
       {/* Footer */}
-      <p style={{ color: 'rgba(239,225,207,0.2)', fontSize: '11px', marginTop: '24px' }}>
+      <p style={{ color: 'rgba(239,225,207,0.2)', fontSize: '11px', marginTop: '17px' }}>
         iOS 26 Liquid Glass Edition
       </p>
 
       {/* Generation Overlay */}
       <GenerationOverlay
-        isOpen={loading}
+        isOpen={loading && !overlayMinimized}
         steps={buildSteps(currentStep)}
         currentStep={currentStep}
         elapsedMs={elapsedMs}
+        onMinimize={() => setOverlayMinimized(true)}
       />
     </div>
   )

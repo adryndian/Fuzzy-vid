@@ -90,6 +90,7 @@ export async function generateAudio(params: {
   scene_number: number
   project_id: string
   engine?: 'polly' | 'elevenlabs'
+  voice?: string
 }): Promise<{ audio_url: string }> {
   const res = await fetch(`${WORKER_URL}/api/audio/generate`, {
     method: 'POST',

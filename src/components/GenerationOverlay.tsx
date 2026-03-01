@@ -10,6 +10,7 @@ interface Props {
   steps: GenStep[]
   currentStep: number
   elapsedMs: number
+  onMinimize?: () => void
 }
 
 function formatElapsed(ms: number): string {
@@ -19,7 +20,7 @@ function formatElapsed(ms: number): string {
   return min > 0 ? `${min}:${s.toString().padStart(2, '0')}` : `${s}s`
 }
 
-export function GenerationOverlay({ isOpen, steps, currentStep, elapsedMs }: Props) {
+export function GenerationOverlay({ isOpen, steps, currentStep, elapsedMs, onMinimize }: Props) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -46,6 +47,7 @@ export function GenerationOverlay({ isOpen, steps, currentStep, elapsedMs }: Pro
             exit={{ scale: 0.92, opacity: 0 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
             style={{
+              position: 'relative',
               background: 'rgba(255,255,255,0.07)',
               backdropFilter: 'blur(40px) saturate(180%)',
               WebkitBackdropFilter: 'blur(40px) saturate(180%)',
@@ -58,6 +60,26 @@ export function GenerationOverlay({ isOpen, steps, currentStep, elapsedMs }: Pro
               fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
             }}
           >
+            {/* Minimize button */}
+            {onMinimize && (
+              <button
+                onClick={onMinimize}
+                style={{
+                  position: 'absolute',
+                  top: '12px',
+                  right: '12px',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: '8px',
+                  color: 'rgba(239,225,207,0.5)',
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                }}
+              >
+                Minimize ⬇
+              </button>
+            )}
             {/* Header */}
             <div style={{ textAlign: 'center', marginBottom: '28px' }}>
               <motion.div

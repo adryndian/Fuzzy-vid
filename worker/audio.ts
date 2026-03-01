@@ -9,6 +9,7 @@ interface AudioRequestBody {
   scene_number: number
   project_id: string
   engine?: 'polly' | 'elevenlabs'
+  voice?: string
 }
 
 export async function handleAudioRequest(
@@ -24,7 +25,7 @@ export async function handleAudioRequest(
   if (path === '/api/audio/generate' && request.method === 'POST') {
     try {
       const body = await request.json() as AudioRequestBody
-      const { text, language, scene_number, project_id, engine } = body
+      const { text, language, scene_number, project_id, engine, voice } = body
 
       if (!text) {
         return Response.json(
@@ -43,7 +44,7 @@ export async function handleAudioRequest(
             { status: 400 }
           )
         }
-        audioBuffer = await generateWithElevenLabs(text, language, apiKey)
+        audioBuffer = await generateWithElevenLabs(text, language, apiKey, voice)
       } else {
         // Default: Polly
         if (!creds.awsAccessKeyId || !creds.awsSecretAccessKey) {
@@ -53,7 +54,7 @@ export async function handleAudioRequest(
           )
         }
         const region = creds.audioRegion || 'us-west-2'
-        audioBuffer = await generateWithPolly(text, language, region, creds)
+        audioBuffer = await generateWithPolly(text, language, region, creds, voice)
       }
 
       // Upload to R2
@@ -78,20 +79,23 @@ export async function handleAudioRequest(
   return Response.json({ error: 'Not Found' }, { status: 404 })
 }
 
+const POLLY_GENERATIVE_VOICES = new Set(['Ruth', 'Danielle'])
+
 async function generateWithPolly(
   text: string,
   language: string,
   region: string,
-  creds: Credentials
+  creds: Credentials,
+  voice?: string
 ): Promise<ArrayBuffer> {
   const endpoint = `https://polly.${region}.amazonaws.com/v1/speech`
 
-  // Use generative engine with Ruth — handles multilingual text
-  const voiceId = 'Ruth'
+  const voiceId = voice || 'Ruth'
   const langCode = language === 'id' ? 'id-ID' : 'en-US'
+  const engineType = POLLY_GENERATIVE_VOICES.has(voiceId) ? 'generative' : 'neural'
 
   const pollyBody = JSON.stringify({
-    Engine: 'generative',
+    Engine: engineType,
     LanguageCode: langCode,
     OutputFormat: 'mp3',
     Text: text,
@@ -120,14 +124,24 @@ async function generateWithPolly(
   return res.arrayBuffer()
 }
 
+const ELEVENLABS_VOICE_MAP: Record<string, string> = {
+  Adam: '29vD33N1zt5gjR81Q3oR',
+  Rachel: '21m00Tcm4TlvDq8ikWAM',
+  Antoni: 'ErXwobaYiN019PkySvjV',
+  Bella: 'EXAVITQu4vr4xnSDxMaL',
+}
+
 async function generateWithElevenLabs(
   text: string,
   language: string,
-  apiKey: string
+  apiKey: string,
+  voice?: string
 ): Promise<ArrayBuffer> {
-  // Use a multilingual voice
-  const voiceId = language === 'id' ? 'pNInz6obpgDQGcFmaJgB' : 'EXAVITQu4vr4xnSDxMaL'
-  const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`
+  // Resolve voice ID: named voice → ID map, else fall back to language default
+  const resolvedVoiceId = (voice && ELEVENLABS_VOICE_MAP[voice])
+    ? ELEVENLABS_VOICE_MAP[voice]
+    : (language === 'id' ? 'pNInz6obpgDQGcFmaJgB' : 'EXAVITQu4vr4xnSDxMaL')
+  const endpoint = `https://api.elevenlabs.io/v1/text-to-speech/${resolvedVoiceId}`
 
   const res = await fetch(endpoint, {
     method: 'POST',
