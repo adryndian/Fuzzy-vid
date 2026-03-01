@@ -23,9 +23,9 @@ export function estimateBrainCost(model: BrainModel, scenesCount: number): numbe
   }
 }
 
-export function estimateImageCost(_model?: ImageModel): number {
-  // Nova Canvas: ~$0.04 per image
-  return 0.04
+export function estimateImageCost(model?: ImageModel): number {
+  if (model === 'titan_v2') return 0.008 // Titan V2: ~$0.008 per image
+  return 0.04 // Nova Canvas: ~$0.04 per image
 }
 
 export function estimateVideoCost(_model?: string, durationSec = 6): number {

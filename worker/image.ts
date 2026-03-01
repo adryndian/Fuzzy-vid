@@ -9,6 +9,7 @@ interface ImageRequestBody {
   project_id: string
   aspect_ratio: string
   art_style: string
+  image_model?: 'nova_canvas' | 'titan_v2'
 }
 
 function getDimensions(aspect: string): { width: number; height: number } {
@@ -33,7 +34,7 @@ export async function handleImageRequest(
   if (path === '/api/image/generate' && request.method === 'POST') {
     try {
       const body = await request.json() as ImageRequestBody
-      const { prompt, scene_number, project_id, aspect_ratio, art_style } = body
+      const { prompt, scene_number, project_id, aspect_ratio, art_style, image_model } = body
 
       if (!prompt) {
         return Response.json(
@@ -50,8 +51,10 @@ export async function handleImageRequest(
       }
 
       const region = creds.imageRegion || 'us-east-1'
-      // Nova Canvas model ID contains colon — must use %3A in the URL path
-      const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/amazon.nova-canvas-v1%3A0/invoke`
+      const modelId = image_model === 'titan_v2'
+        ? 'amazon.titan-image-generator-v2:0'
+        : 'amazon.nova-canvas-v1:0'
+      const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
       const dims = getDimensions(aspect_ratio)
 
       const bedrockBody = JSON.stringify({

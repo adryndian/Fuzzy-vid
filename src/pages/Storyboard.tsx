@@ -14,6 +14,7 @@ export function Storyboard() {
   const [assets, setAssets] = useState<SceneAssetsMap>({})
   const [language, setLanguage] = useState('id')
   const [rawJson, setRawJson] = useState('')
+  const [imageModel, setImageModel] = useState<'nova_canvas' | 'titan_v2'>('nova_canvas')
 
   // Cost tracking
   const addCostEntry = useCostStore((s) => s.addEntry)
@@ -86,10 +87,13 @@ export function Storyboard() {
         project_id: (data.project_id as string) || 'storyboard',
         aspect_ratio: (data.aspect_ratio as string) || '9_16',
         art_style: (data.art_style as string) || 'cinematic_realistic',
+        image_model: imageModel,
       })
+      const imgCost = estimateImageCost(imageModel)
+      const modelLabel = imageModel === 'titan_v2' ? 'Titan V2' : 'Nova Canvas'
       updateAsset(sceneNum, { imageStatus: 'done', imageUrl: result.image_url })
-      addCostEntry({ service: 'image', model: 'Nova Canvas', cost: estimateImageCost() })
-      toast.success(`Scene ${sceneNum} image ready`)
+      addCostEntry({ service: 'image', model: modelLabel, cost: imgCost })
+      toast.success(`Scene ${sceneNum} image ready · ${formatCost(imgCost)}`)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       updateAsset(sceneNum, { imageStatus: 'error', imageError: msg })
@@ -111,9 +115,10 @@ export function Storyboard() {
         project_id: (data.project_id as string) || 'storyboard',
         aspect_ratio: (data.aspect_ratio as string) || '9_16',
       })
+      const vidCost = estimateVideoCost()
       updateAsset(sceneNum, { videoStatus: 'done', videoUrl: result.video_url })
-      addCostEntry({ service: 'video', model: 'Nova Reel', cost: estimateVideoCost() })
-      toast.success(`Scene ${sceneNum} video ready`)
+      addCostEntry({ service: 'video', model: 'Nova Reel', cost: vidCost })
+      toast.success(`Scene ${sceneNum} video started · ${formatCost(vidCost)}`)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       updateAsset(sceneNum, { videoStatus: 'error', videoError: msg })
@@ -137,9 +142,10 @@ export function Storyboard() {
         project_id: (data.project_id as string) || 'storyboard',
         engine: 'polly',
       })
+      const audCost = estimateAudioCost('polly', text.length)
       updateAsset(sceneNum, { audioStatus: 'done', audioUrl: result.audio_url })
-      addCostEntry({ service: 'audio', model: 'Polly', cost: estimateAudioCost('polly', text.length) })
-      toast.success(`Scene ${sceneNum} audio ready`)
+      addCostEntry({ service: 'audio', model: 'Polly', cost: audCost })
+      toast.success(`Scene ${sceneNum} audio ready · ${formatCost(audCost)}`)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       updateAsset(sceneNum, { audioStatus: 'error', audioError: msg })
@@ -437,7 +443,27 @@ export function Storyboard() {
                     </p>
                   )}
 
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                    {(['nova_canvas', 'titan_v2'] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setImageModel(m)}
+                        style={{
+                          padding: '4px 10px', borderRadius: '20px',
+                          border: `1px solid ${imageModel === m ? 'rgba(240,90,37,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                          background: imageModel === m ? 'rgba(240,90,37,0.15)' : 'rgba(255,255,255,0.04)',
+                          color: imageModel === m ? '#F05A25' : 'rgba(239,225,207,0.5)',
+                          fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                        }}
+                      >
+                        {m === 'nova_canvas' ? 'Nova Canvas' : 'Titan V2'}
+                      </button>
+                    ))}
+                  </div>
                   {actionBtn('Generate Image', () => handleGenerateImage(scene), sceneAsset.imageStatus)}
+                  <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '6px' }}>
+                    Est. {formatCost(estimateImageCost(imageModel))}
+                  </div>
                 </div>
 
                 {/* VIDEO SECTION */}
@@ -485,6 +511,9 @@ export function Storyboard() {
                     !hasImage,
                     '#3FA9F6'
                   )}
+                  <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '6px' }}>
+                    Est. {formatCost(estimateVideoCost())}
+                  </div>
                 </div>
 
                 {/* AUDIO SECTION */}
@@ -524,6 +553,9 @@ export function Storyboard() {
                     false,
                     '#A855F7'
                   )}
+                  <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '6px' }}>
+                    Est. {narration ? formatCost(estimateAudioCost('polly', narration.length)) : '<$0.01'}
+                  </div>
                 </div>
 
                 {/* Camera + Transition info */}

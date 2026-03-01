@@ -86,12 +86,12 @@ async function generateWithPolly(
 ): Promise<ArrayBuffer> {
   const endpoint = `https://polly.${region}.amazonaws.com/v1/speech`
 
-  // Pick voice based on language
-  const voiceId = language === 'id' ? 'Arlet' : 'Joanna'
+  // Use generative engine with Ruth — handles multilingual text
+  const voiceId = 'Ruth'
   const langCode = language === 'id' ? 'id-ID' : 'en-US'
 
   const pollyBody = JSON.stringify({
-    Engine: 'neural',
+    Engine: 'generative',
     LanguageCode: langCode,
     OutputFormat: 'mp3',
     Text: text,
