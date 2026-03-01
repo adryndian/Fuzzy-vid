@@ -202,7 +202,20 @@ ${aspectRatio === '4_5' ? 'Use portrait composition - slightly wider than phone 
               )
             }
 
-            return new Response(responseText, {
+            // Strip markdown code fences the AI may have added
+            let jsonText = responseText.trim()
+            const fenced = jsonText.match(/^```(?:json)?\s*([\s\S]*?)```\s*$/)
+            if (fenced) jsonText = fenced[1].trim()
+
+            // Validate parseable before sending
+            try { JSON.parse(jsonText) } catch {
+              return new Response(
+                JSON.stringify({ error: 'Invalid JSON from AI', raw: jsonText.slice(0, 200) }),
+                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              )
+            }
+
+            return new Response(jsonText, {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             })
 

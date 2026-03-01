@@ -77,15 +77,22 @@ export function Home() {
           resolution: '1080p',
         })
       })
-      const data = await res.json() as Record<string, unknown>
+      const text = await res.text()
       if (res.ok) {
-        sessionStorage.setItem('storyboard_result', JSON.stringify(data))
-        navigate('/storyboard')
+        try {
+          JSON.parse(text) // validate
+          sessionStorage.setItem('storyboard_result', text)
+          navigate('/storyboard')
+        } catch {
+          setError('AI returned malformed JSON. Please try again.')
+        }
       } else {
-        setError((data?.message as string) || (data?.error as string) || `Error ${res.status}`)
+        let errData: Record<string, unknown> = {}
+        try { errData = JSON.parse(text) } catch {}
+        setError((errData?.message as string) || (errData?.error as string) || `Error ${res.status}`)
       }
     } catch (e: any) {
-      setError(`Network error: ${e?.message || 'Check Worker deployment'}`)
+      setError(`Request failed: ${e?.message || 'Check Worker deployment'}`)
     } finally { setLoading(false) }
   }
 
