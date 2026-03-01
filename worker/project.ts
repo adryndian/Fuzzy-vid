@@ -2,14 +2,9 @@
 import { Env } from './index';
 import { corsHeaders } from './lib/cors';
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
-    }
-
-    const { method, url } = request;
-    const { pathname } = new URL(url);
+export async function handleProjectRequest(request: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
+    const { method } = request;
+    const { pathname } = url;
 
     try {
       // POST /api/project/save
@@ -72,5 +67,4 @@ export default {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-  },
-};
+}

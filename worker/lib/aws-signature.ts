@@ -54,7 +54,10 @@ export class AwsV4Signer {
     }
 
     private getSignedHeaders(headers: Headers): string {
-        const headerNames = Array.from(headers.keys()).map((h) => h.toLowerCase());
+        const headerNames: string[] = [];
+        headers.forEach((_, key) => {
+            headerNames.push(key.toLowerCase());
+        });
         headerNames.sort();
         return headerNames.join(';');
     }
@@ -69,10 +72,14 @@ export class AwsV4Signer {
         const bodyHash = this.hex(await this.sha256(body));
         
         const canonicalHeaders: string[] = [];
-        const headerNames = Array.from(headers.keys());
-        headerNames.sort();
-        for (const name of headerNames) {
-            canonicalHeaders.push(`${name.toLowerCase()}:${headers.get(name)}`);
+        const headerEntries: [string, string][] = [];
+        headers.forEach((value, key) => {
+            headerEntries.push([key.toLowerCase(), value]);
+        });
+        headerEntries.sort(([a], [b]) => a.localeCompare(b));
+        
+        for (const [name, value] of headerEntries) {
+            canonicalHeaders.push(`${name}:${value}`);
         }
         
         const searchParams = new URLSearchParams(url.search);
@@ -112,7 +119,7 @@ export class AwsV4Signer {
         return this.hex(signature);
     }
     
-    private async hmac(key: ArrayBuffer, data: string): Promise<ArrayBuffer> {
+    private async hmac(key: ArrayBuffer | Uint8Array, data: string): Promise<ArrayBuffer> {
         const cryptoKey = await crypto.subtle.importKey(
             'raw',
             key,

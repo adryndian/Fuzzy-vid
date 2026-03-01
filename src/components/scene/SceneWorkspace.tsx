@@ -6,7 +6,7 @@ import { AudioTab } from './tabs/AudioTab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 export const SceneWorkspace = () => {
-  const { project, activeSceneId, getScene } = useProjectStore();
+  const { activeSceneId, getScene } = useProjectStore();
   const activeScene = activeSceneId ? getScene(activeSceneId) : null;
 
   if (!activeScene) {

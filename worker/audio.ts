@@ -1,7 +1,7 @@
 import { Env } from './index';
 import { corsHeaders } from './lib/cors';
 import { AwsV4Signer } from './lib/aws-signature';
-import { AudioConfig, AWSRegion, Scene } from '../../src/types/schema';
+import { AudioConfig, AWSRegion, Scene } from '../src/types/schema';
 
 const nanoid = (size = 8) => crypto.getRandomValues(new Uint8Array(size)).reduce((id, byte) => id + (byte & 63).toString(36), '');
 
@@ -12,18 +12,13 @@ interface AudioRequestBody {
   awsRegion: AWSRegion;
 }
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
-    }
-
-    const { method, url } = request;
-    const { pathname } = new URL(url);
+export async function handleAudioRequest(request: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
+    const { method } = request;
+    const { pathname } = url;
 
     try {
       if (method === 'POST' && pathname.endsWith('/generate')) {
-        const body = await request.json<AudioRequestBody>();
+        const body = await request.json() as AudioRequestBody;
         const { scene, projectId, audioConfig, awsRegion } = body;
 
         if (!scene || !projectId || !audioConfig) {
@@ -61,8 +56,7 @@ export default {
       console.error('Audio Worker Error:', e);
       return new Response(JSON.stringify({ error: 'Internal Server Error', message: e.message }), { status: 500, headers: corsHeaders });
     }
-  },
-};
+}
 
 async function generateAudio(jobId: string, r2Key: string, body: AudioRequestBody, env: Env) {
   const { scene, audioConfig, awsRegion } = body;

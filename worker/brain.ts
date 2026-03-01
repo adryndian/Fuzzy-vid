@@ -21,7 +21,7 @@ OUTPUT RULES:
   even if narasi_language is set to one language
 `;
 
-export async function handleBrainRequest(request: Request, env: Env, url: URL): Promise<Response> {
+export async function handleBrainRequest(request: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
     const path = url.pathname;
     const corsHeaders = {
         'Access-Control-Allow-Origin': '*',
@@ -39,7 +39,7 @@ export async function handleBrainRequest(request: Request, env: Env, url: URL): 
                 return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
 
-            const { prompt, model, narasi_language = 'en' } = await request.json();
+            const { prompt, model, narasi_language = 'en' } = await request.json() as { prompt: string, model: string, narasi_language?: 'id' | 'en' };
 
             if (!prompt || !model) {
                 return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing prompt or model' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -73,7 +73,7 @@ export async function handleBrainRequest(request: Request, env: Env, url: URL): 
                     return new Response(JSON.stringify({ error: 'Gemini API Error', message: errorBody }), { status: geminiRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
-                const geminiData = await geminiRes.json();
+                const geminiData = await geminiRes.json() as any;
                 const projectSchemaText = geminiData.candidates[0].content.parts[0].text;
                 
                 // The response is pure JSON, so we can return it directly.

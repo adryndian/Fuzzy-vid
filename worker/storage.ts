@@ -3,14 +3,9 @@ import { Env } from './index';
 import { AwsV4Signer } from './lib/aws-signature';
 import { corsHeaders } from './lib/cors';
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
-    }
-
-    const { method, url } = request;
-    const { pathname, searchParams } = new URL(url);
+export async function handleStorageRequest(request: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
+    const { method } = request;
+    const { pathname, searchParams } = url;
 
     // Endpoint: GET /api/storage/presign?key=...
     if (method === 'GET' && pathname.endsWith('/presign')) {
@@ -26,7 +21,13 @@ export default {
         }
         
         const r2Endpoint = `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-        const urlToSign = new URL(`${r2Endpoint}/${key}`);
+        // Use the actual bucket name in the URL if it's path-style, 
+        // or just the endpoint if it's virtual-host style. 
+        // Cloudflare R2 usually uses https://<account_id>.r2.cloudflarestorage.com/<bucket_name>/<key>
+        // But the GEMINI.md says: R2 endpoint: https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com
+        // And bucket: igome-story-storage
+        const bucketName = 'igome-story-storage';
+        const urlToSign = new URL(`${r2Endpoint}/${bucketName}/${key}`);
 
         // The original Hono code passed credentials and config separately.
         // Assuming the signer is instantiated like this based on the lib's likely design.
@@ -63,5 +64,4 @@ export default {
       status: 404,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  },
-};
+}

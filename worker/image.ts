@@ -23,7 +23,7 @@ async function generateImageWithGemini(env: Env, imagePrompt: string, jobId: str
         console.error("Gemini Image Gen Error:", errorBody);
         await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'failed', error: errorBody }), { expirationTtl: 3600 });
     } else {
-        const data = await res.json();
+        const data = await res.json() as any;
         const imageBytes = data.images[0].image.b64_encoded;
         const imageBuffer = Uint8Array.from(atob(imageBytes), c => c.charCodeAt(0));
 
@@ -45,7 +45,7 @@ async function generateImageWithGemini(env: Env, imagePrompt: string, jobId: str
   });
 }
 
-export async function handleImageRequest(request: Request, env: Env, url: URL): Promise<Response> {
+export async function handleImageRequest(request: Request, env: Env, url: URL, ctx: ExecutionContext): Promise<Response> {
   const path = url.pathname;
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -63,7 +63,7 @@ export async function handleImageRequest(request: Request, env: Env, url: URL): 
         return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      const { image_prompt, model } = await request.json();
+      const { image_prompt, model } = await request.json() as { image_prompt: string, model: string };
 
       if (!image_prompt || !model) {
         return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing image_prompt or model' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -73,7 +73,7 @@ export async function handleImageRequest(request: Request, env: Env, url: URL): 
       await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'generating' }), { expirationTtl: 3600 });
 
       if (model === 'gemini') {
-        generateImageWithGemini(env, image_prompt, jobId);
+        ctx.waitUntil(generateImageWithGemini(env, image_prompt, jobId));
       } else {
         return new Response(JSON.stringify({ error: 'Not Implemented', message: `Model ${model} is not supported yet` }), { status: 501, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
       }

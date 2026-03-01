@@ -23,8 +23,8 @@ async function generateVideoWithNovaReel(env: Env, imageR2Key: string, jobId: st
   };
 
   const signer = new AwsV4Signer({
-      aws_access_key_id: env.AWS_ACCESS_KEY_ID,
-      aws_secret_access_key: env.AWS_SECRET_ACCESS_KEY,
+      awsAccessKeyId: env.AWS_ACCESS_KEY_ID,
+      awsSecretKey: env.AWS_SECRET_ACCESS_KEY,
   }, 'us-east-1', 'bedrock');
 
   const request = new Request(bedrockEndpoint.toString(), {
@@ -38,7 +38,7 @@ async function generateVideoWithNovaReel(env: Env, imageR2Key: string, jobId: st
   const signedRequest = await signer.sign(request);
 
   // Fire-and-forget background fetch
-  fetch(signedRequest)
+  return fetch(signedRequest)
     .then(async res => {
       if (!res.ok) {
         const errorBody = await res.text();
@@ -53,7 +53,7 @@ async function generateVideoWithNovaReel(env: Env, imageR2Key: string, jobId: st
     });
 }
 
-export async function handleVideoRequest(request: Request, env: Env, url: URL) {
+export async function handleVideoRequest(request: Request, env: Env, url: URL, ctx: ExecutionContext) {
   const path = url.pathname;
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -71,7 +71,8 @@ export async function handleVideoRequest(request: Request, env: Env, url: URL) {
         return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      const { image_r2_key, model, project_id, scene_id } = await request.json<VideoGenerationRequestBody>();
+      const body = await request.json() as VideoGenerationRequestBody;
+      const { image_r2_key, model, project_id, scene_id } = body;
 
       if (!image_r2_key || !model || !project_id || !scene_id) {
         return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -81,8 +82,7 @@ export async function handleVideoRequest(request: Request, env: Env, url: URL) {
       await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'generating' }), { expirationTtl: 3600 });
 
       if (model === 'nova_reel') {
-        // Do not await this, let it run in the background
-        generateVideoWithNovaReel(env, image_r2_key, jobId, project_id, scene_id);
+        ctx.waitUntil(generateVideoWithNovaReel(env, image_r2_key, jobId, project_id, scene_id));
       } else {
         return new Response(JSON.stringify({ error: 'Not Implemented', message: `Model ${model} is not supported yet` }), { status: 501, headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
       }

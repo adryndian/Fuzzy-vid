@@ -4,6 +4,7 @@ import { handleVideoRequest } from './video';
 import { handleAudioRequest } from './audio';
 import { handleProjectRequest } from './project';
 import { handleStorageRequest } from './storage';
+import { corsHeaders } from './lib/cors';
 
 export interface Env {
   JOB_STATUS: KVNamespace;
@@ -19,12 +20,6 @@ export interface Env {
   ENVIRONMENT: string;
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -36,28 +31,22 @@ export default {
 
     try {
       if (pathname.startsWith('/api/brain')) {
-        return handleBrainRequest(request, env, url);
+        return handleBrainRequest(request, env, url, ctx);
       }
       if (pathname.startsWith('/api/image')) {
-        return handleImageRequest(request, env, url);
+        return handleImageRequest(request, env, url, ctx);
       }
        if (pathname.startsWith('/api/video')) {
-        return handleVideoRequest(request, env, url);
+        return handleVideoRequest(request, env, url, ctx);
       }
        if (pathname.startsWith('/api/audio')) {
-        // Assuming audio.ts will be refactored, for now this will fail
-        // return handleAudioRequest(request, env, url);
-        return new Response("Audio service pending refactor", { status: 500 });
+        return handleAudioRequest(request, env, url, ctx);
       }
        if (pathname.startsWith('/api/project')) {
-        // Assuming project.ts will be refactored
-        // return handleProjectRequest(request, env, url);
-        return new Response("Project service pending refactor", { status: 500 });
+        return handleProjectRequest(request, env, url, ctx);
       }
       if (pathname.startsWith('/api/storage')) {
-        // Assuming storage.ts will be refactored
-        // return handleStorageRequest(request, env, url);
-        return new Response("Storage service pending refactor", { status: 500 });
+        return handleStorageRequest(request, env, url, ctx);
       }
       
       return new Response(JSON.stringify({ error: 'Not Found', message: `Route ${pathname} not found` }), {
