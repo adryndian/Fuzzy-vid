@@ -67,9 +67,13 @@ async function callBedrockLlama(creds: import('./index').Credentials, prompt: st
   const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
 
   const body = JSON.stringify({
-    prompt: `<|system|>${systemPrompt}<|end|><|user|>${prompt}<|end|><|assistant|>`,
+    prompt: "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
+      + systemPrompt
+      + "<|eot_id|><|start_header_id|>user<|end_header_id|>\n"
+      + prompt
+      + "<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
     max_gen_len: 8192,
-    temperature: 0.8
+    temperature: 0.7
   })
 
   const { signRequest } = await import('./lib/aws-signature')
@@ -110,7 +114,8 @@ export async function handleBrainRequest(
     const corsHeaders = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, X-Gemini-Key, X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key, X-Brain-Region, X-Image-Region, X-Audio-Region, X-ElevenLabs-Key, X-Runway-Key',
+        'Access-Control-Max-Age': '86400',
     };
 
     if (request.method === 'OPTIONS') {

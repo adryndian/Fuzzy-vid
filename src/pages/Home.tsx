@@ -56,7 +56,7 @@ export function Home() {
 
     // Check if user has set API keys
     if (!apiHeaders['X-Gemini-Key'] && !apiHeaders['X-AWS-Access-Key-Id']) {
-      setError('Please add your API keys in Settings first')
+      setError('⚙️ Please add your API keys in Settings first')
       setLoading(false)
       return
     }
@@ -78,13 +78,14 @@ export function Home() {
         })
       })
       const data = await res.json() as Record<string, unknown>
-      if (res.ok && data?.project_id) {
-        navigate(`/storyboard/${data.project_id as string}`)
+      if (res.ok) {
+        sessionStorage.setItem('storyboard_result', JSON.stringify(data))
+        navigate('/storyboard')
       } else {
-        setError((data?.message as string) || (data?.error as string) || 'Generation failed')
+        setError((data?.message as string) || (data?.error as string) || `Error ${res.status}`)
       }
     } catch (e: any) {
-      setError(`Error: ${e.message || 'Network failed. Check Settings for API keys.'}`)
+      setError(`Network error: ${e?.message || 'Check Worker deployment'}`)
     } finally { setLoading(false) }
   }
 
@@ -136,7 +137,7 @@ export function Home() {
     <div style={{
       minHeight: '100vh',
       width: '100%',
-      background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1527 40%, #0a1020 100%)',
+      background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1527 50%, #060d1a 100%)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',

@@ -44,7 +44,7 @@ export function Settings() {
     page: {
       minHeight: '100vh',
       width: '100%',
-      background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1527 40%, #0a1020 100%)',
+      background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1527 50%, #060d1a 100%)',
       fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
       paddingBottom: '40px',
     } as React.CSSProperties,
