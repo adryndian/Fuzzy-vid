@@ -48,12 +48,20 @@ export function Storyboard() {
       return
     }
     try {
-      const parsed = JSON.parse(raw) as StoryboardData
-      if (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
-        setError('Storyboard data is missing scenes. Please regenerate.')
+      const parsed = JSON.parse(raw) as any
+      // Normalize: handle cases where AI wraps scenes inside a nested object
+      let normalized: StoryboardData = parsed
+      if (!normalized.scenes) {
+        if (Array.isArray(parsed.storyboard?.scenes)) normalized = parsed.storyboard
+        else if (Array.isArray(parsed.data?.scenes)) normalized = parsed.data
+        else if (Array.isArray(parsed.project?.scenes)) normalized = parsed.project
+      }
+      if (!normalized.scenes || !Array.isArray(normalized.scenes) || normalized.scenes.length === 0) {
+        const keys = Object.keys(parsed).join(', ')
+        setError(`Storyboard data is missing scenes. Keys found: ${keys || 'none'}. Please regenerate.`)
         return
       }
-      setData(parsed)
+      setData(normalized)
     } catch {
       setError('Failed to parse storyboard data. Please regenerate.')
     }

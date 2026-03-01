@@ -10,8 +10,28 @@ camera language, and narrative arc.
 
 OUTPUT RULES:
 - Respond with PURE JSON only — no markdown, no explanation, no backticks
-- Follow the ProjectSchema exactly — include ALL required fields
-- Image prompts ALWAYS in English (YouMind Nano Banana Pro format)
+- Use EXACTLY this JSON structure (no wrapper objects, scenes at root level):
+{
+  "title": "string",
+  "platform": "string",
+  "art_style": "string",
+  "language": "string",
+  "aspect_ratio": "string",
+  "scenes": [
+    {
+      "scene_number": 1,
+      "scene_type": "opening_hook",
+      "image_prompt": "string — always in English",
+      "text_id": "string — Bahasa Indonesia narration",
+      "text_en": "string — English narration",
+      "mood": "string",
+      "camera_angle": "string",
+      "transition": "string"
+    }
+  ]
+}
+- scene_type must be one of: opening_hook, rising_action, climax, resolution
+- Image prompts ALWAYS in English (cinematic, detailed visual description)
 - Narasi voiceover in ${language}
 - Every scene serves the story arc:
   Scene 1 → opening_hook (captures attention in 2 seconds)
