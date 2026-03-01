@@ -33,7 +33,3 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, className, varia
     </div>
   );
 };
-
-export default GlassCard
-
-export default GlassCard

@@ -3,10 +3,10 @@ import type { Scene } from '../../../types/schema';
 import { useImageGeneration } from '../../../hooks/useImageGenerate';
 import useProjectStore from '../../../store/projectStore';
 import useSettingsStore from '../../../store/settingsStore';
-import { Button } from '../../ui/button'; // Corrected import path
+import { Button } from '../../ui/button';
 import { Image, Loader, Check, AlertTriangle } from 'lucide-react';
 import { GlassCard } from '../../glass/GlassCard';
-import ImageSkeleton from '../../skeletons/ImageSkeleton';
+import { ImageSkeleton } from '../../skeletons/ImageSkeleton';
 
 interface ImageTabProps {
   scene: Scene;
@@ -16,10 +16,8 @@ export const ImageTab: React.FC<ImageTabProps> = ({ scene }) => {
   const { project, updateScene, getScene } = useProjectStore();
   const { bedrock_image_region, default_image_model } = useSettingsStore();
 
-  // Use the self-contained hook for all image generation logic
   const { generate, isStarting, isGenerating } = useImageGeneration(scene.scene_id);
 
-  // Get the most current scene data directly from the store
   const currentScene = getScene(scene.scene_id)!;
 
   const handleGenerateImage = () => {
@@ -94,5 +92,3 @@ export const ImageTab: React.FC<ImageTabProps> = ({ scene }) => {
     </div>
   );
 };
-
-export default ImageTab;

@@ -6,7 +6,7 @@ import useSettingsStore from '../../../store/settingsStore';
 import { Button } from '../../ui/button';
 import { Video, Loader, Check, AlertTriangle, Download } from 'lucide-react';
 import { GlassCard } from '../../glass/GlassCard';
-import VideoProgressBar from '../../skeletons/VideoProgressBar';
+import { VideoProgressBar } from '../../skeletons/VideoProgressBar';
 
 interface VideoTabProps {
   scene: Scene;
@@ -116,5 +116,3 @@ export const VideoTab: React.FC<VideoTabProps> = ({ scene }) => {
     </div>
   );
 };
-
-export default VideoTab;

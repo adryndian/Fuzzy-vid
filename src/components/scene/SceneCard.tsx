@@ -1,16 +1,16 @@
 import React from 'react';
 import type { Scene } from '../../types/schema';
 import useProjectStore from '../../store/projectStore';
-import GlassCard from '../glass/GlassCard';
-import ImageTab from './tabs/ImageTab';
-import VideoTab from './tabs/VideoTab';
-import AudioTab from './tabs/AudioTab';
+import { GlassCard } from '../glass/GlassCard';
+import { ImageTab } from './tabs/ImageTab';
+import { VideoTab } from './tabs/VideoTab';
+import { AudioTab } from './tabs/AudioTab';
 
 interface SceneCardProps {
   scene: Scene;
 }
 
-const SceneCard: React.FC<SceneCardProps> = ({ scene }) => {
+export const SceneCard: React.FC<SceneCardProps> = ({ scene }) => {
   const { project } = useProjectStore();
   const [activeTab, setActiveTab] = React.useState('image');
 
@@ -57,5 +57,3 @@ const SceneCard: React.FC<SceneCardProps> = ({ scene }) => {
     </GlassCard>
   );
 };
-
-export default SceneCard;
