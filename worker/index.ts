@@ -1,11 +1,3 @@
-import { handleBrainRequest } from './brain';
-import { handleImageRequest } from './image';
-import { handleVideoRequest } from './video';
-import { handleAudioRequest } from './audio';
-import { handleProjectRequest } from './project';
-import { handleStorageRequest } from './storage';
-import { corsHeaders } from './lib/cors';
-
 export interface Env {
   JOB_STATUS: KVNamespace;
   STORY_STORAGE: R2Bucket;
@@ -22,44 +14,70 @@ export interface Env {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders });
+    
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
     }
 
-    const url = new URL(request.url);
-    const pathname = url.pathname;
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: corsHeaders })
+    }
+
+    const url = new URL(request.url)
+    const path = url.pathname
 
     try {
-      if (pathname.startsWith('/api/brain')) {
-        return handleBrainRequest(request, env, url, ctx);
+      // Brain routes
+      if (path === '/api/brain/generate' || path.startsWith('/api/brain/')) {
+        const { handleBrainRequest } = await import('./brain')
+        return handleBrainRequest(request, env, url, ctx)
       }
-      if (pathname.startsWith('/api/image')) {
-        return handleImageRequest(request, env, url, ctx);
-      }
-       if (pathname.startsWith('/api/video')) {
-        return handleVideoRequest(request, env, url, ctx);
-      }
-       if (pathname.startsWith('/api/audio')) {
-        return handleAudioRequest(request, env, url, ctx);
-      }
-       if (pathname.startsWith('/api/project')) {
-        return handleProjectRequest(request, env, url, ctx);
-      }
-      if (pathname.startsWith('/api/storage')) {
-        return handleStorageRequest(request, env, url, ctx);
-      }
-      
-      return new Response(JSON.stringify({ error: 'Not Found', message: `Route ${pathname} not found` }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
 
-    } catch (e: any) {
-        console.error('Main Worker Error:', e, e.stack);
-        return new Response(JSON.stringify({ error: 'Internal Server Error', message: e.message }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      // Image routes
+      if (path.startsWith('/api/image/')) {
+        const { handleImageRequest } = await import('./image')
+        return handleImageRequest(request, env, url, ctx)
+      }
+
+      // Video routes
+      if (path.startsWith('/api/video/')) {
+        const { handleVideoRequest } = await import('./video')
+        return handleVideoRequest(request, env, url, ctx)
+      }
+
+      // Audio routes
+      if (path.startsWith('/api/audio/')) {
+        const { handleAudioRequest } = await import('./audio')
+        return handleAudioRequest(request, env, url, ctx)
+      }
+
+      // Project routes
+      if (path.startsWith('/api/project/')) {
+        const { handleProjectRequest } = await import('./project')
+        return handleProjectRequest(request, env, url, ctx)
+      }
+
+      // Storage routes
+      if (path.startsWith('/api/storage/')) {
+        const { handleStorageRequest } = await import('./storage')
+        return handleStorageRequest(request, env, url, ctx)
+      }
+
+      // Health check
+      if (path === '/api/health' || path === '/') {
+        return Response.json({ status: 'ok', worker: 'fuzzy-vid-worker' }, { headers: corsHeaders })
+      }
+
+      return Response.json({ error: 'Not Found', path }, { status: 404, headers: corsHeaders })
+
+    } catch (error) {
+      console.error('Worker error:', error)
+      return Response.json(
+        { error: 'Internal Server Error', message: String(error) },
+        { status: 500, headers: corsHeaders }
+      )
     }
-  },
-};
+  }
+}

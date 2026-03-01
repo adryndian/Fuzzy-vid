@@ -26,7 +26,7 @@ export function Home() {
     setError('')
     setLoading(true)
     try {
-      const res = await fetch('https://worker.officialdian21.workers.dev/api/brain/generate', {
+      const res = await fetch('https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
