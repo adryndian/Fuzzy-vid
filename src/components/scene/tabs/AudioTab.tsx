@@ -8,7 +8,7 @@ interface AudioTabProps {
   scene: Scene;
 }
 
-export const AudioTab: React.FC<AudioTabProps> = ({ scene }) => {
+const AudioTab: React.FC<AudioTabProps> = ({ scene }) => {
   const { project, updateScene } = useProjectStore();
 
   const { mutate: generateAudio, isPending } = useAudioGenerate();
@@ -61,3 +61,5 @@ export const AudioTab: React.FC<AudioTabProps> = ({ scene }) => {
     </div>
   );
 };
+
+export { AudioTab };

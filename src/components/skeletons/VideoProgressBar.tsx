@@ -1,4 +1,4 @@
-export default function VideoProgressBar({ progress = 0 }: { progress?: number }) {
+export function VideoProgressBar({ progress = 0 }: { progress?: number }) {
   return (
     <div className="w-full space-y-2">
       <div className="w-full aspect-[9/16] bg-white/5 rounded-2xl border border-white/10 flex items-center justify-center">

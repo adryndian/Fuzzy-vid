@@ -20,7 +20,7 @@ interface ImageStatusResponse {
 
 export function useImageGeneration(sceneId: number) {
   const queryClient = useQueryClient()
-  const { updateScene } = useProjectStore()
+  const { updateScene, getScene } = useProjectStore()
 
   const mutation = useMutation({
     mutationFn: async (props: GenerateImageProps) => {
@@ -34,40 +34,41 @@ export function useImageGeneration(sceneId: number) {
     },
   })
 
-  const { data: status, isLoading: isCheckingStatus } = useQuery<ImageStatusResponse>(
+  const { data: statusResponse, isLoading: isCheckingStatus } = useQuery<ImageStatusResponse>(
     {
       queryKey: ['image-status', mutation.data?.job_id],
       queryFn: () => api.get(`/api/image/status/${mutation.data!.job_id}`),
       enabled: !!mutation.data?.job_id,
-      refetchInterval: (query) => {
-        const data = query.state.data
-        if (data?.status === 'done' || data?.status === 'failed') {
-          return false
-        }
-        return 5000 // 5s
-      },
-      onSuccess: (data) => {
-        if (data.status === 'done') {
-          updateScene(sceneId, {
-            status: { ...useProjectStore.getState().getScene(sceneId)!.status, image: 'done' },
-            assets: { 
-              ...useProjectStore.getState().getScene(sceneId)!.assets,
-              image_url: data.image_url, 
-              image_r2_key: data.r2_key 
-            },
-          })
-        } else if (data.status === 'failed') {
-          updateScene(sceneId, {
-            status: { ...useProjectStore.getState().getScene(sceneId)!.status, image: 'failed' },
-          })
-        }
-      },
+      refetchInterval: (query) => (query.state.data?.status === 'done' || query.state.data?.status === 'failed') ? false : 5000,
     }
   )
+
+  useEffect(() => {
+    if (statusResponse?.status === 'done') {
+      const currentScene = getScene(sceneId);
+      if (currentScene) {
+        updateScene(sceneId, {
+          status: { ...currentScene.status, image: 'done' },
+          assets: { 
+            ...currentScene.assets,
+            image_url: statusResponse.image_url, 
+            image_r2_key: statusResponse.r2_key 
+          },
+        })
+      }
+    } else if (statusResponse?.status === 'failed') {
+      const currentScene = getScene(sceneId);
+      if (currentScene) {
+        updateScene(sceneId, {
+          status: { ...currentScene.status, image: 'failed' },
+        })
+      }
+    }
+  }, [statusResponse, sceneId, updateScene, getScene])
 
   return {
     generate: mutation.mutate,
     isStarting: mutation.isPending,
-    isGenerating: status?.status === 'generating' || isCheckingStatus,
+    isGenerating: statusResponse?.status === 'generating' || isCheckingStatus,
   }
 }

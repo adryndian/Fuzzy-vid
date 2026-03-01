@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { api } from '../lib/api'
 import useProjectStore from '../store/projectStore'
 import type { VideoModel } from '../types/schema'
@@ -20,7 +21,7 @@ interface VideoStatusResponse {
 
 export function useVideoGeneration(sceneId: number) {
   const queryClient = useQueryClient()
-  const { updateScene } = useProjectStore()
+  const { updateScene, getScene } = useProjectStore()
 
   const mutation = useMutation({
     mutationFn: async (props: GenerateVideoProps) => {
@@ -28,47 +29,49 @@ export function useVideoGeneration(sceneId: number) {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(['video-status', data.job_id], { status: 'processing', progress: 0 })
-      updateScene(sceneId, {
-        status: { ...useProjectStore.getState().getScene(sceneId)!.status, video: 'generating' },
-      })
+      const currentScene = getScene(sceneId);
+      if (currentScene) {
+        updateScene(sceneId, {
+          status: { ...currentScene.status, video: 'generating' },
+        })
+      }
     },
   })
 
-  const { data, isLoading: isCheckingStatus } = useQuery<VideoStatusResponse>({
+  const { data: statusResponse, isLoading: isCheckingStatus } = useQuery<VideoStatusResponse>({
     queryKey: ['video-status', mutation.data?.job_id],
     queryFn: () => api.get(`/api/video/status/${mutation.data!.job_id}`),
     enabled: !!mutation.data?.job_id,
-    refetchInterval: (query) => {
-      const data = query.state.data
-      if (data?.status === 'done' || data?.status === 'failed') {
-        return false
-      }
-      return 30000 // 30s
-    },
-    onSuccess: (data) => {
-      if (data.status === 'done') {
+    refetchInterval: (query) => (query.state.data?.status === 'done' || query.state.data?.status === 'failed') ? false : 5000,
+  })
+
+  useEffect(() => {
+    if (statusResponse?.status === 'done') {
+      const currentScene = getScene(sceneId);
+      if (currentScene) {
         updateScene(sceneId, {
-          status: { ...useProjectStore.getState().getScene(sceneId)!.status, video: 'done' },
+          status: { ...currentScene.status, video: 'done' },
           assets: { 
-            ...useProjectStore.getState().getScene(sceneId)!.assets, 
-            video_url: data.video_url, 
-            video_r2_key: data.r2_key 
+            ...currentScene.assets, 
+            video_url: statusResponse.video_url, 
+            video_r2_key: statusResponse.r2_key 
           },
         })
-      } else if (data.status === 'failed') {
-        updateScene(sceneId, {
-          status: { ...useProjectStore.getState().getScene(sceneId)!.status, video: 'failed' },
-        })
-      } else if (data.status === 'processing' && data.progress) {
-        // You might want to update a progress indicator here, maybe in a different store
       }
-    },
-  })
+    } else if (statusResponse?.status === 'failed') {
+      const currentScene = getScene(sceneId);
+      if (currentScene) {
+        updateScene(sceneId, {
+          status: { ...currentScene.status, video: 'failed' },
+        })
+      }
+    }
+  }, [statusResponse, sceneId, updateScene, getScene])
 
   return {
     generate: mutation.mutate,
     isStarting: mutation.isPending,
-    isGenerating: data?.status === 'processing' || isCheckingStatus,
-    progress: data?.progress,
+    isGenerating: statusResponse?.status === 'processing' || isCheckingStatus,
+    progress: statusResponse?.progress,
   }
 }

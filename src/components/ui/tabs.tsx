@@ -24,20 +24,23 @@ export function TabsList({ children, className }: { children: React.ReactNode; c
   )
 }
 
-export function TabsTrigger({ value, children, className }: {
+export function TabsTrigger({ value, children, className, disabled }: {
   value: string
   children: React.ReactNode
   className?: string
+  disabled?: boolean
 }) {
   const { active, setActive } = useContext(TabsContext)
   return (
     <button
-      onClick={() => setActive(value)}
+      onClick={() => !disabled && setActive(value)}
+      disabled={disabled}
       className={cn(
         'flex-1 px-3 py-1.5 text-sm rounded-lg transition-all',
         active === value
           ? 'bg-[#F05A25] text-white'
           : 'text-[rgba(239,225,207,0.6)] hover:text-[#EFE1CF]',
+        disabled && 'opacity-50 cursor-not-allowed grayscale',
         className
       )}
     >

@@ -3,7 +3,6 @@ import React from 'react';
 import useSettingsStore from '../store/settingsStore';
 import { GlassCard } from '../components/glass/GlassCard';
 import { GlassInput } from '../components/glass/GlassInput';
-import { GlassButton } from '../components/glass/GlassButton';
 
 const Settings: React.FC = () => {
   const settings = useSettingsStore();

@@ -12,7 +12,7 @@ interface ImageTabProps {
   scene: Scene;
 }
 
-export const ImageTab: React.FC<ImageTabProps> = ({ scene }) => {
+const ImageTab: React.FC<ImageTabProps> = ({ scene }) => {
   const { project, updateScene, getScene } = useProjectStore();
   const { bedrock_image_region, default_image_model } = useSettingsStore();
 
@@ -92,3 +92,5 @@ export const ImageTab: React.FC<ImageTabProps> = ({ scene }) => {
     </div>
   );
 };
+
+export { ImageTab };

@@ -1,9 +1,17 @@
 import { Env } from './index';
 import { nanoid } from 'nanoid';
 import { AwsV4Signer } from './lib/aws-signature';
+import type { VideoModel } from '../src/types/schema';
+
+interface VideoGenerationRequestBody {
+  image_r2_key: string;
+  model: VideoModel;
+  project_id: string;
+  scene_id: number;
+}
+
 
 async function generateVideoWithNovaReel(env: Env, imageR2Key: string, jobId: string, projectId: string, sceneId: number) {
-  const r2Endpoint = `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
   const outputR2Key = `projects/${projectId}/scene_${sceneId}/video_${Date.now()}.mp4`;
 
   const bedrockEndpoint = new URL('https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.nova-reel-v1:0/invoke');
@@ -15,11 +23,11 @@ async function generateVideoWithNovaReel(env: Env, imageR2Key: string, jobId: st
   };
 
   const signer = new AwsV4Signer({
-      awsAccessKeyId: env.AWS_ACCESS_KEY_ID,
-      awsSecretKey: env.AWS_SECRET_ACCESS_KEY,
+      aws_access_key_id: env.AWS_ACCESS_KEY_ID,
+      aws_secret_access_key: env.AWS_SECRET_ACCESS_KEY,
   }, 'us-east-1', 'bedrock');
 
-  const request = new Request(bedrockEndpoint, {
+  const request = new Request(bedrockEndpoint.toString(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -29,28 +37,23 @@ async function generateVideoWithNovaReel(env: Env, imageR2Key: string, jobId: st
 
   const signedRequest = await signer.sign(request);
 
-  // Use fetch without awaiting it to run in the background
+  // Fire-and-forget background fetch
   fetch(signedRequest)
     .then(async res => {
       if (!res.ok) {
         const errorBody = await res.text();
-        console.error('Nova Reel Error:', errorBody);
+        console.error('Nova Reel Invocation Error:', errorBody);
         await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'failed', error: errorBody }), { expirationTtl: 3600 });
       } else {
-        // const data = await res.json();
-        // For now we just mark as "generating" because the actual generation is async.
-        // The frontend will poll the /status endpoint. Nova Reel doesn't give a job id back,
-        // so we can't check its status directly. We will just have to check if the R2 key exists.
-        // For simplicity, we'll let the frontend polling handle the 'done' state by checking the presigned URL.
         await env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'done', videoR2Key: outputR2Key }), { expirationTtl: 3600 });
       }
-    }).catch(err => {
+    }).catch((err: any) => {
         console.error('Fetch error in Nova Reel background task:', err);
         env.JOB_STATUS.put(jobId, JSON.stringify({ status: 'failed', error: 'Failed to invoke Nova Reel model.' }), { expirationTtl: 3600 });
     });
 }
 
-export async function handleVideoRequest(request: Request, env: Env, url: URL): Promise<Response> {
+export async function handleVideoRequest(request: Request, env: Env, url: URL) {
   const path = url.pathname;
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -68,7 +71,7 @@ export async function handleVideoRequest(request: Request, env: Env, url: URL): 
         return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      const { image_r2_key, model, project_id, scene_id } = await request.json();
+      const { image_r2_key, model, project_id, scene_id } = await request.json<VideoGenerationRequestBody>();
 
       if (!image_r2_key || !model || !project_id || !scene_id) {
         return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

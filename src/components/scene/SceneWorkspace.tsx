@@ -3,11 +3,11 @@ import { GlassCard } from '../glass/GlassCard';
 import { ImageTab } from './tabs/ImageTab';
 import { VideoTab } from './tabs/VideoTab';
 import { AudioTab } from './tabs/AudioTab';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/SegmentedControl';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 export const SceneWorkspace = () => {
-  const { project, activeSceneId } = useProjectStore();
-  const activeScene = project?.scenes.find(s => s.scene_id === activeSceneId);
+  const { project, activeSceneId, getScene } = useProjectStore();
+  const activeScene = activeSceneId ? getScene(activeSceneId) : null;
 
   if (!activeScene) {
     return (

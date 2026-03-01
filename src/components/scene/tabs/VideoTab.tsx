@@ -12,7 +12,7 @@ interface VideoTabProps {
   scene: Scene;
 }
 
-export const VideoTab: React.FC<VideoTabProps> = ({ scene }) => {
+const VideoTab: React.FC<VideoTabProps> = ({ scene }) => {
   const { project, updateScene, getScene } = useProjectStore();
   const { default_video_model } = useSettingsStore();
 
@@ -116,3 +116,5 @@ export const VideoTab: React.FC<VideoTabProps> = ({ scene }) => {
     </div>
   );
 };
+
+export { VideoTab };

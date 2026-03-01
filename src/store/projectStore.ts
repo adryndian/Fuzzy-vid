@@ -4,18 +4,23 @@ import type { ProjectSchema, Scene } from '../types/schema';
 
 interface ProjectState {
   project: ProjectSchema | null;
+  activeSceneId: number | null;
   setProject: (project: ProjectSchema) => void;
-  updateScene: (sceneId: number, scene: Partial<Scene>) => void;
+  setActiveSceneId: (sceneId: number | null) => void;
+  updateScene: (sceneId: number, sceneUpdate: Partial<Scene>) => void;
+  getScene: (sceneId: number) => Scene | undefined;
 }
 
 const useProjectStore = create<ProjectState>()(
   devtools(
-    (set) => ({
+    (set, get) => ({
       project: null,
+      activeSceneId: null,
       setProject: (project) => set({ project }),
+      setActiveSceneId: (sceneId) => set({ activeSceneId: sceneId }),
       updateScene: (sceneId, sceneUpdate) =>
         set((state) => {
-          if (!state.project) return {};
+          if (!state.project) return state;
           const newScenes = state.project.scenes.map((scene) =>
             scene.scene_id === sceneId ? { ...scene, ...sceneUpdate } : scene
           );
@@ -26,6 +31,10 @@ const useProjectStore = create<ProjectState>()(
             },
           };
         }),
+      getScene: (sceneId) => {
+        const project = get().project;
+        return project?.scenes.find((scene) => scene.scene_id === sceneId);
+      },
     }),
     { name: 'ProjectStore' }
   )
