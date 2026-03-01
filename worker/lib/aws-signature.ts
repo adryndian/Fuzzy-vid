@@ -11,7 +11,7 @@ function encodeURIPath(path: string): string {
       encodeURIComponent(segment)
         // AWS requires encoding these characters which encodeURIComponent ignores
         .replace(/[!*'()]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-        // .replace(/%3A/gi, ':')  // keep colon literal - REMOVED because Bedrock expects %3A
+        // NOTE: keep %3A encoded — Bedrock canonical URI requires %3A, not literal colon
         .replace(/%2F/gi, '/')  // keep slash literal
     )
     .join('/')
