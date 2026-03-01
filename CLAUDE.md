@@ -194,12 +194,16 @@ curl -X POST https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/gener
 ✅ UI — navy gradient + glass cards
 ✅ Settings page — API keys per service
 ✅ Aspect ratio selector (9:16 / 16:9 / 1:1 / 4:5)
+✅ Storyboard display page with scene cards
+✅ Image generation per scene (Nova Canvas)
+✅ Video generation per scene (Nova Reel async)
+✅ Audio/narration per scene (Polly + ElevenLabs)
+✅ Generation overlay animation (framer-motion)
+✅ Cost tracker (session-only, per-service breakdown)
+✅ Save to history + History page (localStorage)
+✅ SPA routing (ASSETS binding fallback)
 ⬜ Fix Llama 4 (signature %3A bug)
 ⬜ Fix Gemini (API down)
-⬜ Storyboard display page
-⬜ Image generation per scene
-⬜ Video generation
-⬜ Audio/narration
 ```
 
 ## Wrangler Secrets Set
