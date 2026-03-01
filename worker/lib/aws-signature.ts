@@ -2,6 +2,17 @@
 // A stripped-down and simplified version of AWS V4 signer for Cloudflare Workers.
 // Based on https://github.com/Cloudflare/workers-sdk/blob/main/templates/worker-aws-s3-presigned-urls/src/aws.ts
 
+function encodeURIPath(path: string): string {
+  return path
+    .split('/')
+    .map(segment => 
+      encodeURIComponent(segment)
+        .replace(/%3A/gi, ':')  // keep colon literal
+        .replace(/%2F/gi, '/')  // keep slash literal
+    )
+    .join('/')
+}
+
 export class AwsV4Signer {
     constructor(
         private readonly credentials: {
@@ -89,7 +100,7 @@ export class AwsV4Signer {
 
         return [
             request.method.toUpperCase(),
-            this.uriEncode(url.pathname),
+            encodeURIPath(url.pathname),
             canonicalQuery,
             canonicalHeaders.join('\n') + '\n',
             signedHeaders,
