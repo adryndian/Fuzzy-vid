@@ -14,3 +14,7 @@ preview_id = "fc732a268ca9435b8de8e50f34a35365"
 
 [vars]
 ENVIRONMENT = "production"
+
+[[routes]]
+pattern = "fuzzystuf.pages.dev/api/*"
+zone_name = "workers.dev"
