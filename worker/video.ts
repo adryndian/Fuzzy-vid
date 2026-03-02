@@ -43,7 +43,8 @@ export async function handleVideoStart(
   const region = 'us-east-1'
   const modelId = 'amazon.nova-reel-v1:0'
   const dimension = body.aspect_ratio === '16_9' ? '1280x720' : '720x1280'
-  const duration = Math.max(2, Math.min(6, body.duration_seconds || 6))
+  // Nova Reel v1:0 only supports durationSeconds: 6 — do not send other values
+  const duration = 6
 
   const outputKey = `projects/${body.project_id}/scene_${body.scene_number}/video_${Date.now()}`
   const s3OutputUri = `s3://igome-story-storage/${outputKey}`
@@ -80,15 +81,32 @@ export async function handleVideoStart(
   const signedReq = await signer.sign(req)
   const res = await fetch(signedReq)
 
+  const rawText = await res.text()
+
   if (!res.ok) {
-    const err = await res.text()
     return Response.json(
-      { error: 'Failed to start video job', message: err.slice(0, 300) },
+      { error: 'Failed to start video job', message: rawText.slice(0, 500) },
       { status: 502 }
     )
   }
 
-  const data = await res.json() as { invocationArn: string }
+  let data: { invocationArn?: string }
+  try {
+    data = JSON.parse(rawText)
+  } catch {
+    return Response.json(
+      { error: 'Invalid response from Bedrock', message: rawText.slice(0, 500) },
+      { status: 502 }
+    )
+  }
+
+  if (!data.invocationArn) {
+    return Response.json(
+      { error: 'No invocationArn in Bedrock response', message: rawText.slice(0, 500) },
+      { status: 502 }
+    )
+  }
+
   return Response.json({
     job_id: data.invocationArn,
     scene_number: body.scene_number,

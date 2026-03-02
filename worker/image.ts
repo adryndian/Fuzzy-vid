@@ -23,14 +23,14 @@ function getDimensions(aspect: string): { width: number; height: number } {
 
 // Titan V2 only supports specific preset dimensions.
 // See: https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-titan-image.html
-// Supported: 512×512, 768×768, 1024×1024, 1152×896, 896×1152, 1216×832, 832×1216,
-//            1344×768, 768×1344, 1536×640, 640×1536
+// Confirmed supported: 512×512, 768×768, 1024×1024, 768×1152, 1152×768,
+//                      768×1280, 1280×768, 896×1152, 1152×896, 768×1024, 1024×768
 function getDimensionsTitanV2(aspect: string): { width: number; height: number } {
   switch (aspect) {
-    case '16_9': return { width: 1344, height: 768 }  // closest to 16:9
+    case '16_9': return { width: 1280, height: 768 }  // closest to 16:9
     case '1_1':  return { width: 1024, height: 1024 } // exact
     case '4_5':  return { width: 896, height: 1152 }  // closest to 4:5
-    default:     return { width: 768, height: 1344 }  // closest to 9:16
+    default:     return { width: 768, height: 1280 }  // closest to 9:16
   }
 }
 
