@@ -7,12 +7,12 @@ function encodeURIPath(path: string): string {
   const decodedPath = decodeURIComponent(path);
   return decodedPath
     .split('/')
-    .map(segment => 
+    .map(segment =>
       encodeURIComponent(segment)
         // AWS requires encoding these characters which encodeURIComponent ignores
         .replace(/[!*'()]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-        // NOTE: keep %3A encoded — Bedrock canonical URI requires %3A, not literal colon
         .replace(/%2F/gi, '/')  // keep slash literal
+        .replace(/%3A/gi, ':')  // keep colon literal — AWS canonical URI requires literal ':'
     )
     .join('/')
 }
