@@ -214,6 +214,11 @@ curl -X POST https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/gener
 ✅ Scene collapse/expand + editable image prompts
 ✅ Preview modal (image lightbox + video autoplay)
 ✅ Fix Llama 4 — SigV4 canonical URI colon encoding (%3A → literal :)
+✅ iOS 26 Liquid Glass UI redesign — Home, Storyboard, Settings (light theme)
+✅ Duration-aware VO constraints in Brain (getVoCharLimit + per-scene targets)
+✅ /api/brain/rewrite-vo — AI rewrites VO text to fit duration
+✅ Rewrite VO button per scene with char counter in Storyboard
+✅ Total duration slider (15-120s) in Home.tsx, sent to Brain
 ⬜ Fix Gemini (API down)
 ```
 
