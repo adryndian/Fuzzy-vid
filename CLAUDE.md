@@ -195,13 +195,24 @@ curl -X POST https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/gener
 ✅ Settings page — API keys per service
 ✅ Aspect ratio selector (9:16 / 16:9 / 1:1 / 4:5)
 ✅ Storyboard display page with scene cards
-✅ Image generation per scene (Nova Canvas)
+✅ Image generation per scene (Nova Canvas + Titan V2)
+✅ Titan V2 preset dimensions fix (non-square aspect ratios)
+✅ AI prompt enhancement before image gen (/api/image/enhance-prompt)
+✅ Enhanced prompt display badge per scene
 ✅ Video generation per scene (Nova Reel async)
+✅ /api/video/start — new endpoint with duration_seconds param
+✅ /api/video/status/ — unified ARN + KV routing
+✅ Per-scene duration slider (2–6s) for video generation
+✅ Total duration control (15–120s) with auto-redistribute
+✅ Video job localStorage persistence (saveVideoJob/loadVideoJob)
 ✅ Audio/narration per scene (Polly + ElevenLabs)
 ✅ Generation overlay animation (framer-motion)
 ✅ Cost tracker (session-only, per-service breakdown)
 ✅ Save to history + History page (localStorage)
 ✅ SPA routing (ASSETS binding fallback)
+✅ Queue mode — minimize session, resume from GenTaskBar
+✅ Scene collapse/expand + editable image prompts
+✅ Preview modal (image lightbox + video autoplay)
 ⬜ Fix Llama 4 (signature %3A bug)
 ⬜ Fix Gemini (API down)
 ```
