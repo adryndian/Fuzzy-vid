@@ -6,6 +6,7 @@ import { estimateBrainCost, formatCost } from '../lib/costEstimate'
 import { useCostStore } from '../store/costStore'
 import { useHistoryStore } from '../store/historyStore'
 import { useGenTaskStore } from '../store/genTaskStore'
+import { useStoryboardSessionStore } from '../store/storyboardSessionStore'
 import { GenerationOverlay } from '../components/GenerationOverlay'
 import type { GenStep } from '../components/GenerationOverlay'
 import { useElapsedTimer } from '../hooks/useElapsedTimer'
@@ -71,6 +72,7 @@ export function Home() {
   const historyCount = useHistoryStore((s) => s.items.length)
   const addTask = useGenTaskStore((s) => s.addTask)
   const updateTask = useGenTaskStore((s) => s.updateTask)
+  const createSession = useStoryboardSessionStore((s) => s.createSession)
 
   const elapsedMs = useElapsedTimer(loading)
 
@@ -161,6 +163,23 @@ export function Home() {
           sessionStorage.setItem('fuzzy_gen_imageModel', imageModel)
           sessionStorage.setItem('fuzzy_gen_audioModel', audioModel)
 
+          // Create persistent session for queue mode
+          const parsed = JSON.parse(text)
+          let storyData = parsed
+          if (!storyData.scenes) {
+            if (Array.isArray(parsed.storyboard?.scenes)) storyData = parsed.storyboard
+            else if (Array.isArray(parsed.data?.scenes)) storyData = parsed.data
+            else if (Array.isArray(parsed.project?.scenes)) storyData = parsed.project
+          }
+          const sessionId = createSession({
+            rawJson: text,
+            title: storyData.title || title,
+            imageModel,
+            audioEngine: audioModel,
+            audioVoice: audioModel === 'polly' ? 'Ruth' : 'Bella',
+            language,
+          })
+
           addHistoryItem({
             title,
             platform,
@@ -183,13 +202,13 @@ export function Home() {
           )
 
           setCurrentStep(4)
-          updateTask(taskId, { status: 'done', currentStep: 4, resultJson: text })
+          updateTask(taskId, { status: 'done', currentStep: 4, resultJson: text, sessionId })
 
           setTimeout(() => {
             setLoading(false)
             setOverlayMinimized(false)
             setCurrentStep(-1)
-            navigate('/storyboard')
+            navigate(`/storyboard?id=${sessionId}`)
           }, 800)
           return
         } catch {

@@ -150,6 +150,8 @@ export async function handleVideoRequest(
         invocationArn?: string
         outputKey?: string
         video_url?: string
+        errorCount?: number
+        lastError?: string
       }
 
       // If already done or failed, return as-is
@@ -160,8 +162,9 @@ export async function handleVideoRequest(
       // Poll Bedrock for status
       if (jobData.invocationArn && creds.awsAccessKeyId && creds.awsSecretAccessKey) {
         const region = 'us-east-1'
-        const arnEncoded = encodeURIComponent(jobData.invocationArn)
-        const statusEndpoint = `https://bedrock-runtime.${region}.amazonaws.com/async-invoke/${arnEncoded}`
+        // Keep colons literal in path (AWS canonical URI requirement), encode only the / inside the ARN
+        const arnForUrl = encodeURIComponent(jobData.invocationArn).replace(/%3A/gi, ':')
+        const statusEndpoint = `https://bedrock-runtime.${region}.amazonaws.com/async-invoke/${arnForUrl}`
 
         const signer = new AwsV4Signer(
           { awsAccessKeyId: creds.awsAccessKeyId, awsSecretKey: creds.awsSecretAccessKey },
@@ -173,7 +176,7 @@ export async function handleVideoRequest(
         const res = await fetch(signedReq)
 
         if (res.ok) {
-          const statusData = await res.json() as { status: string; outputDataConfig?: { s3Uri?: string } }
+          const statusData = await res.json() as { status: string; failureMessage?: string }
           if (statusData.status === 'Completed') {
             const videoUrl = `${WORKER_URL}/api/storage/file/${jobData.outputKey}/output.mp4`
             await env.JOB_STATUS.put(jobId, JSON.stringify({
@@ -183,12 +186,42 @@ export async function handleVideoRequest(
             }), { expirationTtl: 7200 })
             return Response.json({ status: 'done', video_url: videoUrl })
           } else if (statusData.status === 'Failed') {
+            const failMsg = statusData.failureMessage || 'Nova Reel generation failed'
             await env.JOB_STATUS.put(jobId, JSON.stringify({
               ...jobData,
               status: 'failed',
+              lastError: failMsg,
             }), { expirationTtl: 7200 })
-            return Response.json({ status: 'failed' })
+            return Response.json({ status: 'failed', message: failMsg })
           }
+          // Still InProgress — reset error count since we got a valid response
+          if (jobData.errorCount) {
+            await env.JOB_STATUS.put(jobId, JSON.stringify({ ...jobData, errorCount: 0 }), { expirationTtl: 7200 })
+          }
+        } else {
+          // Bedrock status check failed — track consecutive errors
+          const errText = await res.text()
+          console.error(`Bedrock status check failed (${res.status}):`, errText.slice(0, 200))
+          const errorCount = (jobData.errorCount || 0) + 1
+          if (errorCount >= 5) {
+            // After 5 consecutive API errors, mark as failed
+            const errMsg = `Bedrock status check failed after ${errorCount} attempts: HTTP ${res.status}`
+            await env.JOB_STATUS.put(jobId, JSON.stringify({
+              ...jobData,
+              status: 'failed',
+              lastError: errMsg,
+            }), { expirationTtl: 7200 })
+            return Response.json({ status: 'failed', message: errMsg })
+          }
+          await env.JOB_STATUS.put(jobId, JSON.stringify({
+            ...jobData,
+            errorCount,
+            lastError: `HTTP ${res.status}: ${errText.slice(0, 100)}`,
+          }), { expirationTtl: 7200 })
+          return Response.json({
+            status: 'processing',
+            message: `Status check error (${errorCount}/5): HTTP ${res.status}`,
+          })
         }
       }
 

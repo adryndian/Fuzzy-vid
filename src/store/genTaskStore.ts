@@ -7,6 +7,7 @@ export interface GenTask {
   status: 'running' | 'done' | 'error'
   currentStep: number
   resultJson?: string
+  sessionId?: string
   error?: string
   startedAt: string
 }
