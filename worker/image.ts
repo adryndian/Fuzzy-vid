@@ -137,8 +137,7 @@ export async function handleImageRequest(
       const modelId = image_model === 'titan_v2'
         ? 'amazon.titan-image-generator-v2:0'
         : 'amazon.nova-canvas-v1:0'
-      const encodedModelId = modelId.replace(/:/g, '%3A')
-      const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodedModelId}/invoke`
+      const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
       const dims = image_model === 'titan_v2'
         ? getDimensionsTitanV2(aspect_ratio)
         : getDimensions(aspect_ratio)
