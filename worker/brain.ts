@@ -21,8 +21,21 @@ CRITICAL DURATION RULES:
 - Count characters carefully — shorter is better than longer
 - Audio will be cut off if narration exceeds duration
 
+STRICT RULES TO PREVENT HALLUCINATION:
+- Only describe what CAN be visually shown in a single image frame
+- Do NOT reference events that happened before/after the scene
+- Do NOT mention sounds, music, or audio in image_prompt
+- Each scene must be self-contained and visually coherent
+- image_prompt must describe ONLY visible elements: lighting, composition, subjects, colors, camera angle
+- text_id and text_en must match the EXACT scene duration
+- NEVER invent historical facts not in the original story
+- NEVER add characters or elements not mentioned in the story
+- If unsure about a visual detail, describe it generically
+
 OUTPUT RULES:
-- Respond with PURE JSON only — no markdown, no explanation, no backticks
+- Return ONLY valid JSON. No markdown. No backticks. No explanation.
+- Start your response with { and end with }
+- Any text outside the JSON will break the parser.
 - Use EXACTLY this JSON structure (no wrapper objects, scenes at root level):
 {
   "title": "string",

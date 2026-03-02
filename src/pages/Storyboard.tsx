@@ -63,6 +63,9 @@ export function Storyboard() {
   const [totalDuration, setTotalDuration] = useState(60)
   const [sceneDurations, setSceneDurations] = useState<Record<number, number>>({})
 
+  // Prompt view toggle (text | json) per scene
+  const [promptView, setPromptView] = useState<Record<number, 'text' | 'json'>>({})
+
   // VO Rewrite state
   const [rewritingVO, setRewritingVO] = useState<Record<number, boolean>>({})
   const [customVO, setCustomVO] = useState<Record<number, string>>({})
@@ -70,6 +73,9 @@ export function Storyboard() {
 
   // Poll counts for display
   const [videoPollDisplayCounts, setVideoPollDisplayCounts] = useState<Record<number, number>>({})
+
+  // Page-level dismissable toast
+  const [pageToast, setPageToast] = useState<{msg: string, type: 'error'|'success'} | null>(null)
 
   // Cost tracker UI state
   const [costExpanded, setCostExpanded] = useState(false)
@@ -129,6 +135,13 @@ export function Storyboard() {
       Object.values(videoPollingRefs.current).forEach(clearInterval)
     }
   }, [])
+
+  // Auto-hide page toast after 5s
+  useEffect(() => {
+    if (!pageToast) return
+    const t = setTimeout(() => setPageToast(null), 5000)
+    return () => clearTimeout(t)
+  }, [pageToast])
 
   // Load storyboard from session store or sessionStorage
   useEffect(() => {
@@ -324,7 +337,7 @@ export function Storyboard() {
         delete videoPollingRefs.current[sceneNum]
         setVideoPollDisplayCounts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })
         updateAsset(sceneNum, { videoStatus: 'error', videoError: 'Timed out after 12 min' })
-        toast.error(`Scene ${sceneNum} video timed out`)
+        setPageToast({ msg: `Scene ${sceneNum} video timed out`, type: 'error' })
         return
       }
 
@@ -345,7 +358,7 @@ export function Storyboard() {
             videoError: result.message || 'Video generation failed',
             videoJobId: jobId,
           })
-          toast.error(`Scene ${sceneNum} video failed`)
+          setPageToast({ msg: `Scene ${sceneNum} video failed`, type: 'error' })
         }
       } catch {
         // Network error — keep polling
@@ -392,7 +405,7 @@ export function Storyboard() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       updateAsset(sceneNum, { imageStatus: 'error', imageError: msg })
-      toast.error(`Image failed: ${msg}`)
+      setPageToast({ msg: `Image failed: ${msg}`, type: 'error' })
     }
   }
 
@@ -431,12 +444,12 @@ export function Storyboard() {
         pollVideoStatus(sceneNum, result.job_id)
       } else {
         updateAsset(sceneNum, { videoStatus: 'error', videoError: 'No job_id returned' })
-        toast.error('Video generation returned no job ID')
+        setPageToast({ msg: 'Video generation returned no job ID', type: 'error' })
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       updateAsset(sceneNum, { videoStatus: 'error', videoError: msg })
-      toast.error(`Video failed: ${msg}`)
+      setPageToast({ msg: `Video failed: ${msg}`, type: 'error' })
     }
   }
 
@@ -460,7 +473,7 @@ export function Storyboard() {
       setVoCharInfo(prev => ({ ...prev, [sceneNum]: { count: result.char_count, limit: result.char_limit } }))
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
-      toast.error(`Rewrite VO failed: ${msg}`)
+      setPageToast({ msg: `Rewrite VO failed: ${msg}`, type: 'error' })
     } finally {
       setRewritingVO(prev => ({ ...prev, [sceneNum]: false }))
     }
@@ -504,7 +517,7 @@ export function Storyboard() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       updateAsset(sceneNum, { audioStatus: 'error', audioError: msg })
-      toast.error(`Audio failed: ${msg}`)
+      setPageToast({ msg: `Audio failed: ${msg}`, type: 'error' })
     }
   }
 
@@ -669,6 +682,32 @@ export function Storyboard() {
               Scene {previewModal.sceneNum} · {previewModal.type === 'image' ? 'Image' : 'Video'} Preview
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Page Toast */}
+      {pageToast && (
+        <div style={{
+          position: 'fixed', top: '16px', left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 9999, maxWidth: '320px', width: '90%',
+          background: pageToast.type === 'error'
+            ? 'rgba(255,59,48,0.95)' : 'rgba(52,199,89,0.95)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: '14px', padding: '12px 16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          display: 'flex', alignItems: 'flex-start', gap: '10px',
+        }}>
+          <span style={{ color: 'white', fontSize: '12px', flex: 1, lineHeight: '1.4' }}>
+            {pageToast.msg}
+          </span>
+          <button onClick={() => setPageToast(null)} style={{
+            background: 'rgba(255,255,255,0.25)',
+            border: 'none', borderRadius: '6px',
+            color: 'white', fontSize: '11px',
+            padding: '2px 7px', cursor: 'pointer',
+            flexShrink: 0,
+          }}>✕</button>
         </div>
       )}
 
@@ -982,13 +1021,34 @@ export function Storyboard() {
               {!isCollapsed && (
                 <div style={{ padding: '10px 11px' }}>
 
-                  {/* Image Prompt — editable textarea */}
+                  {/* Image Prompt — editable textarea or JSON view */}
                   <div style={{ marginBottom: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
                       <p style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>
                         Image Prompt
                       </p>
-                      <div style={{ display: 'flex', gap: '4px' }}>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        {/* Text / JSON toggle */}
+                        <div style={{ display: 'flex', borderRadius: '8px', overflow: 'hidden', border: '0.5px solid rgba(0,0,0,0.1)' }}>
+                          <button
+                            onClick={() => setPromptView(prev => ({ ...prev, [sceneNum]: 'text' }))}
+                            style={{
+                              padding: '2px 7px', border: 'none',
+                              background: (promptView[sceneNum] || 'text') === 'text' ? 'rgba(0,122,255,0.12)' : 'transparent',
+                              color: (promptView[sceneNum] || 'text') === 'text' ? '#007aff' : 'rgba(60,60,67,0.4)',
+                              fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                            }}
+                          >📝 Text</button>
+                          <button
+                            onClick={() => setPromptView(prev => ({ ...prev, [sceneNum]: 'json' }))}
+                            style={{
+                              padding: '2px 7px', border: 'none',
+                              background: promptView[sceneNum] === 'json' ? 'rgba(0,122,255,0.12)' : 'transparent',
+                              color: promptView[sceneNum] === 'json' ? '#007aff' : 'rgba(60,60,67,0.4)',
+                              fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                            }}
+                          >{'{ }'} JSON</button>
+                        </div>
                         {currentPrompt !== (scene.image_prompt as string) && (
                           <button
                             onClick={() => setEditedPrompts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })}
@@ -1002,28 +1062,63 @@ export function Storyboard() {
                         </button>
                       </div>
                     </div>
-                    <textarea
-                      value={currentPrompt}
-                      onChange={e => setEditedPrompts(prev => ({ ...prev, [sceneNum]: e.target.value }))}
-                      rows={3}
-                      style={{
-                        width: '100%',
-                        background: 'rgba(118,118,128,0.07)',
-                        border: currentPrompt !== (scene.image_prompt as string)
-                          ? '1px solid rgba(255,107,53,0.4)'
-                          : '0.5px solid rgba(0,0,0,0.08)',
+                    {(promptView[sceneNum] || 'text') === 'text' ? (
+                      <textarea
+                        value={currentPrompt}
+                        onChange={e => setEditedPrompts(prev => ({ ...prev, [sceneNum]: e.target.value }))}
+                        rows={3}
+                        style={{
+                          width: '100%',
+                          background: 'rgba(118,118,128,0.07)',
+                          border: currentPrompt !== (scene.image_prompt as string)
+                            ? '1px solid rgba(255,107,53,0.4)'
+                            : '0.5px solid rgba(0,0,0,0.08)',
+                          borderRadius: '10px',
+                          padding: '7px 9px',
+                          color: '#1d1d1f',
+                          fontSize: '12px',
+                          lineHeight: '1.5',
+                          resize: 'vertical',
+                          outline: 'none',
+                          fontFamily: 'inherit',
+                          boxSizing: 'border-box',
+                          transition: 'border-color 0.2s',
+                        }}
+                      />
+                    ) : (
+                      <pre style={{
+                        background: 'rgba(0,0,0,0.04)',
+                        border: '0.5px solid rgba(0,0,0,0.08)',
                         borderRadius: '10px',
-                        padding: '7px 9px',
+                        padding: '9px',
+                        fontSize: '10px',
                         color: '#1d1d1f',
-                        fontSize: '12px',
-                        lineHeight: '1.5',
-                        resize: 'vertical',
-                        outline: 'none',
-                        fontFamily: 'inherit',
-                        boxSizing: 'border-box',
-                        transition: 'border-color 0.2s',
-                      }}
-                    />
+                        lineHeight: '1.6',
+                        overflow: 'auto',
+                        margin: 0,
+                        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                      }}>
+                        {JSON.stringify({
+                          raw_prompt: scene.image_prompt as string,
+                          enhanced_prompt: sceneAsset.enhancedPrompt || null,
+                          art_style: (storyboard.art_style as string) || '',
+                          aspect_ratio: (storyboard.aspect_ratio as string) || '9_16',
+                          mood: (scene.mood as string) || '',
+                          camera_angle: (scene.camera_angle as string) || '',
+                          model: imageModel === 'titan_v2' ? 'Titan V2' : 'Nova Canvas',
+                          dimensions: (() => {
+                            const ar = (storyboard.aspect_ratio as string) || '9_16'
+                            const dimMap: Record<string, string> = {
+                              '9_16': imageModel === 'titan_v2' ? '768x1280' : '720x1280',
+                              '16_9': imageModel === 'titan_v2' ? '1280x768' : '1280x720',
+                              '1_1': '1024x1024',
+                              '4_5': imageModel === 'titan_v2' ? '896x1152' : '896x1120',
+                            }
+                            return dimMap[ar] || dimMap['9_16']
+                          })(),
+                        }, null, 2)}
+                      </pre>
+                    )}
                   </div>
 
                   {/* Narration + Rewrite VO */}

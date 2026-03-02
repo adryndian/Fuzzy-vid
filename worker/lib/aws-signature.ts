@@ -3,17 +3,14 @@
 // Based on https://github.com/Cloudflare/workers-sdk/blob/main/templates/worker-aws-s3-presigned-urls/src/aws.ts
 
 function encodeURIPath(path: string): string {
-  // Decode first to prevent double-encoding
-  const decodedPath = decodeURIComponent(path);
-  const result = decodedPath
+  const result = path
     .split('/')
-    .map(segment =>
-      encodeURIComponent(segment)
-        // AWS requires encoding these characters which encodeURIComponent ignores
-        .replace(/[!*'()]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-        .replace(/%2F/gi, '/')  // keep slash literal
-        .replace(/%3A/gi, ':')  // keep colon literal — AWS canonical URI requires literal ':'
-    )
+    .map(segment => {
+      // Decode %3A back to : for canonical URI (handles both literal : and encoded %3A in URL)
+      const decoded = decodeURIComponent(segment)
+      // Re-encode safely keeping : literal — AWS canonical URI requires literal ':'
+      return encodeURIComponent(decoded).replace(/%3A/gi, ':')
+    })
     .join('/')
   console.log('[AWS-SIG] canonicalUri:', result)
   return result
