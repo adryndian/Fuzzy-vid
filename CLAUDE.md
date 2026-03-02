@@ -213,7 +213,7 @@ curl -X POST https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/gener
 ✅ Queue mode — minimize session, resume from GenTaskBar
 ✅ Scene collapse/expand + editable image prompts
 ✅ Preview modal (image lightbox + video autoplay)
-⬜ Fix Llama 4 (signature %3A bug)
+✅ Fix Llama 4 — SigV4 canonical URI colon encoding (%3A → literal :)
 ⬜ Fix Gemini (API down)
 ```
 
