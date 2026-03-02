@@ -33,16 +33,16 @@ function buildSteps(current: number): GenStep[] {
 
 const dropdownStyle: React.CSSProperties = {
   width: '100%',
-  background: 'rgba(255,255,255,0.06)',
-  border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: '10px',
-  padding: '9px 32px 9px 12px',
-  color: '#EFE1CF',
+  background: 'rgba(118,118,128,0.1)',
+  border: '1px solid rgba(118,118,128,0.2)',
+  borderRadius: '12px',
+  padding: '10px 32px 10px 12px',
+  color: '#1d1d1f',
   fontSize: '13px',
   outline: 'none',
   cursor: 'pointer',
   appearance: 'none',
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23EFE1CF' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
+  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%233c3c43' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
   backgroundRepeat: 'no-repeat',
   backgroundPosition: 'right 12px center',
   fontFamily: 'inherit',
@@ -60,6 +60,7 @@ export function Home() {
   const [imageModel, setImageModel] = useState<'nova_canvas' | 'titan_v2'>('nova_canvas')
   const [audioModel, setAudioModel] = useState<'polly' | 'elevenlabs'>('polly')
   const [scenes, setScenes] = useState(5)
+  const [totalDuration, setTotalDuration] = useState(60)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [overlayMinimized, setOverlayMinimized] = useState(false)
@@ -95,11 +96,9 @@ export function Home() {
     setOverlayMinimized(false)
     setCurrentStep(0)
 
-    // Create queue task
     const taskId = addTask({ title, status: 'running', currentStep: 0 })
     taskIdRef.current = taskId
 
-    // Load settings from localStorage
     let apiHeaders: Record<string, string> = {}
     try {
       const stored = localStorage.getItem('fuzzy_short_settings')
@@ -135,6 +134,10 @@ export function Home() {
         updateTask(taskId, { currentStep: 2 })
       }, 1500)
 
+      const sceneDurationsArr = Array.from({ length: scenes }, () =>
+        Math.round(totalDuration / scenes)
+      )
+
       const res = await fetch('https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...apiHeaders },
@@ -148,6 +151,8 @@ export function Home() {
           total_scenes: scenes,
           aspect_ratio: aspectRatio,
           resolution: '1080p',
+          total_duration: totalDuration,
+          scene_durations: sceneDurationsArr,
         })
       })
       clearTimeout(thinkTimer)
@@ -163,7 +168,6 @@ export function Home() {
           sessionStorage.setItem('fuzzy_gen_imageModel', imageModel)
           sessionStorage.setItem('fuzzy_gen_audioModel', audioModel)
 
-          // Create persistent session for queue mode
           const parsed = JSON.parse(text)
           let storyData = parsed
           if (!storyData.scenes) {
@@ -196,7 +200,7 @@ export function Home() {
             `Storyboard ${formatCost(cost)}`,
             {
               icon: '🧠',
-              style: { border: '1px solid rgba(240,90,37,0.3)' },
+              style: { border: '1px solid rgba(0,122,255,0.3)' },
               duration: 4000,
             }
           )
@@ -238,68 +242,72 @@ export function Home() {
     }
   }, [])
 
+  // ── iOS 26 Style tokens ──────────────────────────────────
   const card: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.08)',
+    background: 'rgba(255,255,255,0.75)',
     backdropFilter: 'blur(40px) saturate(200%)',
     WebkitBackdropFilter: 'blur(40px) saturate(200%)',
-    border: '1px solid rgba(255,255,255,0.15)',
-    borderRadius: '20px',
-    boxShadow: '0 8px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
+    border: '0.5px solid rgba(255,255,255,0.9)',
+    borderRadius: '28px',
+    boxShadow: '0 4px 40px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(255,255,255,0.5) inset',
   }
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '12px',
-    padding: '8px 11px',
-    color: '#EFE1CF',
+    background: 'rgba(118,118,128,0.1)',
+    border: '1px solid rgba(118,118,128,0.2)',
+    borderRadius: '14px',
+    padding: '10px 12px',
+    color: '#1d1d1f',
     fontSize: '14px',
     outline: 'none',
     fontFamily: 'inherit',
     transition: 'all 0.2s',
   }
 
-  const label: React.CSSProperties = {
-    fontSize: '11px',
-    color: 'rgba(239,225,207,0.5)',
+  const labelStyle: React.CSSProperties = {
+    fontSize: '12px',
+    color: 'rgba(60,60,67,0.6)',
     textTransform: 'uppercase' as const,
-    letterSpacing: '0.1em',
-    marginBottom: '6px',
+    letterSpacing: '0.06em',
+    fontWeight: 600,
+    marginBottom: '7px',
     display: 'block',
   }
 
-  const pillBtn = (active: boolean, color = '#F05A25'): React.CSSProperties => ({
+  const pillBtn = (active: boolean, activeColor = '#007aff'): React.CSSProperties => ({
     flex: 1,
-    padding: '6px 3px',
-    borderRadius: '10px',
-    border: `1px solid ${active ? color : 'rgba(239,225,207,0.1)'}`,
-    background: active ? `${color}22` : 'rgba(255,255,255,0.04)',
-    color: active ? color : 'rgba(239,225,207,0.55)',
+    padding: '7px 4px',
+    borderRadius: '12px',
+    border: 'none',
+    background: active ? activeColor : 'rgba(118,118,128,0.12)',
+    color: active ? 'white' : '#1d1d1f',
     fontSize: '13px',
     fontWeight: active ? 600 : 400,
     cursor: 'pointer',
     transition: 'all 0.2s',
+    boxShadow: active ? `0 4px 12px ${activeColor}4d` : 'none',
   })
 
   const navBtnStyle: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.08)',
+    background: 'rgba(255,255,255,0.8)',
     backdropFilter: 'blur(12px)',
     WebkitBackdropFilter: 'blur(12px)',
-    border: '1px solid rgba(239,225,207,0.15)',
-    borderRadius: '12px',
-    color: '#EFE1CF',
+    border: '0.5px solid rgba(255,255,255,0.9)',
+    borderRadius: '14px',
+    color: '#1d1d1f',
     padding: '8px 12px',
     cursor: 'pointer',
     fontSize: '18px',
     position: 'relative' as const,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1), 0 1px 0 rgba(255,255,255,0.8) inset',
   }
 
   return (
     <div style={{
       minHeight: '100vh',
       width: '100%',
-      background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1527 50%, #060d1a 100%)',
+      background: 'linear-gradient(145deg, #f2f2f7 0%, #e5e5ea 50%, #f2f2f7 100%)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -310,9 +318,10 @@ export function Home() {
       <style>{`
         .glass-input:focus {
           outline: none !important;
-          border-color: rgba(240,90,37,0.6) !important;
+          border-color: rgba(0,122,255,0.5) !important;
+          background: rgba(255,255,255,0.9) !important;
         }
-        select option { background: #0d1527; color: #EFE1CF; }
+        select option { background: #f2f2f7; color: #1d1d1f; }
       `}</style>
 
       {/* Top-right nav buttons */}
@@ -322,12 +331,12 @@ export function Home() {
           {historyCount > 0 && (
             <span style={{
               position: 'absolute', top: '-4px', right: '-4px',
-              background: '#F05A25', color: 'white',
+              background: '#ff3b30', color: 'white',
               fontSize: '9px', fontWeight: 800,
               width: '18px', height: '18px',
               borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 2px 8px rgba(240,90,37,0.5)',
+              boxShadow: '0 2px 8px rgba(255,59,48,0.5)',
             }}>
               {historyCount > 99 ? '99' : historyCount}
             </span>
@@ -341,21 +350,21 @@ export function Home() {
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '22px' }}>
         <div style={{ fontSize: '40px', marginBottom: '6px' }}>🎬</div>
-        <h1 style={{ fontSize: '34px', fontWeight: 800, color: '#EFE1CF', letterSpacing: '-0.02em', margin: 0 }}>
-          Fuzzy <span style={{ color: '#F05A25' }}>Short</span>
+        <h1 style={{ fontSize: '34px', fontWeight: 800, color: '#1d1d1f', letterSpacing: '-0.02em', margin: 0 }}>
+          Fuzzy <span style={{ color: '#ff6b35' }}>Short</span>
         </h1>
-        <p style={{ color: 'rgba(239,225,207,0.5)', fontSize: '13px', marginTop: '5px' }}>
+        <p style={{ color: 'rgba(60,60,67,0.6)', fontSize: '13px', marginTop: '5px' }}>
           AI-powered short video production
         </p>
       </div>
 
       {/* Main Glass Card */}
       <div style={{ ...card, width: '100%', maxWidth: '440px', padding: '20px 17px', position: 'relative' }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)' }} />
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,1), transparent)' }} />
 
         {/* Story Title */}
         <div style={{ marginBottom: '14px' }}>
-          <span style={label}>Story Title</span>
+          <span style={labelStyle}>Story Title</span>
           <input
             style={inputStyle}
             className="glass-input"
@@ -368,7 +377,7 @@ export function Home() {
 
         {/* Story */}
         <div style={{ marginBottom: '14px' }}>
-          <span style={label}>The Story</span>
+          <span style={labelStyle}>The Story</span>
           <textarea
             style={{ ...inputStyle, minHeight: '72px', resize: 'none' as const }}
             className="glass-input"
@@ -380,23 +389,23 @@ export function Home() {
 
         {/* Platform */}
         <div style={{ marginBottom: '14px' }}>
-          <span style={label}>Target Platform</span>
+          <span style={labelStyle}>Target Platform</span>
           <div style={{ display: 'flex', gap: '6px' }}>
             {([
               { id: 'youtube_shorts', label: '▶️ Shorts' },
               { id: 'reels', label: '📸 Reels' },
               { id: 'tiktok', label: '🎵 TikTok' },
             ] as const).map(p => (
-              <button key={p.id} onClick={() => setPlatform(p.id)} style={pillBtn(platform === p.id)}>
+              <button key={p.id} onClick={() => setPlatform(p.id)} style={pillBtn(platform === p.id, '#007aff')}>
                 {p.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* AI Brain — dropdown */}
+        {/* AI Brain */}
         <div style={{ marginBottom: '14px' }}>
-          <span style={label}>AI Brain</span>
+          <span style={labelStyle}>AI Brain</span>
           <select
             value={brainModel}
             onChange={e => setBrainModel(e.target.value as BrainModel)}
@@ -410,14 +419,14 @@ export function Home() {
 
         {/* Language */}
         <div style={{ marginBottom: '14px' }}>
-          <span style={label}>Narration Language</span>
+          <span style={labelStyle}>Narration Language</span>
           <div style={{ display: 'flex', gap: '6px' }}>
             {([
               { id: 'id', label: '🇮🇩 Indonesia' },
               { id: 'en', label: '🇬🇧 English' },
             ] as const).map(l => (
               <button key={l.id} onClick={() => setLanguage(l.id)}
-                style={pillBtn(language === l.id, '#3FA9F6')}>
+                style={pillBtn(language === l.id, '#007aff')}>
                 {l.label}
               </button>
             ))}
@@ -426,7 +435,7 @@ export function Home() {
 
         {/* Art Style */}
         <div style={{ marginBottom: '14px' }}>
-          <span style={label}>Art Style</span>
+          <span style={labelStyle}>Art Style</span>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
             {([
               { id: 'cinematic_realistic', label: '🎬 Cinematic' },
@@ -438,14 +447,16 @@ export function Home() {
             ] as const).map(s => (
               <button key={s.id} onClick={() => setArtStyle(s.id)}
                 style={{
-                  padding: '7px 3px',
-                  borderRadius: '10px',
-                  border: `1px solid ${artStyle === s.id ? '#F05A25' : 'rgba(239,225,207,0.08)'}`,
-                  background: artStyle === s.id ? 'rgba(240,90,37,0.18)' : 'rgba(255,255,255,0.04)',
-                  color: artStyle === s.id ? '#EFE1CF' : 'rgba(239,225,207,0.5)',
+                  padding: '8px 3px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: artStyle === s.id ? '#007aff' : 'rgba(118,118,128,0.12)',
+                  color: artStyle === s.id ? 'white' : '#1d1d1f',
                   fontSize: '12px',
+                  fontWeight: artStyle === s.id ? 600 : 400,
                   cursor: 'pointer',
                   transition: 'all 0.2s',
+                  boxShadow: artStyle === s.id ? '0 4px 12px rgba(0,122,255,0.3)' : 'none',
                 }}>
                 {s.label}
               </button>
@@ -455,7 +466,7 @@ export function Home() {
 
         {/* Aspect Ratio */}
         <div style={{ marginBottom: '14px' }}>
-          <span style={label}>Aspect Ratio</span>
+          <span style={labelStyle}>Aspect Ratio</span>
           <div style={{ display: 'flex', gap: '6px' }}>
             {([
               { id: '9_16', label: '9:16', desc: 'Vertical', icon: '📱' },
@@ -466,30 +477,31 @@ export function Home() {
               <button key={r.id} onClick={() => setAspectRatio(r.id)}
                 style={{
                   flex: 1,
-                  padding: '7px 3px',
+                  padding: '8px 3px',
                   borderRadius: '12px',
-                  border: `1px solid ${aspectRatio === r.id ? '#F05A25' : 'rgba(239,225,207,0.08)'}`,
-                  background: aspectRatio === r.id ? 'rgba(240,90,37,0.18)' : 'rgba(255,255,255,0.04)',
+                  border: 'none',
+                  background: aspectRatio === r.id ? '#007aff' : 'rgba(118,118,128,0.12)',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
+                  boxShadow: aspectRatio === r.id ? '0 4px 12px rgba(0,122,255,0.3)' : 'none',
                 }}>
                 <div style={{ fontSize: '15px', marginBottom: '2px' }}>{r.icon}</div>
-                <div style={{ color: aspectRatio === r.id ? '#F05A25' : '#EFE1CF', fontSize: '12px', fontWeight: 700 }}>{r.label}</div>
-                <div style={{ color: 'rgba(239,225,207,0.4)', fontSize: '10px' }}>{r.desc}</div>
+                <div style={{ color: aspectRatio === r.id ? 'white' : '#1d1d1f', fontSize: '12px', fontWeight: 700 }}>{r.label}</div>
+                <div style={{ color: aspectRatio === r.id ? 'rgba(255,255,255,0.75)' : 'rgba(60,60,67,0.5)', fontSize: '10px' }}>{r.desc}</div>
               </button>
             ))}
           </div>
           <div style={{
             marginTop: '6px', padding: '6px 10px',
-            background: 'rgba(63,169,246,0.08)',
-            border: '1px solid rgba(63,169,246,0.15)',
+            background: 'rgba(0,122,255,0.06)',
+            border: '0.5px solid rgba(0,122,255,0.15)',
             borderRadius: '10px',
             display: 'flex', alignItems: 'center', gap: '6px'
           }}>
             <span style={{ fontSize: '11px' }}>🎬</span>
-            <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '11px' }}>
-              Resolution: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>1080p</span>
-              {' · '}Output: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>
+            <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px' }}>
+              Resolution: <span style={{ color: '#007aff', fontWeight: 600 }}>1080p</span>
+              {' · '}Output: <span style={{ color: '#007aff', fontWeight: 600 }}>
                 {aspectRatio === '9_16' ? '1080×1920' :
                  aspectRatio === '16_9' ? '1920×1080' :
                  aspectRatio === '1_1' ? '1080×1080' : '864×1080'}
@@ -498,9 +510,9 @@ export function Home() {
           </div>
         </div>
 
-        {/* Image Model — dropdown */}
+        {/* Image Model */}
         <div style={{ marginBottom: '14px' }}>
-          <span style={label}>Image Model</span>
+          <span style={labelStyle}>Image Model</span>
           <select
             value={imageModel}
             onChange={e => setImageModel(e.target.value as 'nova_canvas' | 'titan_v2')}
@@ -511,9 +523,9 @@ export function Home() {
           </select>
         </div>
 
-        {/* Audio Engine — dropdown */}
+        {/* Audio Engine */}
         <div style={{ marginBottom: '14px' }}>
-          <span style={label}>Audio Engine</span>
+          <span style={labelStyle}>Audio Engine</span>
           <select
             value={audioModel}
             onChange={e => setAudioModel(e.target.value as 'polly' | 'elevenlabs')}
@@ -528,28 +540,46 @@ export function Home() {
         <div style={{
           marginBottom: '14px',
           padding: '7px 10px',
-          background: 'rgba(63,169,246,0.06)',
-          border: '1px solid rgba(63,169,246,0.12)',
+          background: 'rgba(0,122,255,0.06)',
+          border: '0.5px solid rgba(0,122,255,0.12)',
           borderRadius: '10px',
           display: 'flex', alignItems: 'center', gap: '6px',
         }}>
           <span style={{ fontSize: '11px' }}>🎬</span>
-          <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '11px' }}>
-            Video: <span style={{ color: '#3FA9F6', fontWeight: 600 }}>Nova Reel</span> (only available model)
+          <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px' }}>
+            Video: <span style={{ color: '#007aff', fontWeight: 600 }}>Nova Reel</span> (only available model)
           </span>
+        </div>
+
+        {/* Total Duration */}
+        <div style={{ marginBottom: '17px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '7px' }}>
+            <span style={labelStyle}>Total Duration</span>
+            <span style={{ color: '#007aff', fontSize: '13px', fontWeight: 700 }}>{totalDuration}s</span>
+          </div>
+          <input
+            type="range" min={15} max={120} step={5}
+            value={totalDuration}
+            onChange={e => setTotalDuration(Number(e.target.value))}
+            style={{ width: '100%', accentColor: '#007aff' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(60,60,67,0.4)', fontSize: '11px', marginTop: '3px' }}>
+            <span>15s</span><span>120s</span>
+          </div>
         </div>
 
         {/* Scenes */}
         <div style={{ marginBottom: '17px' }}>
-          <span style={label}>
-            Scenes: <span style={{ color: '#F05A25', fontWeight: 700 }}>{scenes}</span>
-          </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '7px' }}>
+            <span style={labelStyle}>Scenes</span>
+            <span style={{ color: '#ff6b35', fontSize: '13px', fontWeight: 700 }}>{scenes}</span>
+          </div>
           <input
             type="range" min={3} max={15} value={scenes}
             onChange={e => setScenes(Number(e.target.value))}
-            style={{ width: '100%', accentColor: '#F05A25' }}
+            style={{ width: '100%', accentColor: '#ff6b35' }}
           />
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(239,225,207,0.3)', fontSize: '11px', marginTop: '3px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(60,60,67,0.4)', fontSize: '11px', marginTop: '3px' }}>
             <span>3</span><span>15</span>
           </div>
         </div>
@@ -557,11 +587,11 @@ export function Home() {
         {/* Error */}
         {error && (
           <div style={{
-            background: 'rgba(239,68,68,0.1)',
-            border: '1px solid rgba(239,68,68,0.3)',
+            background: 'rgba(255,59,48,0.08)',
+            border: '0.5px solid rgba(255,59,48,0.2)',
             borderRadius: '12px',
             padding: '8px 12px',
-            color: '#f87171',
+            color: '#ff3b30',
             fontSize: '13px',
             marginBottom: '11px',
           }}>
@@ -575,13 +605,13 @@ export function Home() {
           disabled={loading}
           style={{
             width: '100%',
-            padding: '11px',
-            borderRadius: '14px',
+            padding: '12px',
+            borderRadius: '16px',
             border: 'none',
-            background: loading ? 'rgba(240,90,37,0.5)' : 'linear-gradient(135deg, #F05A25, #d94e1f)',
-            boxShadow: loading ? 'none' : '0 0 32px rgba(240,90,37,0.5), 0 4px 16px rgba(0,0,0,0.4)',
+            background: loading ? 'rgba(255,107,53,0.5)' : 'linear-gradient(135deg, #ff6b35 0%, #ff4500 100%)',
+            boxShadow: loading ? 'none' : '0 4px 20px rgba(255,107,53,0.4)',
             color: 'white',
-            fontSize: '15px',
+            fontSize: '16px',
             fontWeight: 700,
             cursor: loading ? 'not-allowed' : 'pointer',
             transition: 'all 0.3s',
@@ -592,7 +622,7 @@ export function Home() {
       </div>
 
       {/* Footer */}
-      <p style={{ color: 'rgba(239,225,207,0.2)', fontSize: '11px', marginTop: '17px' }}>
+      <p style={{ color: 'rgba(60,60,67,0.3)', fontSize: '11px', marginTop: '17px' }}>
         iOS 26 Liquid Glass Edition
       </p>
 

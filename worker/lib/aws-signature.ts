@@ -5,7 +5,7 @@
 function encodeURIPath(path: string): string {
   // Decode first to prevent double-encoding
   const decodedPath = decodeURIComponent(path);
-  return decodedPath
+  const result = decodedPath
     .split('/')
     .map(segment =>
       encodeURIComponent(segment)
@@ -15,6 +15,8 @@ function encodeURIPath(path: string): string {
         .replace(/%3A/gi, ':')  // keep colon literal — AWS canonical URI requires literal ':'
     )
     .join('/')
+  console.log('[AWS-SIG] canonicalUri:', result)
+  return result
 }
 
 export class AwsV4Signer {

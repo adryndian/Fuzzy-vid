@@ -1,12 +1,25 @@
 import { Env } from './index';
 
-const getSystemPrompt = (language: 'id' | 'en') => `
+function getVoCharLimit(durationSeconds: number, language: string): number {
+  const charsPerSecond = language === 'id' ? 15 : 18
+  return Math.floor(durationSeconds * charsPerSecond)
+}
+
+const getSystemPrompt = (language: 'id' | 'en', avgDuration = 10) => `
 You are an expert Creative Director and Visual Storyteller
 specializing in short-form video content for YouTube Shorts,
 Instagram Reels, and TikTok.
 
 Think in cinematic sequences. Understand visual continuity,
 camera language, and narrative arc.
+
+CRITICAL DURATION RULES:
+- Each scene has a specific duration in seconds
+- The narration text (text_id and text_en) MUST fit within that duration
+- Indonesian narration: maximum ${getVoCharLimit(avgDuration, 'id')} characters per scene
+- English narration: maximum ${getVoCharLimit(avgDuration, 'en')} characters per scene
+- Count characters carefully — shorter is better than longer
+- Audio will be cut off if narration exceeds duration
 
 OUTPUT RULES:
 - Respond with PURE JSON only — no markdown, no explanation, no backticks
@@ -21,6 +34,8 @@ OUTPUT RULES:
     {
       "scene_number": 1,
       "scene_type": "opening_hook",
+      "duration_seconds": 6,
+      "char_limit": ${getVoCharLimit(avgDuration, language)},
       "image_prompt": "string — always in English",
       "text_id": "string — Bahasa Indonesia narration",
       "text_en": "string — English narration",
@@ -151,6 +166,12 @@ export async function handleBrainRequest(
             const body = await request.json() as any;
             const { title, story, platform, brain_model: model, language: narasi_language = 'en', art_style, total_scenes } = body;
 
+            const scene_durations = (body.scene_durations as number[]) || []
+            const total_duration = (body.total_duration as number) || 60
+            const avgDuration = scene_durations.length > 0
+              ? total_duration / scene_durations.length
+              : total_duration / (total_scenes as number || 5)
+
             const selectedModel = model || 'gemini'
             if (selectedModel === 'gemini' && !creds.geminiApiKey) {
               return Response.json({ error: 'Missing Gemini API Key', message: 'Please add your Gemini API Key in Settings' }, { status: 400, headers: corsHeaders })
@@ -192,6 +213,15 @@ Total Scenes: ${total_scenes}
 Language: ${narasi_language}
 Frame Specification: ${frameSpec}
 Resolution: ${resolution}
+Total Video Duration: ${total_duration} seconds
+
+SCENE DURATION TARGETS:
+${scene_durations.length > 0
+  ? scene_durations.map((d: number, i: number) =>
+      `Scene ${i + 1}: ${d}s → max ${getVoCharLimit(d, narasi_language)} chars narration`
+    ).join('\n')
+  : `Each scene: ~${Math.round(total_duration / (total_scenes as number || 5))}s → max ${getVoCharLimit(Math.round(total_duration / (total_scenes as number || 5)), narasi_language)} chars narration`
+}
 
 IMPORTANT: All image prompts must be composed for ${frameSpec}.
 ${aspectRatio === '9_16' ? 'Use vertical composition - subjects centered, portrait orientation.' : ''}
@@ -200,7 +230,7 @@ ${aspectRatio === '1_1' ? 'Use square composition - centered subjects, balanced 
 ${aspectRatio === '4_5' ? 'Use portrait composition - slightly wider than phone screen.' : ''}
 `;
 
-            const systemPrompt = getSystemPrompt(narasi_language);
+            const systemPrompt = getSystemPrompt(narasi_language, avgDuration);
             let responseText: string
 
             if (model === 'claude_sonnet' || model === 'gemini') {
@@ -249,4 +279,89 @@ ${aspectRatio === '4_5' ? 'Use portrait composition - slightly wider than phone 
         console.error('Error in brain handler:', error);
         return new Response(JSON.stringify({ error: 'Internal Server Error', message: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+}
+
+export async function handleRewriteVO(
+  request: Request,
+  _env: Env,
+  creds: import('./index').Credentials
+): Promise<Response> {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key, X-Brain-Region',
+  }
+
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders })
+  }
+
+  const body = await request.json() as {
+    original_text: string
+    duration_seconds: number
+    language: string
+    scene_context: string
+    art_style: string
+  }
+
+  const charLimit = body.language === 'id'
+    ? Math.floor(body.duration_seconds * 15)
+    : Math.floor(body.duration_seconds * 18)
+
+  const systemPrompt = `You are an expert video narration writer.
+Rewrite the given narration to fit exactly within ${body.duration_seconds} seconds.
+Maximum ${charLimit} characters.
+Keep the same meaning and emotional tone.
+Return ONLY the rewritten text — no quotes, no explanation, no JSON.`
+
+  const userPrompt = `Scene context: ${body.scene_context}
+Original narration: "${body.original_text}"
+Language: ${body.language === 'id' ? 'Indonesian' : 'English'}
+Target duration: ${body.duration_seconds} seconds
+Max characters: ${charLimit}
+
+Rewrite to fit within ${charLimit} characters:`
+
+  const region = creds.brainRegion || 'us-east-1'
+  const modelId = 'us.anthropic.claude-sonnet-4-6'
+  const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
+
+  const payload = JSON.stringify({
+    anthropic_version: 'bedrock-2023-05-31',
+    max_tokens: 200,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userPrompt }]
+  })
+
+  const { signRequest } = await import('./lib/aws-signature')
+  const signedHeaders = await signRequest({
+    method: 'POST',
+    url: endpoint,
+    region,
+    service: 'bedrock',
+    accessKeyId: creds.awsAccessKeyId,
+    secretAccessKey: creds.awsSecretAccessKey,
+    body: payload,
+    headers: { 'Content-Type': 'application/json' }
+  })
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: signedHeaders,
+    body: payload
+  })
+
+  if (!res.ok) {
+    return Response.json({ error: 'Rewrite failed' }, { status: 500, headers: corsHeaders })
+  }
+
+  const data = await res.json() as { content: [{ text: string }] }
+  const rewritten = data.content[0].text.trim()
+
+  return Response.json({
+    rewritten_text: rewritten,
+    char_count: rewritten.length,
+    char_limit: charLimit,
+    fits: rewritten.length <= charLimit
+  }, { headers: corsHeaders })
 }

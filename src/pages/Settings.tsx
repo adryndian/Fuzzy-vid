@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { AppSettings } from '../types/schema'
-import { DEFAULT_SETTINGS, SETTINGS_STORAGE_KEY, loadSettings, saveSettings } from '../types/schema'
+import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../types/schema'
 
 type TestStatus = 'idle' | 'testing' | 'success' | 'failed'
 
@@ -44,7 +44,7 @@ export function Settings() {
     page: {
       minHeight: '100vh',
       width: '100%',
-      background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1527 50%, #060d1a 100%)',
+      background: 'linear-gradient(145deg, #f2f2f7 0%, #e5e5ea 100%)',
       fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
       paddingBottom: '40px',
     } as React.CSSProperties,
@@ -53,10 +53,10 @@ export function Settings() {
       position: 'sticky' as const,
       top: 0,
       zIndex: 100,
-      background: 'rgba(0,0,0,0.85)',
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      borderBottom: '1px solid rgba(239,225,207,0.08)',
+      background: 'rgba(242,242,247,0.85)',
+      backdropFilter: 'blur(30px)',
+      WebkitBackdropFilter: 'blur(30px)',
+      borderBottom: '0.5px solid rgba(0,0,0,0.1)',
       padding: '14px 16px',
       display: 'flex',
       alignItems: 'center',
@@ -64,10 +64,10 @@ export function Settings() {
     } as React.CSSProperties,
 
     backBtn: {
-      background: 'rgba(255,255,255,0.08)',
-      border: '1px solid rgba(239,225,207,0.15)',
-      borderRadius: '10px',
-      color: '#EFE1CF',
+      background: 'rgba(255,255,255,0.85)',
+      border: '0.5px solid rgba(0,0,0,0.12)',
+      borderRadius: '12px',
+      color: '#007aff',
       padding: '8px 14px',
       cursor: 'pointer',
       fontSize: '13px',
@@ -75,33 +75,27 @@ export function Settings() {
       display: 'flex',
       alignItems: 'center',
       gap: '4px',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
     } as React.CSSProperties,
 
     card: {
-      background: 'rgba(255,255,255,0.06)',
-      backdropFilter: 'blur(24px) saturate(180%)',
-      WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-      border: '1px solid rgba(239,225,207,0.12)',
+      background: 'rgba(255,255,255,0.75)',
+      backdropFilter: 'blur(30px)',
+      WebkitBackdropFilter: 'blur(30px)',
+      border: '0.5px solid rgba(255,255,255,0.9)',
       borderRadius: '20px',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      boxShadow: '0 2px 16px rgba(0,0,0,0.06)',
       padding: '20px',
       marginBottom: '14px',
       position: 'relative' as const,
       overflow: 'hidden' as const,
     } as React.CSSProperties,
 
-    cardSpecular: {
-      position: 'absolute' as const,
-      inset: '0 0 auto 0',
-      height: '1px',
-      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
-    } as React.CSSProperties,
-
     label: {
-      fontSize: '10px',
-      color: 'rgba(239,225,207,0.45)',
+      fontSize: '11px',
+      color: 'rgba(60,60,67,0.6)',
       textTransform: 'uppercase' as const,
-      letterSpacing: '0.1em',
+      letterSpacing: '0.06em',
       display: 'block',
       marginBottom: '6px',
       fontWeight: 600,
@@ -109,11 +103,11 @@ export function Settings() {
 
     input: {
       width: '100%',
-      background: 'rgba(255,255,255,0.05)',
-      border: '1px solid rgba(239,225,207,0.1)',
+      background: 'rgba(118,118,128,0.1)',
+      border: '1px solid transparent',
       borderRadius: '12px',
       padding: '11px 14px',
-      color: '#EFE1CF',
+      color: '#1d1d1f',
       fontSize: '13px',
       outline: 'none',
       fontFamily: 'inherit',
@@ -123,11 +117,11 @@ export function Settings() {
 
     select: {
       width: '100%',
-      background: 'rgba(255,255,255,0.05)',
-      border: '1px solid rgba(239,225,207,0.1)',
+      background: 'rgba(118,118,128,0.1)',
+      border: '1px solid transparent',
       borderRadius: '12px',
       padding: '11px 14px',
-      color: '#EFE1CF',
+      color: '#1d1d1f',
       fontSize: '13px',
       outline: 'none',
       fontFamily: 'inherit',
@@ -162,7 +156,7 @@ export function Settings() {
           style={{
             position: 'absolute', right: '12px', top: '50%',
             transform: 'translateY(-50%)', background: 'none',
-            border: 'none', color: 'rgba(239,225,207,0.4)',
+            border: 'none', color: 'rgba(60,60,67,0.4)',
             cursor: 'pointer', fontSize: '15px', padding: '2px',
           }}>
           {showKey[fieldKey] ? '🙈' : '👁️'}
@@ -177,7 +171,7 @@ export function Settings() {
     <div style={{ marginBottom: '14px' }}>
       <label style={s.label}>
         {label} {locked && (
-          <span style={{ color: '#F05A25', marginLeft: '4px' }}>🔒 FIXED</span>
+          <span style={{ color: '#ff6b35', marginLeft: '4px' }}>🔒 FIXED</span>
         )}
       </label>
       <select
@@ -201,7 +195,7 @@ export function Settings() {
 
   const StatusMsg = ({ status, msg }: { status: TestStatus; msg: string }) => {
     if (!msg) return null
-    const color = status === 'success' ? '#4ade80' : status === 'failed' ? '#f87171' : 'rgba(239,225,207,0.5)'
+    const color = status === 'success' ? '#34c759' : status === 'failed' ? '#ff3b30' : 'rgba(60,60,67,0.5)'
     return (
       <span style={{ fontSize: '12px', color, fontWeight: 500 }}>{msg}</span>
     )
@@ -214,16 +208,16 @@ export function Settings() {
       onClick={onClick}
       disabled={status === 'testing'}
       style={{
-        padding: '9px 16px', borderRadius: '10px',
-        border: '1px solid rgba(63,169,246,0.4)',
+        padding: '9px 16px', borderRadius: '12px',
+        border: '0.5px solid rgba(0,122,255,0.25)',
         background: status === 'success'
-          ? 'rgba(74,222,128,0.15)'
+          ? 'rgba(52,199,89,0.12)'
           : status === 'failed'
-          ? 'rgba(248,113,113,0.15)'
-          : 'rgba(63,169,246,0.1)',
-        color: status === 'success' ? '#4ade80'
-          : status === 'failed' ? '#f87171'
-          : '#3FA9F6',
+          ? 'rgba(255,59,48,0.08)'
+          : 'rgba(0,122,255,0.1)',
+        color: status === 'success' ? '#34c759'
+          : status === 'failed' ? '#ff3b30'
+          : '#007aff',
         fontSize: '12px', cursor: status === 'testing' ? 'not-allowed' : 'pointer',
         fontWeight: 600, opacity: status === 'testing' ? 0.6 : 1,
         transition: 'all 0.2s',
@@ -267,7 +261,7 @@ export function Settings() {
         setGeminiStatus('failed')
         setGeminiMsg(`❌ ${(data.error as string) || `HTTP ${res.status}`}`)
       }
-    } catch (e) {
+    } catch {
       setGeminiStatus('failed')
       setGeminiMsg('❌ Network error — check Worker deployment')
     }
@@ -308,7 +302,7 @@ export function Settings() {
         setAwsStatus('failed')
         setAwsMsg(`❌ ${(data.error as string) || `HTTP ${res.status}`}`)
       }
-    } catch (e) {
+    } catch {
       setAwsStatus('failed')
       setAwsMsg('❌ Network error — check Worker deployment')
     }
@@ -317,13 +311,14 @@ export function Settings() {
   // ─── Render ────────────────────────────────────────────────
   return (
     <div style={s.page}>
+      <style>{`select option { background: #f2f2f7; color: #1d1d1f; }`}</style>
 
       {/* Sticky Header */}
       <div style={s.header}>
         <button onClick={() => navigate(-1)} style={s.backBtn}>
           ← Back
         </button>
-        <span style={{ color: '#EFE1CF', fontSize: '17px', fontWeight: 700, flex: 1 }}>
+        <span style={{ color: '#1d1d1f', fontSize: '17px', fontWeight: 700, flex: 1 }}>
           Settings
         </span>
         <span style={{ fontSize: '22px' }}>⚙️</span>
@@ -333,10 +328,9 @@ export function Settings() {
 
         {/* ── Google Gemini ── */}
         <div style={s.card}>
-          <div style={s.cardSpecular} />
           <div style={s.sectionTitle}>
             <span style={{ fontSize: '20px' }}>✨</span>
-            <span style={{ color: '#EFE1CF', fontSize: '15px', fontWeight: 700 }}>Google Gemini</span>
+            <span style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 700 }}>Google Gemini</span>
           </div>
 
           <SecretInput
@@ -350,17 +344,16 @@ export function Settings() {
             <StatusMsg status={geminiStatus} msg={geminiMsg} />
           </div>
 
-          <p style={{ fontSize: '11px', color: 'rgba(239,225,207,0.25)', margin: 0 }}>
+          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', margin: 0 }}>
             Get key → aistudio.google.com/apikey
           </p>
         </div>
 
         {/* ── AWS Bedrock ── */}
         <div style={s.card}>
-          <div style={s.cardSpecular} />
           <div style={s.sectionTitle}>
             <span style={{ fontSize: '20px' }}>☁️</span>
-            <span style={{ color: '#EFE1CF', fontSize: '15px', fontWeight: 700 }}>AWS Bedrock</span>
+            <span style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 700 }}>AWS Bedrock</span>
           </div>
 
           <SecretInput
@@ -376,13 +369,13 @@ export function Settings() {
 
           {/* Region per service */}
           <div style={{
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(239,225,207,0.08)',
+            background: 'rgba(118,118,128,0.08)',
+            border: '0.5px solid rgba(0,0,0,0.06)',
             borderRadius: '14px',
             padding: '14px',
             marginBottom: '14px',
           }}>
-            <p style={{ fontSize: '11px', color: 'rgba(239,225,207,0.4)', marginBottom: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.5)', marginBottom: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Region per Service
             </p>
             <RegionSelect label="🧠 Brain Region" fieldKey="brainRegion" />
@@ -396,17 +389,16 @@ export function Settings() {
             <StatusMsg status={awsStatus} msg={awsMsg} />
           </div>
 
-          <p style={{ fontSize: '11px', color: 'rgba(239,225,207,0.25)', margin: 0 }}>
+          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', margin: 0 }}>
             IAM user needs AmazonBedrockFullAccess permission
           </p>
         </div>
 
         {/* ── Optional APIs ── */}
         <div style={s.card}>
-          <div style={s.cardSpecular} />
           <div style={s.sectionTitle}>
             <span style={{ fontSize: '20px' }}>🎬</span>
-            <span style={{ color: '#EFE1CF', fontSize: '15px', fontWeight: 700 }}>Optional APIs</span>
+            <span style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 700 }}>Optional APIs</span>
           </div>
 
           <SecretInput
@@ -420,7 +412,7 @@ export function Settings() {
             placeholder="Optional — uses Nova Reel if empty"
           />
 
-          <p style={{ fontSize: '11px', color: 'rgba(239,225,207,0.25)', marginTop: '4px', margin: 0 }}>
+          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', marginTop: '4px', margin: 0 }}>
             App works without these — AWS services used as fallback
           </p>
         </div>
@@ -428,16 +420,16 @@ export function Settings() {
         {/* ── Security Note ── */}
         <div style={{
           ...s.card,
-          background: 'rgba(63,169,246,0.05)',
-          borderColor: 'rgba(63,169,246,0.15)',
+          background: 'rgba(0,122,255,0.06)',
+          border: '0.5px solid rgba(0,122,255,0.2)',
         }}>
           <div style={{ display: 'flex', gap: '10px' }}>
             <span style={{ fontSize: '18px' }}>🔐</span>
             <div>
-              <p style={{ color: '#3FA9F6', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
+              <p style={{ color: '#007aff', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
                 Security Note
               </p>
-              <p style={{ color: 'rgba(239,225,207,0.45)', fontSize: '12px', lineHeight: '1.6', margin: 0 }}>
+              <p style={{ color: 'rgba(60,60,67,0.5)', fontSize: '12px', lineHeight: '1.6', margin: 0 }}>
                 Keys are stored only in your browser's localStorage. They are sent directly from your browser to the API — never stored on any server.
               </p>
             </div>
@@ -450,12 +442,14 @@ export function Settings() {
           style={{
             width: '100%',
             padding: '16px',
-            borderRadius: '14px',
+            borderRadius: '16px',
             border: 'none',
-            background: saved ? '#4ade80' : '#F05A25',
+            background: saved
+              ? 'linear-gradient(135deg, #34c759, #28a745)'
+              : 'linear-gradient(135deg, #ff6b35, #ff4500)',
             boxShadow: saved
-              ? '0 0 24px rgba(74,222,128,0.4)'
-              : '0 0 28px rgba(240,90,37,0.45)',
+              ? '0 4px 16px rgba(52,199,89,0.4)'
+              : '0 4px 16px rgba(255,107,53,0.4)',
             color: 'white',
             fontSize: '15px',
             fontWeight: 700,

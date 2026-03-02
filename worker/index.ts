@@ -70,7 +70,11 @@ export default {
 
     try {
       // Brain routes
-      if (path === '/api/brain/generate' || path.startsWith('/api/brain/')) {
+      if (path === '/api/brain/rewrite-vo') {
+        const { handleRewriteVO } = await import('./brain')
+        response = await handleRewriteVO(request, env, creds)
+      }
+      else if (path === '/api/brain/generate' || path.startsWith('/api/brain/')) {
         const { handleBrainRequest } = await import('./brain')
         response = await handleBrainRequest(request, env, url, ctx, creds)
       }

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import type { SceneAssets, SceneAssetsMap, GenerationStatus, AudioHistoryItem } from '../types/schema'
 import { defaultSceneAssets, saveVideoJob, loadVideoJob, clearVideoJob, redistributeDurations } from '../types/schema'
-import { generateImage, generateAudio, checkVideoStatus, startVideoJob, enhancePrompt } from '../lib/api'
+import { generateImage, generateAudio, checkVideoStatus, startVideoJob, enhancePrompt, rewriteVO } from '../lib/api'
 import { useHistoryStore } from '../store/historyStore'
 import { useCostStore } from '../store/costStore'
 import { useStoryboardSessionStore } from '../store/storyboardSessionStore'
@@ -13,16 +13,16 @@ const POLLY_VOICES = ['Ruth', 'Joanna', 'Matthew', 'Joey'] as const
 const ELEVENLABS_VOICES = ['Bella', 'Adam', 'Rachel', 'Antoni'] as const
 
 const dropdownStyle: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.06)',
-  border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: '8px',
+  background: 'rgba(118,118,128,0.1)',
+  border: '0.5px solid rgba(0,0,0,0.08)',
+  borderRadius: '10px',
   padding: '5px 24px 5px 8px',
-  color: '#EFE1CF',
+  color: '#1d1d1f',
   fontSize: '11px',
   outline: 'none',
   cursor: 'pointer',
   appearance: 'none',
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23EFE1CF' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
+  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%233c3c43' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
   backgroundRepeat: 'no-repeat',
   backgroundPosition: 'right 7px center',
   fontFamily: 'inherit',
@@ -62,6 +62,11 @@ export function Storyboard() {
   // Duration control
   const [totalDuration, setTotalDuration] = useState(60)
   const [sceneDurations, setSceneDurations] = useState<Record<number, number>>({})
+
+  // VO Rewrite state
+  const [rewritingVO, setRewritingVO] = useState<Record<number, boolean>>({})
+  const [customVO, setCustomVO] = useState<Record<number, string>>({})
+  const [voCharInfo, setVoCharInfo] = useState<Record<number, { count: number; limit: number }>>({})
 
   // Poll counts for display
   const [videoPollDisplayCounts, setVideoPollDisplayCounts] = useState<Record<number, number>>({})
@@ -435,11 +440,38 @@ export function Storyboard() {
     }
   }
 
+  const handleRewriteVO = async (scene: Record<string, unknown>, sceneNum: number) => {
+    setRewritingVO(prev => ({ ...prev, [sceneNum]: true }))
+    const originalText = language === 'id'
+      ? (scene.text_id as string) || ''
+      : (scene.text_en as string) || ''
+    const data = storyboard as Record<string, unknown>
+    const artStyle = (data.art_style as string) || 'cinematic_realistic'
+
+    try {
+      const result = await rewriteVO({
+        original_text: customVO[sceneNum] || originalText,
+        duration_seconds: sceneDurations[sceneNum] || 4,
+        language,
+        scene_context: scene.image_prompt as string,
+        art_style: artStyle,
+      })
+      setCustomVO(prev => ({ ...prev, [sceneNum]: result.rewritten_text }))
+      setVoCharInfo(prev => ({ ...prev, [sceneNum]: { count: result.char_count, limit: result.char_limit } }))
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error'
+      toast.error(`Rewrite VO failed: ${msg}`)
+    } finally {
+      setRewritingVO(prev => ({ ...prev, [sceneNum]: false }))
+    }
+  }
+
   const handleGenerateAudio = async (scene: Record<string, unknown>) => {
     const sceneNum = scene.scene_number as number
-    const text = language === 'id'
-      ? (scene.text_id as string) || (scene.text_en as string)
-      : (scene.text_en as string) || (scene.text_id as string)
+    const text = customVO[sceneNum]
+      || (language === 'id'
+        ? (scene.text_id as string) || (scene.text_en as string)
+        : (scene.text_en as string) || (scene.text_id as string))
     if (!text) return
     updateAsset(sceneNum, { audioStatus: 'generating', audioError: undefined })
     try {
@@ -484,28 +516,28 @@ export function Storyboard() {
   const page: React.CSSProperties = {
     minHeight: '100vh',
     width: '100%',
-    background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1527 50%, #060d1a 100%)',
+    background: 'linear-gradient(145deg, #f2f2f7 0%, #e5e5ea 50%, #f2f2f7 100%)',
     fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
     paddingBottom: '60px',
   }
 
   const glassCard: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.07)',
-    backdropFilter: 'blur(24px) saturate(180%)',
-    WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: '20px',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)',
+    background: 'rgba(255,255,255,0.78)',
+    backdropFilter: 'blur(40px) saturate(180%)',
+    WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+    border: '0.5px solid rgba(255,255,255,0.95)',
+    borderRadius: '22px',
+    boxShadow: '0 2px 24px rgba(0,0,0,0.07), 0 0 0 0.5px rgba(255,255,255,0.6) inset',
     marginBottom: '11px',
     overflow: 'hidden',
   }
 
   const statusBadge = (status: GenerationStatus, label: string, isVideoPolling = false) => {
     const colors: Record<GenerationStatus, string> = {
-      idle: 'rgba(239,225,207,0.3)',
-      generating: '#F05A25',
-      done: '#4ade80',
-      error: '#f87171',
+      idle: 'rgba(60,60,67,0.3)',
+      generating: '#ff6b35',
+      done: '#34c759',
+      error: '#ff3b30',
     }
     return (
       <span style={{
@@ -526,24 +558,26 @@ export function Storyboard() {
     onClick: () => void,
     status: GenerationStatus,
     disabled = false,
-    color = '#F05A25'
+    color = '#ff6b35'
   ) => (
     <button
       onClick={onClick}
       disabled={status === 'generating' || disabled}
       style={{
-        padding: '7px 11px',
+        padding: '8px 12px',
         borderRadius: '12px',
-        border: `1px solid ${status === 'done' ? '#4ade80' : disabled ? 'rgba(239,225,207,0.1)' : color + '66'}`,
-        background: status === 'done' ? 'rgba(74,222,128,0.12)' :
-                    disabled ? 'rgba(255,255,255,0.03)' :
-                    `${color}18`,
-        color: status === 'done' ? '#4ade80' :
-               disabled ? 'rgba(239,225,207,0.25)' : color,
+        border: 'none',
+        background: status === 'done' ? 'rgba(52,199,89,0.12)' :
+                    disabled ? 'rgba(118,118,128,0.1)' :
+                    status === 'generating' ? `${color}33` :
+                    color,
+        color: status === 'done' ? '#34c759' :
+               disabled ? 'rgba(60,60,67,0.3)' : 'white',
         fontSize: '13px', fontWeight: 600,
         cursor: (status === 'generating' || disabled) ? 'not-allowed' : 'pointer',
         transition: 'all 0.2s',
         opacity: status === 'generating' ? 0.7 : 1,
+        boxShadow: (!disabled && status !== 'done' && status !== 'generating') ? `0 3px 10px ${color}4d` : 'none',
       }}>
       {status === 'generating' ? 'Generating...' :
        status === 'done' ? 'Re-generate' : label}
@@ -551,24 +585,25 @@ export function Storyboard() {
   )
 
   const smallIconBtn: React.CSSProperties = {
-    padding: '3px 8px',
+    padding: '4px 9px',
     borderRadius: '8px',
-    border: '1px solid rgba(255,255,255,0.1)',
-    background: 'rgba(255,255,255,0.06)',
-    color: 'rgba(239,225,207,0.6)',
+    border: '0.5px solid rgba(0,0,0,0.1)',
+    background: 'rgba(255,255,255,0.9)',
+    color: '#1d1d1f',
     fontSize: '11px',
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'all 0.2s',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
   }
 
   // Cost tracker data
   const serviceTotals: Record<string, number> = {}
   const serviceColors: Record<string, string> = {
-    Brain: '#3FA9F6',
-    image: '#F05A25',
-    video: '#4ade80',
-    audio: '#A855F7',
+    Brain: '#007aff',
+    image: '#ff6b35',
+    video: '#34c759',
+    audio: '#af52de',
   }
   for (const e of costEntries) {
     serviceTotals[e.service] = (serviceTotals[e.service] || 0) + e.cost
@@ -640,27 +675,28 @@ export function Storyboard() {
       {/* Header */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 100,
-        background: 'rgba(10,15,30,0.9)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(242,242,247,0.85)',
+        backdropFilter: 'blur(30px)',
+        WebkitBackdropFilter: 'blur(30px)',
+        borderBottom: '0.5px solid rgba(0,0,0,0.1)',
         padding: '10px 11px',
         display: 'flex', alignItems: 'center', gap: '10px',
       }}>
         <button onClick={() => navigate('/')} style={{
-          background: 'rgba(255,255,255,0.08)',
-          border: '1px solid rgba(239,225,207,0.15)',
-          borderRadius: '10px', color: '#EFE1CF',
+          background: 'rgba(255,255,255,0.85)',
+          border: '0.5px solid rgba(0,0,0,0.12)',
+          borderRadius: '12px', color: '#007aff',
           padding: '6px 12px', cursor: 'pointer',
           fontSize: '13px', fontWeight: 600,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
         }}>
           ← Back
         </button>
         <div style={{ flex: 1 }}>
-          <div style={{ color: '#EFE1CF', fontSize: '15px', fontWeight: 700 }}>
+          <div style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 700 }}>
             {storyboard.title as string}
           </div>
-          <div style={{ color: 'rgba(239,225,207,0.4)', fontSize: '11px' }}>
+          <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px' }}>
             {scenes.length} scenes · Storyboard
           </div>
         </div>
@@ -670,9 +706,9 @@ export function Storyboard() {
           title="Minimize to queue — continue generating in background"
           style={{
             padding: '6px 12px', borderRadius: '10px',
-            border: '1px solid rgba(63,169,246,0.3)',
-            background: 'rgba(63,169,246,0.1)',
-            color: '#3FA9F6',
+            border: '0.5px solid rgba(0,122,255,0.25)',
+            background: 'rgba(0,122,255,0.1)',
+            color: '#007aff',
             fontSize: '12px', fontWeight: 600,
             cursor: 'pointer',
           }}
@@ -684,9 +720,9 @@ export function Storyboard() {
           disabled={isAlreadySaved}
           style={{
             padding: '6px 12px', borderRadius: '10px',
-            border: `1px solid ${isAlreadySaved ? 'rgba(102,187,106,0.3)' : 'rgba(240,90,37,0.3)'}`,
-            background: isAlreadySaved ? 'rgba(102,187,106,0.12)' : 'rgba(240,90,37,0.12)',
-            color: isAlreadySaved ? '#66bb6a' : '#F05A25',
+            border: `0.5px solid ${isAlreadySaved ? 'rgba(52,199,89,0.3)' : 'rgba(255,107,53,0.3)'}`,
+            background: isAlreadySaved ? 'rgba(52,199,89,0.1)' : 'rgba(255,107,53,0.1)',
+            color: isAlreadySaved ? '#34c759' : '#ff6b35',
             fontSize: '12px', fontWeight: 600,
             cursor: isAlreadySaved ? 'default' : 'pointer',
           }}
@@ -699,10 +735,10 @@ export function Storyboard() {
       {/* Interactive Cost Tracker */}
       {costEntries.length > 0 && (
         <div style={{
-          background: 'rgba(15,20,35,0.85)',
+          background: 'rgba(255,255,255,0.7)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
-          borderBottom: '1px solid rgba(240,90,37,0.2)',
+          borderBottom: '0.5px solid rgba(0,0,0,0.08)',
         }}>
           <div
             onClick={() => setCostExpanded(!costExpanded)}
@@ -715,7 +751,7 @@ export function Storyboard() {
               userSelect: 'none',
             }}
           >
-            <span style={{ color: '#F05A25', fontWeight: 700 }}>
+            <span style={{ color: '#ff6b35', fontWeight: 700 }}>
               Session: {formatCost(sessionTotal)}
             </span>
             {Object.entries(serviceTotals).map(([svc, total]) => (
@@ -736,7 +772,7 @@ export function Storyboard() {
                 {svc}: {formatCost(total)}
               </button>
             ))}
-            <span style={{ marginLeft: 'auto', color: 'rgba(239,225,207,0.35)', fontSize: '10px' }}>
+            <span style={{ marginLeft: 'auto', color: 'rgba(60,60,67,0.4)', fontSize: '10px' }}>
               {costExpanded ? '▲ collapse' : '▼ details'}
             </span>
           </div>
@@ -766,10 +802,10 @@ export function Storyboard() {
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
                   padding: '4px 0',
-                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  borderBottom: '0.5px solid rgba(0,0,0,0.05)',
                   fontSize: '11px',
                 }}>
-                  <span style={{ color: 'rgba(239,225,207,0.3)', fontSize: '10px', minWidth: '50px' }}>
+                  <span style={{ color: 'rgba(60,60,67,0.35)', fontSize: '10px', minWidth: '50px' }}>
                     {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                   <span style={{
@@ -780,10 +816,10 @@ export function Storyboard() {
                   }}>
                     {entry.service}
                   </span>
-                  <span style={{ color: 'rgba(239,225,207,0.5)', flex: 1 }}>
+                  <span style={{ color: 'rgba(60,60,67,0.5)', flex: 1 }}>
                     {entry.model}
                   </span>
-                  <span style={{ color: '#EFE1CF', fontWeight: 600 }}>
+                  <span style={{ color: '#1d1d1f', fontWeight: 600 }}>
                     {formatCost(entry.cost)}
                   </span>
                 </div>
@@ -793,9 +829,9 @@ export function Storyboard() {
                   onClick={() => { clearSession(); setCostExpanded(false); setCostFilter(null) }}
                   style={{
                     padding: '4px 10px', borderRadius: '8px',
-                    border: '1px solid rgba(248,113,113,0.3)',
-                    background: 'rgba(248,113,113,0.1)',
-                    color: '#f87171',
+                    border: '0.5px solid rgba(255,59,48,0.25)',
+                    background: 'rgba(255,59,48,0.08)',
+                    color: '#ff3b30',
                     fontSize: '11px', fontWeight: 600, cursor: 'pointer',
                   }}
                 >
@@ -812,21 +848,21 @@ export function Storyboard() {
         {/* Production Notes */}
         {productionNotes && (
           <div style={{ ...glassCard, padding: '11px', marginBottom: '14px' }}>
-            <p style={{ color: 'rgba(239,225,207,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '7px', margin: '0 0 7px' }}>
+            <p style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: '7px', margin: '0 0 7px' }}>
               Production Notes
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
               {(productionNotes.color_palette as string[] || []).map((c: string, i: number) => (
                 <span key={i} style={{
                   padding: '2px 8px', borderRadius: '20px',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#EFE1CF', fontSize: '11px',
+                  background: 'rgba(118,118,128,0.1)',
+                  border: 'none',
+                  color: '#1d1d1f', fontSize: '11px',
                 }}>{c}</span>
               ))}
             </div>
             {productionNotes.music_tone && (
-              <p style={{ color: 'rgba(239,225,207,0.5)', fontSize: '12px', margin: 0 }}>
+              <p style={{ color: 'rgba(60,60,67,0.5)', fontSize: '12px', margin: 0 }}>
                 🎵 {productionNotes.music_tone as string}
               </p>
             )}
@@ -835,17 +871,18 @@ export function Storyboard() {
 
         {/* Total Duration Control */}
         <div style={{
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: '12px',
+          background: 'rgba(255,255,255,0.7)',
+          border: '0.5px solid rgba(255,255,255,0.9)',
+          borderRadius: '16px',
           padding: '10px 12px',
           marginBottom: '10px',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-            <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <span style={{ color: 'rgba(60,60,67,0.6)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
               Target Total Duration
             </span>
-            <span style={{ color: '#F05A25', fontSize: '10px', fontWeight: 700 }}>
+            <span style={{ color: '#007aff', fontSize: '10px', fontWeight: 700 }}>
               {totalDuration}s · {Object.values(sceneDurations).reduce((a, b) => a + b, 0)}s allocated
             </span>
           </div>
@@ -853,11 +890,11 @@ export function Storyboard() {
             type="range" min={15} max={120} step={5}
             value={totalDuration}
             onChange={e => handleTotalDurationChange(Number(e.target.value))}
-            style={{ width: '100%', accentColor: '#F05A25', height: '3px' }}
+            style={{ width: '100%', accentColor: '#007aff', height: '3px' }}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
-            <span style={{ color: 'rgba(239,225,207,0.25)', fontSize: '9px' }}>15s</span>
-            <span style={{ color: 'rgba(239,225,207,0.25)', fontSize: '9px' }}>120s</span>
+            <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>15s</span>
+            <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>120s</span>
           </div>
         </div>
 
@@ -882,21 +919,21 @@ export function Storyboard() {
               {/* Scene Header */}
               <div style={{
                 padding: '10px 11px 7px',
-                borderBottom: isCollapsed ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                borderBottom: isCollapsed ? 'none' : '0.5px solid rgba(0,0,0,0.06)',
                 display: 'flex', alignItems: 'center', gap: '8px',
               }}>
                 <div style={{
                   width: '28px', height: '28px', borderRadius: '9px',
-                  background: 'rgba(240,90,37,0.2)',
-                  border: '1px solid rgba(240,90,37,0.4)',
+                  background: 'rgba(255,107,53,0.12)',
+                  border: 'none',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#F05A25', fontSize: '12px', fontWeight: 700, flexShrink: 0,
+                  color: '#ff6b35', fontSize: '12px', fontWeight: 700, flexShrink: 0,
                 }}>{sceneNum}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ color: '#EFE1CF', fontSize: '13px', fontWeight: 600 }}>
+                  <div style={{ color: '#1d1d1f', fontSize: '13px', fontWeight: 600 }}>
                     Scene {sceneNum}
                   </div>
-                  <div style={{ color: '#3FA9F6', fontSize: '10px' }}>
+                  <div style={{ color: '#007aff', fontSize: '10px' }}>
                     {(scene.scene_type as string || '').replace(/_/g, ' ')}
                   </div>
                 </div>
@@ -904,8 +941,8 @@ export function Storyboard() {
                   {scene.mood && (
                     <span style={{
                       padding: '2px 7px', borderRadius: '20px',
-                      background: 'rgba(255,255,255,0.06)',
-                      color: 'rgba(239,225,207,0.5)', fontSize: '10px',
+                      background: 'rgba(118,118,128,0.1)',
+                      color: 'rgba(60,60,67,0.6)', fontSize: '10px',
                     }}>{scene.mood as string}</span>
                   )}
                   {/* Status summary badges when collapsed */}
@@ -929,9 +966,9 @@ export function Storyboard() {
                     style={{
                       padding: '3px 8px',
                       borderRadius: '8px',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      background: 'rgba(255,255,255,0.05)',
-                      color: 'rgba(239,225,207,0.5)',
+                      border: '0.5px solid rgba(0,0,0,0.1)',
+                      background: 'rgba(255,255,255,0.8)',
+                      color: 'rgba(60,60,67,0.6)',
                       fontSize: '11px', fontWeight: 500,
                       cursor: 'pointer',
                     }}
@@ -948,14 +985,14 @@ export function Storyboard() {
                   {/* Image Prompt — editable textarea */}
                   <div style={{ marginBottom: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                      <p style={{ color: 'rgba(239,225,207,0.4)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                      <p style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>
                         Image Prompt
                       </p>
                       <div style={{ display: 'flex', gap: '4px' }}>
                         {currentPrompt !== (scene.image_prompt as string) && (
                           <button
                             onClick={() => setEditedPrompts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })}
-                            style={{ ...smallIconBtn, color: '#f87171', borderColor: 'rgba(248,113,113,0.3)', fontSize: '10px' }}
+                            style={{ ...smallIconBtn, color: '#ff3b30', borderColor: 'rgba(255,59,48,0.2)', fontSize: '10px' }}
                           >
                             Reset
                           </button>
@@ -971,13 +1008,13 @@ export function Storyboard() {
                       rows={3}
                       style={{
                         width: '100%',
-                        background: 'rgba(255,255,255,0.04)',
+                        background: 'rgba(118,118,128,0.07)',
                         border: currentPrompt !== (scene.image_prompt as string)
-                          ? '1px solid rgba(240,90,37,0.4)'
-                          : '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: '8px',
-                        padding: '6px 8px',
-                        color: 'rgba(239,225,207,0.85)',
+                          ? '1px solid rgba(255,107,53,0.4)'
+                          : '0.5px solid rgba(0,0,0,0.08)',
+                        borderRadius: '10px',
+                        padding: '7px 9px',
+                        color: '#1d1d1f',
                         fontSize: '12px',
                         lineHeight: '1.5',
                         resize: 'vertical',
@@ -989,35 +1026,65 @@ export function Storyboard() {
                     />
                   </div>
 
-                  {/* Narration */}
+                  {/* Narration + Rewrite VO */}
                   {narration && (
                     <div style={{ marginBottom: '11px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                        <p style={{ color: 'rgba(239,225,207,0.4)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
-                          Narration VO
+                      <div style={{
+                        background: 'rgba(0,0,0,0.03)',
+                        border: '0.5px solid rgba(0,0,0,0.08)',
+                        borderRadius: '14px',
+                        padding: '10px 12px',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            Narration VO
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {voCharInfo[sceneNum] && (
+                              <span style={{
+                                fontSize: '10px', fontWeight: 600,
+                                color: voCharInfo[sceneNum].count <= voCharInfo[sceneNum].limit ? '#34c759' : '#ff3b30'
+                              }}>
+                                {voCharInfo[sceneNum].count}/{voCharInfo[sceneNum].limit} chars
+                              </span>
+                            )}
+                            <button onClick={() => handleCopy(customVO[sceneNum] || narration)} style={smallIconBtn}>
+                              Copy
+                            </button>
+                            <button
+                              onClick={() => handleRewriteVO(scene, sceneNum)}
+                              disabled={rewritingVO[sceneNum]}
+                              style={{
+                                padding: '4px 10px', borderRadius: '8px',
+                                background: 'rgba(0,122,255,0.1)',
+                                border: '0.5px solid rgba(0,122,255,0.25)',
+                                color: '#007aff', fontSize: '10px', fontWeight: 600,
+                                cursor: rewritingVO[sceneNum] ? 'not-allowed' : 'pointer',
+                                opacity: rewritingVO[sceneNum] ? 0.6 : 1,
+                              }}>
+                              {rewritingVO[sceneNum] ? '⏳...' : `✏️ Rewrite (${sceneDurations[sceneNum] || 4}s)`}
+                            </button>
+                          </div>
+                        </div>
+                        <p style={{ color: '#1d1d1f', fontSize: '13px', lineHeight: '1.5', fontStyle: 'italic', margin: 0 }}>
+                          "{customVO[sceneNum] || narration}"
                         </p>
-                        <button onClick={() => handleCopy(narration)} style={smallIconBtn}>
-                          Copy
-                        </button>
                       </div>
-                      <p style={{ color: '#EFE1CF', fontSize: '13px', lineHeight: '1.6', fontStyle: 'italic', margin: 0 }}>
-                        "{narration}"
-                      </p>
                     </div>
                   )}
 
                   {/* IMAGE SECTION */}
                   <div style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '12px',
-                    padding: '8px',
-                    marginBottom: '7px',
+                    background: 'rgba(0,0,0,0.03)',
+                    border: '0.5px solid rgba(0,0,0,0.08)',
+                    borderRadius: '16px',
+                    padding: '10px',
+                    marginBottom: '8px',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <span style={{ fontSize: '13px' }}>🖼️</span>
-                        <span style={{ color: '#EFE1CF', fontSize: '12px', fontWeight: 600 }}>Image</span>
+                        <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Image</span>
                       </div>
                       {statusBadge(sceneAsset.imageStatus, 'Image')}
                     </div>
@@ -1075,7 +1142,7 @@ export function Storyboard() {
                     )}
 
                     {sceneAsset.imageError && (
-                      <p style={{ color: '#f87171', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
+                      <p style={{ color: '#ff3b30', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
                         {sceneAsset.imageError}
                       </p>
                     )}
@@ -1091,22 +1158,22 @@ export function Storyboard() {
                         <option value="titan_v2">Titan V2</option>
                       </select>
                     </div>
-                    {actionBtn('Generate Image', () => handleGenerateImage(scene), sceneAsset.imageStatus)}
-                    <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '5px' }}>
+                    {actionBtn('Generate Image', () => handleGenerateImage(scene), sceneAsset.imageStatus, false, '#ff6b35')}
+                    <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
                       Est. {formatCost(estimateImageCost(imageModel))}
                     </div>
                     {sceneAsset.enhancedPrompt && (
                       <div style={{
                         marginTop: '7px',
                         padding: '6px 8px',
-                        background: 'rgba(63,169,246,0.07)',
-                        border: '1px solid rgba(63,169,246,0.2)',
-                        borderRadius: '8px',
+                        background: 'rgba(0,122,255,0.06)',
+                        border: '0.5px solid rgba(0,122,255,0.2)',
+                        borderRadius: '10px',
                       }}>
-                        <p style={{ color: 'rgba(63,169,246,0.7)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 3px' }}>
+                        <p style={{ color: '#007aff', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: '0 0 3px' }}>
                           ✨ AI Enhanced Prompt
                         </p>
-                        <p style={{ color: 'rgba(239,225,207,0.6)', fontSize: '10px', lineHeight: '1.5', margin: 0 }}>
+                        <p style={{ color: 'rgba(60,60,67,0.6)', fontSize: '10px', lineHeight: '1.5', margin: 0 }}>
                           {sceneAsset.enhancedPrompt}
                         </p>
                       </div>
@@ -1115,20 +1182,20 @@ export function Storyboard() {
 
                   {/* VIDEO SECTION */}
                   <div style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    border: `1px solid ${hasImage ? 'rgba(63,169,246,0.2)' : 'rgba(255,255,255,0.06)'}`,
-                    borderRadius: '12px',
-                    padding: '8px',
-                    marginBottom: '7px',
+                    background: 'rgba(0,122,255,0.04)',
+                    border: `0.5px solid ${hasImage ? 'rgba(0,122,255,0.15)' : 'rgba(0,0,0,0.05)'}`,
+                    borderRadius: '16px',
+                    padding: '10px',
+                    marginBottom: '8px',
                     opacity: hasImage ? 1 : 0.5,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <span style={{ fontSize: '13px' }}>🎬</span>
-                        <span style={{ color: '#EFE1CF', fontSize: '12px', fontWeight: 600 }}>Video</span>
+                        <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Video</span>
                       </div>
                       {!hasImage
-                        ? <span style={{ color: 'rgba(239,225,207,0.3)', fontSize: '10px' }}>Generate image first</span>
+                        ? <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '10px' }}>Generate image first</span>
                         : statusBadge(sceneAsset.videoStatus, 'Video', isVideoPolling)
                       }
                     </div>
@@ -1175,33 +1242,33 @@ export function Storyboard() {
                     {isVideoPolling && !hasVideo && (
                       <div style={{
                         padding: '8px',
-                        background: 'rgba(63,169,246,0.08)',
-                        border: '1px solid rgba(63,169,246,0.15)',
-                        borderRadius: '9px',
+                        background: 'rgba(0,122,255,0.06)',
+                        border: '0.5px solid rgba(0,122,255,0.15)',
+                        borderRadius: '12px',
                         marginBottom: '8px',
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                          <div style={{ color: '#3FA9F6', fontSize: '12px', fontWeight: 600 }}>
+                          <div style={{ color: '#007aff', fontSize: '12px', fontWeight: 600 }}>
                             Generating video...
                           </div>
                           <button
                             onClick={() => handleCancelVideo(sceneNum)}
                             style={{
                               padding: '2px 8px', borderRadius: '8px',
-                              border: '1px solid rgba(248,113,113,0.4)',
-                              background: 'rgba(248,113,113,0.1)',
-                              color: '#f87171',
+                              border: '0.5px solid rgba(255,59,48,0.3)',
+                              background: 'rgba(255,59,48,0.08)',
+                              color: '#ff3b30',
                               fontSize: '10px', fontWeight: 600, cursor: 'pointer',
                             }}
                           >
                             Cancel
                           </button>
                         </div>
-                        <div style={{ color: 'rgba(239,225,207,0.4)', fontSize: '11px' }}>
+                        <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px' }}>
                           Nova Reel takes 2-5 minutes. Polling every 8s.
                         </div>
                         {pollCount > 0 && (
-                          <div style={{ color: 'rgba(239,225,207,0.3)', fontSize: '10px', marginTop: '3px' }}>
+                          <div style={{ color: 'rgba(60,60,67,0.35)', fontSize: '10px', marginTop: '3px' }}>
                             Checked {pollCount} time{pollCount !== 1 ? 's' : ''}
                           </div>
                         )}
@@ -1209,7 +1276,7 @@ export function Storyboard() {
                     )}
 
                     {sceneAsset.videoError && (
-                      <p style={{ color: '#f87171', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
+                      <p style={{ color: '#ff3b30', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
                         {sceneAsset.videoError}
                       </p>
                     )}
@@ -1217,18 +1284,18 @@ export function Storyboard() {
                     {/* Duration slider */}
                     <div style={{ marginBottom: '8px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '10px' }}>⏱ Duration</span>
-                        <span style={{ color: '#3FA9F6', fontSize: '10px', fontWeight: 700 }}>{sceneDurations[sceneNum] || 6}s</span>
+                        <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>⏱ Duration</span>
+                        <span style={{ color: '#007aff', fontSize: '10px', fontWeight: 700 }}>{sceneDurations[sceneNum] || 6}s</span>
                       </div>
                       <input
                         type="range" min={2} max={6} step={1}
                         value={sceneDurations[sceneNum] || 6}
                         onChange={e => handleSceneDurationChange(sceneNum, Number(e.target.value))}
-                        style={{ width: '100%', accentColor: '#3FA9F6', height: '3px' }}
+                        style={{ width: '100%', accentColor: '#007aff', height: '3px' }}
                       />
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'rgba(239,225,207,0.25)', fontSize: '9px' }}>2s</span>
-                        <span style={{ color: 'rgba(239,225,207,0.25)', fontSize: '9px' }}>6s</span>
+                        <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>2s</span>
+                        <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>6s</span>
                       </div>
                     </div>
 
@@ -1237,24 +1304,24 @@ export function Storyboard() {
                       () => handleGenerateVideo(scene),
                       sceneAsset.videoStatus,
                       !hasImage,
-                      '#3FA9F6'
+                      '#007aff'
                     )}
-                    <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '5px' }}>
+                    <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
                       Est. {formatCost(estimateVideoCost())}
                     </div>
                   </div>
 
                   {/* AUDIO SECTION */}
                   <div style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(168,85,247,0.2)',
-                    borderRadius: '12px',
-                    padding: '8px',
+                    background: 'rgba(175,82,222,0.05)',
+                    border: '0.5px solid rgba(175,82,222,0.18)',
+                    borderRadius: '16px',
+                    padding: '10px',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <span style={{ fontSize: '13px' }}>🎵</span>
-                        <span style={{ color: '#EFE1CF', fontSize: '12px', fontWeight: 600 }}>Audio VO</span>
+                        <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Audio VO</span>
                       </div>
                       {statusBadge(sceneAsset.audioStatus, 'Audio')}
                     </div>
@@ -1266,17 +1333,17 @@ export function Storyboard() {
                           <div key={idx} style={{
                             marginBottom: '6px',
                             padding: '6px',
-                            background: 'rgba(168,85,247,0.06)',
-                            border: '1px solid rgba(168,85,247,0.15)',
-                            borderRadius: '8px',
+                            background: 'rgba(175,82,222,0.06)',
+                            border: '0.5px solid rgba(175,82,222,0.15)',
+                            borderRadius: '10px',
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '10px' }}>
+                              <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>
                                 {idx === 0 ? '▶ Latest' : `Take ${sceneAsset.audioHistory.length - idx}`}
                                 {' · '}{item.engine === 'elevenlabs' ? 'ElevenLabs' : 'Polly'}
                                 {' · '}{item.voice}
                               </span>
-                              <span style={{ color: 'rgba(239,225,207,0.3)', fontSize: '10px' }}>
+                              <span style={{ color: 'rgba(60,60,67,0.35)', fontSize: '10px' }}>
                                 {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
@@ -1312,7 +1379,7 @@ export function Storyboard() {
                     )}
 
                     {sceneAsset.audioError && (
-                      <p style={{ color: '#f87171', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
+                      <p style={{ color: '#ff3b30', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
                         {sceneAsset.audioError}
                       </p>
                     )}
@@ -1343,9 +1410,9 @@ export function Storyboard() {
                       () => handleGenerateAudio(scene),
                       sceneAsset.audioStatus,
                       false,
-                      '#A855F7'
+                      '#af52de'
                     )}
-                    <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '5px' }}>
+                    <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
                       Est. {narration ? formatCost(estimateAudioCost(audioEngine, narration.length)) : '<$0.01'}
                     </div>
                   </div>
@@ -1355,17 +1422,17 @@ export function Storyboard() {
                     {scene.camera_angle && (
                       <span style={{
                         padding: '3px 8px', borderRadius: '20px',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        color: 'rgba(239,225,207,0.45)', fontSize: '11px',
+                        background: 'rgba(118,118,128,0.08)',
+                        border: 'none',
+                        color: 'rgba(60,60,67,0.5)', fontSize: '11px',
                       }}>📷 {scene.camera_angle as string}</span>
                     )}
                     {scene.transition && (
                       <span style={{
                         padding: '3px 8px', borderRadius: '20px',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        color: 'rgba(239,225,207,0.45)', fontSize: '11px',
+                        background: 'rgba(118,118,128,0.08)',
+                        border: 'none',
+                        color: 'rgba(60,60,67,0.5)', fontSize: '11px',
                       }}>{(scene.transition as string).replace(/_/g, ' ')}</span>
                     )}
                   </div>
@@ -1376,12 +1443,12 @@ export function Storyboard() {
         })}
 
         {/* Footer */}
-        <p style={{ textAlign: 'center', color: 'rgba(239,225,207,0.2)', fontSize: '11px', marginTop: '17px' }}>
+        <p style={{ textAlign: 'center', color: 'rgba(60,60,67,0.3)', fontSize: '11px', marginTop: '17px' }}>
           {scenes.length} scenes · Fuzzy Short
         </p>
       </div>
 
-      <style>{`select option { background: #0d1527; color: #EFE1CF; }`}</style>
+      <style>{`select option { background: #f2f2f7; color: #1d1d1f; }`}</style>
     </div>
   )
 }

@@ -133,6 +133,22 @@ export async function enhancePrompt(params: {
   return res.json()
 }
 
+export async function rewriteVO(params: {
+  original_text: string
+  duration_seconds: number
+  language: string
+  scene_context: string
+  art_style: string
+}): Promise<{ rewritten_text: string; char_count: number; char_limit: number; fits: boolean }> {
+  const res = await fetch(`${WORKER_URL}/api/brain/rewrite-vo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) throw new Error('VO rewrite failed')
+  return res.json()
+}
+
 export async function generateAudio(params: {
   text: string
   language: string
