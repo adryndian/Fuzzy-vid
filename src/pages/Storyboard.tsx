@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import type { SceneAssets, SceneAssetsMap, GenerationStatus, AudioHistoryItem } from '../types/schema'
-import { defaultSceneAssets } from '../types/schema'
-import { generateImage, generateVideo, generateAudio, checkVideoStatus } from '../lib/api'
+import { defaultSceneAssets, saveVideoJob, loadVideoJob, clearVideoJob, redistributeDurations } from '../types/schema'
+import { generateImage, generateAudio, checkVideoStatus, startVideoJob, enhancePrompt } from '../lib/api'
 import { useHistoryStore } from '../store/historyStore'
 import { useCostStore } from '../store/costStore'
 import { useStoryboardSessionStore } from '../store/storyboardSessionStore'
@@ -58,6 +58,10 @@ export function Storyboard() {
   const [collapsedScenes, setCollapsedScenes] = useState<Set<number>>(new Set())
   const [editedPrompts, setEditedPrompts] = useState<Record<number, string>>({})
   const [previewModal, setPreviewModal] = useState<PreviewModal | null>(null)
+
+  // Duration control
+  const [totalDuration, setTotalDuration] = useState(60)
+  const [sceneDurations, setSceneDurations] = useState<Record<number, number>>({})
 
   // Poll counts for display
   const [videoPollDisplayCounts, setVideoPollDisplayCounts] = useState<Record<number, number>>({})
@@ -202,6 +206,11 @@ export function Storyboard() {
         return
       }
       setStoryboard(data)
+      // Initialize scene durations evenly across 60s default
+      const scenes = (data.scenes as Record<string, unknown>[]) || []
+      const initDurations: Record<number, number> = {}
+      scenes.forEach((_, i) => { initDurations[i + 1] = Math.max(2, Math.min(6, Math.round(60 / scenes.length))) })
+      setSceneDurations(initDurations)
     } catch { navigate('/') }
   }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -223,6 +232,20 @@ export function Storyboard() {
       updateAssetInStore(activeSessionId, sceneNum, update)
     }
   }, [activeSessionId, updateAssetInStore])
+
+  // ─── Duration control ──────────────────────────────────────
+  const handleTotalDurationChange = (total: number) => {
+    setTotalDuration(total)
+    const scenes = (storyboard?.scenes as Record<string, unknown>[]) || []
+    const redistributed = redistributeDurations(scenes.length, total)
+    const newDurations: Record<number, number> = {}
+    redistributed.forEach(d => { newDurations[d.sceneNumber] = d.durationSeconds })
+    setSceneDurations(newDurations)
+  }
+
+  const handleSceneDurationChange = (sceneNum: number, duration: number) => {
+    setSceneDurations(prev => ({ ...prev, [sceneNum]: duration }))
+  }
 
   // Also update session settings when user changes them
   const handleImageModelChange = (val: 'nova_canvas' | 'titan_v2') => {
@@ -332,12 +355,28 @@ export function Storyboard() {
     updateAsset(sceneNum, { imageStatus: 'generating', imageError: undefined })
     try {
       const data = storyboard as Record<string, unknown>
+      const artStyle = (data.art_style as string) || 'cinematic_realistic'
+      const aspectRatio = (data.aspect_ratio as string) || '9_16'
+
+      // Enhance prompt via Claude first
+      let finalPrompt = prompt
+      try {
+        const enhanced = await enhancePrompt({
+          raw_prompt: prompt,
+          art_style: artStyle,
+          aspect_ratio: aspectRatio,
+          mood: scene.mood as string | undefined,
+        })
+        finalPrompt = enhanced.enhanced_prompt
+        updateAsset(sceneNum, { enhancedPrompt: finalPrompt })
+      } catch { /* fall through with original prompt */ }
+
       const result = await generateImage({
-        prompt,
+        prompt: finalPrompt,
         scene_number: sceneNum,
         project_id: (data.project_id as string) || 'storyboard',
-        aspect_ratio: (data.aspect_ratio as string) || '9_16',
-        art_style: (data.art_style as string) || 'cinematic_realistic',
+        aspect_ratio: aspectRatio,
+        art_style: artStyle,
         image_model: imageModel,
       })
       const imgCost = estimateImageCost(imageModel)
@@ -359,25 +398,34 @@ export function Storyboard() {
     updateAsset(sceneNum, { videoStatus: 'generating', videoError: undefined })
     try {
       const data = storyboard as Record<string, unknown>
-      const result = await generateVideo({
+      const projectId = (data.project_id as string) || 'storyboard'
+      const durationSeconds = sceneDurations[sceneNum] || 6
+      const result = await startVideoJob({
         image_url: sceneAsset.imageUrl,
         prompt: editedPrompts[sceneNum] ?? (scene.image_prompt as string),
         scene_number: sceneNum,
-        project_id: (data.project_id as string) || 'storyboard',
+        project_id: projectId,
         aspect_ratio: (data.aspect_ratio as string) || '9_16',
+        duration_seconds: durationSeconds,
       })
       const vidCost = estimateVideoCost()
       addCostEntry({ service: 'video', model: 'Nova Reel', cost: vidCost })
 
-      if (result.video_url) {
-        updateAsset(sceneNum, { videoStatus: 'done', videoUrl: result.video_url })
-        toast.success(`Scene ${sceneNum} video ready · ${formatCost(vidCost)}`)
-      } else if (result.job_id) {
+      if (result.job_id) {
         updateAsset(sceneNum, { videoStatus: 'generating', videoJobId: result.job_id })
-        toast(`Scene ${sceneNum} video started · polling every 8s`, { icon: '🎬', duration: 4000 })
+        // Save to localStorage so we can resume on page reload
+        saveVideoJob({
+          jobId: result.job_id,
+          sceneNumber: sceneNum,
+          projectId,
+          startedAt: Date.now(),
+          status: 'processing',
+          durationSeconds,
+        })
+        toast(`Scene ${sceneNum} video started (${durationSeconds}s) · polling every 8s`, { icon: '🎬', duration: 4000 })
         pollVideoStatus(sceneNum, result.job_id)
       } else {
-        updateAsset(sceneNum, { videoStatus: 'error', videoError: 'No job_id or video_url returned' })
+        updateAsset(sceneNum, { videoStatus: 'error', videoError: 'No job_id returned' })
         toast.error('Video generation returned no job ID')
       }
     } catch (e: unknown) {
@@ -785,6 +833,34 @@ export function Storyboard() {
           </div>
         )}
 
+        {/* Total Duration Control */}
+        <div style={{
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '12px',
+          padding: '10px 12px',
+          marginBottom: '10px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Target Total Duration
+            </span>
+            <span style={{ color: '#F05A25', fontSize: '10px', fontWeight: 700 }}>
+              {totalDuration}s · {Object.values(sceneDurations).reduce((a, b) => a + b, 0)}s allocated
+            </span>
+          </div>
+          <input
+            type="range" min={15} max={120} step={5}
+            value={totalDuration}
+            onChange={e => handleTotalDurationChange(Number(e.target.value))}
+            style={{ width: '100%', accentColor: '#F05A25', height: '3px' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
+            <span style={{ color: 'rgba(239,225,207,0.25)', fontSize: '9px' }}>15s</span>
+            <span style={{ color: 'rgba(239,225,207,0.25)', fontSize: '9px' }}>120s</span>
+          </div>
+        </div>
+
         {/* Scenes */}
         {scenes.map((scene) => {
           const sceneNum = scene.scene_number as number
@@ -1019,6 +1095,22 @@ export function Storyboard() {
                     <div style={{ fontSize: '10px', color: 'rgba(239,225,207,0.35)', marginTop: '5px' }}>
                       Est. {formatCost(estimateImageCost(imageModel))}
                     </div>
+                    {sceneAsset.enhancedPrompt && (
+                      <div style={{
+                        marginTop: '7px',
+                        padding: '6px 8px',
+                        background: 'rgba(63,169,246,0.07)',
+                        border: '1px solid rgba(63,169,246,0.2)',
+                        borderRadius: '8px',
+                      }}>
+                        <p style={{ color: 'rgba(63,169,246,0.7)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 3px' }}>
+                          ✨ AI Enhanced Prompt
+                        </p>
+                        <p style={{ color: 'rgba(239,225,207,0.6)', fontSize: '10px', lineHeight: '1.5', margin: 0 }}>
+                          {sceneAsset.enhancedPrompt}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* VIDEO SECTION */}
@@ -1122,8 +1214,26 @@ export function Storyboard() {
                       </p>
                     )}
 
+                    {/* Duration slider */}
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: 'rgba(239,225,207,0.5)', fontSize: '10px' }}>⏱ Duration</span>
+                        <span style={{ color: '#3FA9F6', fontSize: '10px', fontWeight: 700 }}>{sceneDurations[sceneNum] || 6}s</span>
+                      </div>
+                      <input
+                        type="range" min={2} max={6} step={1}
+                        value={sceneDurations[sceneNum] || 6}
+                        onChange={e => handleSceneDurationChange(sceneNum, Number(e.target.value))}
+                        style={{ width: '100%', accentColor: '#3FA9F6', height: '3px' }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'rgba(239,225,207,0.25)', fontSize: '9px' }}>2s</span>
+                        <span style={{ color: 'rgba(239,225,207,0.25)', fontSize: '9px' }}>6s</span>
+                      </div>
+                    </div>
+
                     {actionBtn(
-                      'Generate Video',
+                      `Generate Video (${sceneDurations[sceneNum] || 6}s)`,
                       () => handleGenerateVideo(scene),
                       sceneAsset.videoStatus,
                       !hasImage,

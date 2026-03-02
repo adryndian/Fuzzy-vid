@@ -34,6 +34,76 @@ function getDimensionsTitanV2(aspect: string): { width: number; height: number }
   }
 }
 
+export async function handleEnhancePrompt(
+  request: Request,
+  _env: Env,
+  creds: Credentials
+): Promise<Response> {
+  const body = await request.json() as {
+    raw_prompt: string
+    art_style: string
+    aspect_ratio: string
+    mood?: string
+  }
+
+  const systemPrompt = `You are an expert AI image prompt engineer specializing in cinematic visual storytelling.
+Your job is to enhance image prompts for maximum quality output from AI image generators like Amazon Nova Canvas.
+
+Rules:
+- Keep the original scene/subject intact
+- Add professional photography and cinematography technical terms
+- Add lighting specifications
+- Add camera and lens details
+- Add quality modifiers
+- Keep the enhanced prompt under 400 characters
+- Return ONLY the enhanced prompt text, nothing else`
+
+  const userPrompt = `Enhance this image prompt for ${body.art_style} style, ${body.aspect_ratio} aspect ratio, mood: ${body.mood || 'neutral'}:
+
+"${body.raw_prompt}"
+
+Add these types of technical terms as appropriate:
+- Photography: depth of field, bokeh, rule of thirds, golden ratio
+- Lighting: volumetric lighting, god rays, golden hour, rim light, chiaroscuro
+- Camera: 85mm lens, wide angle, dutch angle, bird's eye view
+- Quality: 8k UHD, photorealistic, highly detailed, sharp focus
+- Style-specific terms for ${body.art_style}`
+
+  const region = creds.brainRegion || 'us-east-1'
+  const modelId = 'us.anthropic.claude-sonnet-4-6'
+  const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
+
+  const payload = JSON.stringify({
+    anthropic_version: 'bedrock-2023-05-31',
+    max_tokens: 500,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userPrompt }],
+  })
+
+  const signer = new AwsV4Signer(
+    { awsAccessKeyId: creds.awsAccessKeyId, awsSecretKey: creds.awsSecretAccessKey },
+    region,
+    'bedrock'
+  )
+  const req = new Request(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: payload,
+  })
+  const signedReq = await signer.sign(req)
+  const res = await fetch(signedReq)
+
+  if (!res.ok) {
+    // Fallback: return original prompt with basic enhancement
+    const basicEnhanced = `${body.raw_prompt}, ${body.art_style}, cinematic lighting, 8k UHD, highly detailed, sharp focus`
+    return Response.json({ enhanced_prompt: basicEnhanced })
+  }
+
+  const data = await res.json() as { content: [{ text: string }] }
+  const enhanced = data.content[0].text.trim()
+  return Response.json({ enhanced_prompt: enhanced })
+}
+
 export async function handleImageRequest(
   request: Request,
   env: Env,

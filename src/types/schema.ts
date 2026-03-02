@@ -45,6 +45,7 @@ export interface SceneAssets {
   imageUrl?: string
   imageStatus: GenerationStatus
   imageError?: string
+  enhancedPrompt?: string
   videoUrl?: string
   videoJobId?: string
   videoStatus: GenerationStatus
@@ -173,6 +174,54 @@ export interface AudioConfig {
   voice_character: string
   speed: number
   language: 'id' | 'en'
+}
+
+// Video Job (Nova Reel polling)
+export interface VideoJob {
+  jobId: string
+  sceneNumber: number
+  projectId: string
+  startedAt: number // Date.now()
+  status: 'processing' | 'done' | 'error'
+  videoUrl?: string
+  errorMessage?: string
+  durationSeconds: number
+}
+
+export function videoJobKey(projectId: string, sceneNum: number): string {
+  return `video_job_${projectId}_${sceneNum}`
+}
+
+export function saveVideoJob(job: VideoJob): void {
+  localStorage.setItem(videoJobKey(job.projectId, job.sceneNumber), JSON.stringify(job))
+}
+
+export function loadVideoJob(projectId: string, sceneNum: number): VideoJob | null {
+  try {
+    const raw = localStorage.getItem(videoJobKey(projectId, sceneNum))
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+export function clearVideoJob(projectId: string, sceneNum: number): void {
+  localStorage.removeItem(videoJobKey(projectId, sceneNum))
+}
+
+// Duration
+export interface SceneDuration {
+  sceneNumber: number
+  durationSeconds: number // 2-6 seconds
+}
+
+export function redistributeDurations(
+  sceneCount: number,
+  totalTarget: number
+): SceneDuration[] {
+  const perScene = Math.max(2, Math.min(6, Math.round(totalTarget / sceneCount)))
+  return Array.from({ length: sceneCount }, (_, i) => ({
+    sceneNumber: i + 1,
+    durationSeconds: perScene,
+  }))
 }
 
 // Settings Store Types

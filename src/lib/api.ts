@@ -84,6 +84,55 @@ export async function generateVideo(params: {
   return res.json()
 }
 
+export async function startVideoJob(params: {
+  prompt: string
+  image_url?: string
+  scene_number: number
+  project_id: string
+  aspect_ratio: string
+  duration_seconds: number
+}): Promise<{ job_id: string; scene_number: number; status: string }> {
+  const res = await fetch(`${WORKER_URL}/api/video/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json() as Record<string, unknown>
+    throw new Error((err.message as string) || `Failed to start video job`)
+  }
+  return res.json()
+}
+
+export async function pollVideoStatus(jobId: string): Promise<{
+  status: 'processing' | 'done' | 'error'
+  video_url?: string
+  message?: string
+}> {
+  const encodedJobId = encodeURIComponent(jobId)
+  const res = await fetch(
+    `${WORKER_URL}/api/video/status/${encodedJobId}`,
+    { headers: getApiHeaders() }
+  )
+  if (!res.ok) throw new Error(`Status check failed: ${res.status}`)
+  return res.json()
+}
+
+export async function enhancePrompt(params: {
+  raw_prompt: string
+  art_style: string
+  aspect_ratio: string
+  mood?: string
+}): Promise<{ enhanced_prompt: string }> {
+  const res = await fetch(`${WORKER_URL}/api/image/enhance-prompt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) return { enhanced_prompt: params.raw_prompt }
+  return res.json()
+}
+
 export async function generateAudio(params: {
   text: string
   language: string

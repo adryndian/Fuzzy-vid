@@ -18,6 +18,141 @@ function getDimension(aspect: string): string {
   }
 }
 
+// ─── New: Start Nova Reel async job (returns invocationArn as job_id) ─────────
+
+export async function handleVideoStart(
+  request: Request,
+  _env: Env,
+  _url: URL,
+  _ctx: ExecutionContext,
+  creds: Credentials
+): Promise<Response> {
+  const body = await request.json() as {
+    prompt: string
+    image_url?: string
+    scene_number: number
+    project_id: string
+    aspect_ratio: string
+    duration_seconds: number
+  }
+
+  if (!creds.awsAccessKeyId || !creds.awsSecretAccessKey) {
+    return Response.json({ error: 'Missing AWS credentials' }, { status: 400 })
+  }
+
+  const region = 'us-east-1'
+  const modelId = 'amazon.nova-reel-v1:0'
+  const dimension = body.aspect_ratio === '16_9' ? '1280x720' : '720x1280'
+  const duration = Math.max(2, Math.min(6, body.duration_seconds || 6))
+
+  const outputKey = `projects/${body.project_id}/scene_${body.scene_number}/video_${Date.now()}`
+  const s3OutputUri = `s3://igome-story-storage/${outputKey}`
+  const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/async-invoke`
+
+  const bedrockBody = JSON.stringify({
+    modelInput: {
+      taskType: 'TEXT_VIDEO',
+      textToVideoParams: {
+        text: body.prompt,
+      },
+      videoGenerationConfig: {
+        durationSeconds: duration,
+        fps: 24,
+        dimension,
+        seed: Math.floor(Math.random() * 1000000),
+      },
+    },
+    outputDataConfig: {
+      s3OutputDataConfig: { s3Uri: s3OutputUri },
+    },
+  })
+
+  const signer = new AwsV4Signer(
+    { awsAccessKeyId: creds.awsAccessKeyId, awsSecretKey: creds.awsSecretAccessKey },
+    region,
+    'bedrock'
+  )
+  const req = new Request(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: bedrockBody,
+  })
+  const signedReq = await signer.sign(req)
+  const res = await fetch(signedReq)
+
+  if (!res.ok) {
+    const err = await res.text()
+    return Response.json(
+      { error: 'Failed to start video job', message: err.slice(0, 300) },
+      { status: 502 }
+    )
+  }
+
+  const data = await res.json() as { invocationArn: string }
+  return Response.json({
+    job_id: data.invocationArn,
+    scene_number: body.scene_number,
+    status: 'processing',
+  })
+}
+
+// ─── New: Poll video status by ARN ────────────────────────────────────────────
+
+export async function handleVideoStatus(
+  request: Request,
+  env: Env,
+  jobId: string,
+  creds: Credentials
+): Promise<Response> {
+  // If jobId is an ARN (new flow: startVideoJob), poll Bedrock directly
+  if (jobId.startsWith('arn:aws:')) {
+    if (!creds.awsAccessKeyId || !creds.awsSecretAccessKey) {
+      return Response.json({ error: 'Missing AWS credentials' }, { status: 400 })
+    }
+    const region = 'us-east-1'
+    const arnForUrl = encodeURIComponent(jobId).replace(/%3A/gi, ':')
+    const statusEndpoint = `https://bedrock-runtime.${region}.amazonaws.com/async-invoke/${arnForUrl}`
+
+    const signer = new AwsV4Signer(
+      { awsAccessKeyId: creds.awsAccessKeyId, awsSecretKey: creds.awsSecretAccessKey },
+      region,
+      'bedrock'
+    )
+    const req = new Request(statusEndpoint, { method: 'GET' })
+    const signedReq = await signer.sign(req)
+    const res = await fetch(signedReq)
+
+    if (!res.ok) {
+      const err = await res.text()
+      return Response.json({ status: 'processing', message: `Status check error: HTTP ${res.status}: ${err.slice(0, 100)}` })
+    }
+
+    const statusData = await res.json() as {
+      status: string
+      failureMessage?: string
+      outputDataConfig?: { s3OutputDataConfig?: { s3Uri: string } }
+    }
+
+    if (statusData.status === 'Completed') {
+      const s3Uri = statusData.outputDataConfig?.s3OutputDataConfig?.s3Uri || ''
+      const match = s3Uri.match(/s3:\/\/[^/]+\/(.+)/)
+      const outputKey = match ? match[1] : ''
+      const videoUrl = outputKey ? `${WORKER_URL}/api/storage/file/${outputKey}/output.mp4` : ''
+      return Response.json({ status: 'done', video_url: videoUrl })
+    }
+
+    if (statusData.status === 'Failed') {
+      return Response.json({ status: 'error', message: statusData.failureMessage || 'Video generation failed' })
+    }
+
+    return Response.json({ status: 'processing' })
+  }
+
+  // Otherwise it's a KV short-key (old flow: generateVideo), delegate to legacy handler
+  const url = new URL(request.url)
+  return handleVideoRequest(request, env, url, {} as ExecutionContext, creds)
+}
+
 export async function handleVideoRequest(
   request: Request,
   env: Env,

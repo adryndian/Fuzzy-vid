@@ -75,11 +75,24 @@ export default {
         response = await handleBrainRequest(request, env, url, ctx, creds)
       }
       // Image routes
+      else if (path === '/api/image/enhance-prompt') {
+        const { handleEnhancePrompt } = await import('./image')
+        response = await handleEnhancePrompt(request, env, creds)
+      }
       else if (path.startsWith('/api/image/')) {
         const { handleImageRequest } = await import('./image')
         response = await handleImageRequest(request, env, url, ctx, creds)
       }
       // Video routes
+      else if (path === '/api/video/start') {
+        const { handleVideoStart } = await import('./video')
+        response = await handleVideoStart(request, env, url, ctx, creds)
+      }
+      else if (path.startsWith('/api/video/status/')) {
+        const jobId = decodeURIComponent(path.replace('/api/video/status/', ''))
+        const { handleVideoStatus } = await import('./video')
+        response = await handleVideoStatus(request, env, jobId, creds)
+      }
       else if (path.startsWith('/api/video/')) {
         const { handleVideoRequest } = await import('./video')
         response = await handleVideoRequest(request, env, url, ctx, creds)
