@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import type { VideoPromptData } from '../types/schema'
 
 export const api = {
   get: async (path: string) => {
@@ -149,6 +150,28 @@ export async function rewriteVO(params: {
     body: JSON.stringify(params),
   })
   if (!res.ok) throw new Error('VO rewrite failed')
+  return res.json()
+}
+
+export async function regenerateVideoPrompt(params: {
+  image_prompt: string
+  enhanced_prompt?: string
+  mood: string
+  camera_angle: string
+  scene_type: string
+  duration_seconds: number
+  narration: string
+  art_style: string
+  aspect_ratio: string
+  scene_number: number
+  brain_model?: string
+}): Promise<{ video_prompt: VideoPromptData }> {
+  const res = await fetch(`${WORKER_URL}/api/brain/regenerate-video-prompt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) throw new Error('Video prompt regeneration failed')
   return res.json()
 }
 

@@ -32,6 +32,18 @@ STRICT RULES TO PREVENT HALLUCINATION:
 - NEVER add characters or elements not mentioned in the story
 - If unsure about a visual detail, describe it generically
 
+VIDEO PROMPT RULES:
+- video_prompt describes MOTION and ACTION, not static appearance
+- It must be coherent with image_prompt (same scene, same subject)
+- motion: camera movement (dolly, pan, tilt, zoom, static, handheld)
+- subject_action: what subjects/objects are doing
+- atmosphere: environmental motion (wind, particles, light changes)
+- camera: shot type + movement style
+- pacing: slow / medium / fast
+- full_prompt: 1-2 sentence combined description, max 200 chars,
+  optimized for Nova Reel / Wan2.1 i2v models
+- full_prompt must START with camera movement, then subject
+
 OUTPUT RULES:
 - Return ONLY valid JSON. No markdown. No backticks. No explanation.
 - Start your response with { and end with }
@@ -50,6 +62,14 @@ OUTPUT RULES:
       "duration_seconds": 6,
       "char_limit": ${getVoCharLimit(avgDuration, language)},
       "image_prompt": "string — always in English",
+      "video_prompt": {
+        "motion": "slow dolly forward",
+        "subject_action": "merchant hands arranging colorful spices",
+        "atmosphere": "dust particles floating in light shafts, fabric rippling",
+        "camera": "steady cam, slight upward tilt",
+        "pacing": "slow",
+        "full_prompt": "Camera slowly dollies forward through ancient spice market, merchant hands arranging spices, golden dust particles drift through warm shafts of light"
+      },
       "text_id": "string — Bahasa Indonesia narration",
       "text_en": "string — English narration",
       "mood": "string",
@@ -290,6 +310,125 @@ export async function handleBrainRequest(
         console.error('Error in brain handler:', error);
         return new Response(JSON.stringify({ error: 'Internal Server Error', message: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+}
+
+export async function handleRegenerateVideoPrompt(
+  request: Request,
+  _env: Env,
+  creds: import('./index').Credentials
+): Promise<Response> {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key, X-Brain-Region, X-Dashscope-Api-Key',
+  }
+
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders })
+  }
+
+  const body = await request.json() as {
+    image_prompt: string
+    enhanced_prompt?: string
+    mood: string
+    camera_angle: string
+    scene_type: string
+    duration_seconds: number
+    narration: string
+    art_style: string
+    aspect_ratio: string
+    scene_number: number
+    brain_model?: string
+  }
+
+  const systemPrompt = `You are an expert cinematographer and video director.
+Generate a structured video_prompt object for a single scene in a short-form video.
+Return ONLY valid JSON. No markdown. No backticks. No explanation.
+Start your response with { and end with }.`
+
+  const userPrompt = `Scene ${body.scene_number} details:
+Image Prompt: ${body.image_prompt}
+${body.enhanced_prompt ? `Enhanced Image Prompt: ${body.enhanced_prompt}` : ''}
+Mood: ${body.mood}
+Camera Angle: ${body.camera_angle}
+Scene Type: ${body.scene_type}
+Duration: ${body.duration_seconds} seconds
+Narration: "${body.narration}"
+Art Style: ${body.art_style}
+Aspect Ratio: ${body.aspect_ratio}
+
+Generate a video_prompt JSON for this scene. full_prompt must start with camera movement, max 200 chars, optimized for Nova Reel / Wan2.1 i2v.
+Return ONLY this JSON structure:
+{
+  "video_prompt": {
+    "motion": "camera movement type",
+    "subject_action": "what subjects are doing",
+    "atmosphere": "environmental motion elements",
+    "camera": "shot type and movement style",
+    "pacing": "slow|medium|fast",
+    "full_prompt": "Camera [movement], [subject action], [atmosphere]"
+  }
+}`
+
+  const brainModel = body.brain_model || 'claude_sonnet'
+
+  const dashscopeModels: Record<string, string> = {
+    qwen3_max: 'qwen3-max',
+    qwen_plus: 'qwen-plus',
+    qwen_flash: 'qwen-flash',
+    qwen_turbo: 'qwen-turbo',
+    qwq_plus: 'qwq-plus',
+  }
+
+  let responseText: string
+
+  if (dashscopeModels[brainModel]) {
+    if (!creds.dashscopeApiKey) {
+      return Response.json({ error: 'Missing Dashscope API key' }, { status: 400, headers: corsHeaders })
+    }
+    const res = await fetch('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${creds.dashscopeApiKey}`,
+      },
+      body: JSON.stringify({
+        model: dashscopeModels[brainModel],
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        max_tokens: 400,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      return Response.json({ error: `Dashscope error: ${err}` }, { status: 500, headers: corsHeaders })
+    }
+    const data = await res.json() as any
+    responseText = data.choices[0].message.content
+  } else {
+    responseText = await callBedrock(
+      creds,
+      'us.anthropic.claude-sonnet-4-6',
+      userPrompt,
+      systemPrompt
+    )
+  }
+
+  let jsonText = responseText.trim()
+  const fenced = jsonText.match(/^```(?:json)?\s*([\s\S]*?)```\s*$/)
+  if (fenced) jsonText = fenced[1].trim()
+
+  try {
+    const parsed = JSON.parse(jsonText)
+    return Response.json(parsed, { headers: corsHeaders })
+  } catch {
+    return Response.json(
+      { error: 'Invalid JSON from AI', raw: jsonText.slice(0, 200) },
+      { status: 500, headers: corsHeaders }
+    )
+  }
 }
 
 export async function handleRewriteVO(

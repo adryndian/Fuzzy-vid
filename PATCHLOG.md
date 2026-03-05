@@ -2,6 +2,28 @@
 
 ---
 
+## v2.5 — 2026-03-05
+
+**Feat: smart video prompt per scene + interactive generation animations**
+
+### Changes
+- **Brain generates `video_prompt` per scene** — each scene in the storyboard JSON now includes a structured `video_prompt` object: `motion`, `subject_action`, `atmosphere`, `camera`, `pacing`, `full_prompt`.
+- **`full_prompt` used for video generation** — `handleGenerateVideo` now uses `customVideoPrompt || videoPrompt.full_prompt || editedPrompts || image_prompt` priority chain (both Dashscope and Nova Reel branches).
+- **Regenerate Video Prompt per scene** — new endpoint `POST /api/brain/regenerate-video-prompt` supports both Bedrock (Claude Sonnet 4.6) and Dashscope Qwen models. Button in the collapsible Video Prompt section.
+- **Video Prompt section UI** — collapsible panel per scene (default collapsed). Expanded: Text/JSON tab toggle, motion/pacing/camera breakdown pills, subject action + atmosphere display, editable `full_prompt` textarea (200 char max + counter), Regenerate + Reset buttons.
+- **Image shimmer placeholder** — animated gradient shimmer with pulsing 🖼️ icon and progress bar shown while image is generating.
+- **Animated video generating indicator** — film-strip progress bars (poll-driven), spinning 🎬 icon, elapsed time display (`~Xs elapsed`), replaces plain text indicator.
+- **CSS keyframes injected once on mount** — `shimmer`, `pulse-ring`, `spin`, `float-up`, `progress-bar`, `gradient-flow`.
+- **`VideoPromptData` type** — added to `src/types/schema.ts`; `SceneAssets` extended with `videoPrompt?` and `customVideoPrompt?`.
+
+### New Endpoint
+`POST /api/brain/regenerate-video-prompt` — regenerates `video_prompt` for a single scene using brain model (Bedrock Claude or Qwen). Accepts: `image_prompt`, `enhanced_prompt?`, `mood`, `camera_angle`, `scene_type`, `duration_seconds`, `narration`, `art_style`, `aspect_ratio`, `scene_number`, `brain_model?`.
+
+### Files Changed
+`worker/brain.ts` · `worker/index.ts` · `src/lib/api.ts` · `src/types/schema.ts` · `src/pages/Storyboard.tsx` · `CLAUDE.md` · `GEMINI.md`
+
+---
+
 ## v2.4 — 2026-03-05
 
 **Feat: add qwen-image-2.0-pro and qwen-image-2.0 as primary Dashscope image models**

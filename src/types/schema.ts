@@ -41,6 +41,15 @@ export interface AudioHistoryItem {
   timestamp: string
 }
 
+export interface VideoPromptData {
+  motion: string
+  subject_action: string
+  atmosphere: string
+  camera: string
+  pacing: string
+  full_prompt: string
+}
+
 export interface SceneAssets {
   imageUrl?: string
   imageStatus: GenerationStatus
@@ -50,6 +59,8 @@ export interface SceneAssets {
   videoJobId?: string
   videoStatus: GenerationStatus
   videoError?: string
+  videoPrompt?: VideoPromptData
+  customVideoPrompt?: string
   audioUrl?: string
   audioStatus: GenerationStatus
   audioError?: string

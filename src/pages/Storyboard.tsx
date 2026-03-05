@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import type { SceneAssets, SceneAssetsMap, GenerationStatus, AudioHistoryItem } from '../types/schema'
+import type { SceneAssets, SceneAssetsMap, GenerationStatus, AudioHistoryItem, VideoPromptData } from '../types/schema'
 import { defaultSceneAssets, saveVideoJob, loadVideoJob, clearVideoJob, redistributeDurations } from '../types/schema'
-import { generateImage, generateAudio, checkVideoStatus, startVideoJob, enhancePrompt, rewriteVO, getApiHeaders, WORKER_URL } from '../lib/api'
+import { generateImage, generateAudio, checkVideoStatus, startVideoJob, enhancePrompt, rewriteVO, regenerateVideoPrompt, getApiHeaders, WORKER_URL } from '../lib/api'
 import { useHistoryStore } from '../store/historyStore'
 import { useCostStore } from '../store/costStore'
 import { useStoryboardSessionStore } from '../store/storyboardSessionStore'
@@ -103,6 +103,11 @@ export function Storyboard() {
   const [videoSeed, setVideoSeed] = useState<Record<number, number | undefined>>({})
   const [promptExtend, setPromptExtend] = useState<Record<number, boolean>>({})
 
+  // Video prompt UI state
+  const [videoPromptExpanded, setVideoPromptExpanded] = useState<Record<number, boolean>>({})
+  const [videoPromptView, setVideoPromptView] = useState<Record<number, 'text' | 'json'>>({})
+  const [regenVideoPrompt, setRegenVideoPrompt] = useState<Record<number, boolean>>({})
+
   // Desktop layout state
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' && window.innerWidth >= 768)
   const [activeScene, setActiveScene] = useState<number>(1)
@@ -110,6 +115,42 @@ export function Storyboard() {
     const handleResize = () => setIsDesktop(window.innerWidth >= 768)
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Inject CSS animations once on mount
+  useEffect(() => {
+    if (document.getElementById('fuzzy-animations')) return
+    const style = document.createElement('style')
+    style.id = 'fuzzy-animations'
+    style.textContent = `
+      @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      @keyframes pulse-ring {
+        0% { opacity: 0.6; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.1); }
+        100% { opacity: 0.6; transform: scale(1); }
+      }
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes float-up {
+        0% { opacity: 0; transform: translateY(4px); }
+        100% { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes progress-bar {
+        0% { width: 0%; }
+        100% { width: 90%; }
+      }
+      @keyframes gradient-flow {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+    `
+    document.head.appendChild(style)
   }, [])
 
   // Page-level dismissable toast
@@ -277,6 +318,17 @@ export function Storyboard() {
       const initDurations: Record<number, number> = {}
       scenes.forEach((_, i) => { initDurations[i + 1] = Math.max(2, Math.min(6, Math.round(60 / scenes.length))) })
       setSceneDurations(initDurations)
+      // Pre-populate video prompts from brain-generated JSON
+      scenes.forEach((scene) => {
+        const sceneNum = scene.scene_number as number
+        const brainVideoPrompt = scene.video_prompt as VideoPromptData | undefined
+        if (brainVideoPrompt && sid) {
+          updateAssetInStore(sid, sceneNum, {
+            videoPrompt: brainVideoPrompt,
+            customVideoPrompt: brainVideoPrompt.full_prompt,
+          })
+        }
+      })
     } catch { navigate('/') }
   }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -557,7 +609,10 @@ export function Storyboard() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
           body: JSON.stringify({
-            prompt: editedPrompts[sceneNum] ?? (scene.image_prompt as string),
+            prompt: sceneAsset?.customVideoPrompt
+              || sceneAsset?.videoPrompt?.full_prompt
+              || editedPrompts[sceneNum]
+              || (scene.image_prompt as string),
             image_url: sceneAsset?.imageUrl,
             video_model: selectedVideoModel.id,
             aspect_ratio: aspectRatio,
@@ -581,7 +636,10 @@ export function Storyboard() {
         }
         const result = await startVideoJob({
           image_url: sceneAsset.imageUrl,
-          prompt: editedPrompts[sceneNum] ?? (scene.image_prompt as string),
+          prompt: sceneAsset?.customVideoPrompt
+            || sceneAsset?.videoPrompt?.full_prompt
+            || editedPrompts[sceneNum]
+            || (scene.image_prompt as string),
           scene_number: sceneNum,
           project_id: projectId,
           aspect_ratio: aspectRatio,
@@ -638,6 +696,39 @@ export function Storyboard() {
       setPageToast({ msg: `Rewrite VO failed: ${msg}`, type: 'error' })
     } finally {
       setRewritingVO(prev => ({ ...prev, [sceneNum]: false }))
+    }
+  }
+
+  const handleRegenerateVideoPromptScene = async (scene: Record<string, unknown>, sceneNum: number) => {
+    setRegenVideoPrompt(prev => ({ ...prev, [sceneNum]: true }))
+    const narration = customVO[sceneNum]
+      || (language === 'id' ? (scene.text_id as string) : (scene.text_en as string)) || ''
+    const data = storyboard as Record<string, unknown>
+    const artStyle = (data.art_style as string) || 'cinematic_realistic'
+    const aspectRatio = (data.aspect_ratio as string) || '9_16'
+    try {
+      const result = await regenerateVideoPrompt({
+        image_prompt: scene.image_prompt as string,
+        enhanced_prompt: storedAssets[sceneNum]?.enhancedPrompt,
+        mood: scene.mood as string,
+        camera_angle: scene.camera_angle as string,
+        scene_type: scene.scene_type as string,
+        duration_seconds: sceneDurations[sceneNum] || 4,
+        narration,
+        art_style: artStyle,
+        aspect_ratio: aspectRatio,
+        scene_number: sceneNum,
+        brain_model: (storyboard as any)?.brain_model,
+      })
+      updateAsset(sceneNum, {
+        videoPrompt: result.video_prompt,
+        customVideoPrompt: result.video_prompt.full_prompt,
+      })
+    } catch (e: any) {
+      console.error('Video prompt regen failed:', e)
+      setPageToast({ msg: `Video prompt regen failed: ${e.message}`, type: 'error' })
+    } finally {
+      setRegenVideoPrompt(prev => ({ ...prev, [sceneNum]: false }))
     }
   }
 
@@ -1090,6 +1181,38 @@ export function Storyboard() {
                 {statusBadge(sceneAsset.imageStatus, 'Image')}
               </div>
 
+              {sceneAsset.imageStatus === 'generating' && !hasImage && (() => {
+                const ar = (storyboard.aspect_ratio as string) || '9_16'
+                const ratioMap: Record<string, string> = {
+                  '9_16': '177.77%', '16_9': '56.25%', '1_1': '100%', '4_5': '125%',
+                }
+                return (
+                  <div style={{
+                    width: '100%',
+                    paddingBottom: ratioMap[ar] || '177.77%',
+                    position: 'relative',
+                    borderRadius: '9px',
+                    overflow: 'hidden',
+                    background: 'linear-gradient(90deg, rgba(118,118,128,0.1) 25%, rgba(118,118,128,0.2) 50%, rgba(118,118,128,0.1) 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.5s infinite linear',
+                    marginBottom: '6px',
+                  }}>
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center', gap: '8px',
+                    }}>
+                      <span style={{ fontSize: '24px', animation: 'pulse-ring 1.5s infinite', display: 'block' }}>🖼️</span>
+                      <span style={{ color: 'rgba(60,60,67,0.6)', fontSize: '11px', fontWeight: 600 }}>Generating image...</span>
+                      <div style={{ width: '60%', height: '3px', background: 'rgba(118,118,128,0.15)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', borderRadius: '2px', background: 'linear-gradient(90deg, #ff6b35, #ff8c00)', animation: 'progress-bar 3s ease-out forwards' }} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
               {hasImage && (
                 <>
                   <div style={{ position: 'relative', cursor: 'pointer', marginBottom: '6px' }}
@@ -1189,6 +1312,172 @@ export function Storyboard() {
               )}
             </div>
 
+            {/* VIDEO PROMPT SECTION */}
+            {(() => {
+              const videoPrompt = storedAssets[sceneNum]?.videoPrompt
+              const customVideoPromptVal = storedAssets[sceneNum]?.customVideoPrompt || ''
+              const hasVideoPrompt = !!videoPrompt
+              const isExpanded = videoPromptExpanded[sceneNum] || false
+              const view = videoPromptView[sceneNum] || 'text'
+              const isRegening = regenVideoPrompt[sceneNum] || false
+              return (
+                <div style={{
+                  background: 'rgba(0,122,255,0.04)',
+                  border: '0.5px solid rgba(0,122,255,0.12)',
+                  borderRadius: '16px',
+                  marginBottom: '8px',
+                  overflow: 'hidden',
+                }}>
+                  <div
+                    onClick={() => setVideoPromptExpanded(prev => ({ ...prev, [sceneNum]: !prev[sceneNum] }))}
+                    style={{
+                      padding: '8px 10px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '12px' }}>🎥</span>
+                      <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Video Prompt</span>
+                      {hasVideoPrompt ? (
+                        <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'rgba(52,199,89,0.12)', color: '#34c759', fontSize: '10px', fontWeight: 600 }}>✓ Ready</span>
+                      ) : (
+                        <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'rgba(118,118,128,0.1)', color: 'rgba(60,60,67,0.4)', fontSize: '10px' }}>Using image prompt</span>
+                      )}
+                    </div>
+                    <span style={{ color: 'rgba(60,60,67,0.4)', fontSize: '11px' }}>{isExpanded ? '▲' : '▼'}</span>
+                  </div>
+
+                  {isExpanded && (
+                    <div style={{ padding: '0 10px 10px', borderTop: '0.5px solid rgba(0,122,255,0.08)' }}>
+                      {/* Text/JSON tab toggle */}
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '8px', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', borderRadius: '8px', overflow: 'hidden', border: '0.5px solid rgba(0,0,0,0.1)' }}>
+                          <button
+                            onClick={() => setVideoPromptView(prev => ({ ...prev, [sceneNum]: 'text' }))}
+                            style={{
+                              padding: '2px 7px', border: 'none',
+                              background: view === 'text' ? 'rgba(0,122,255,0.12)' : 'transparent',
+                              color: view === 'text' ? '#007aff' : 'rgba(60,60,67,0.4)',
+                              fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                            }}
+                          >📝 Text</button>
+                          <button
+                            onClick={() => setVideoPromptView(prev => ({ ...prev, [sceneNum]: 'json' }))}
+                            style={{
+                              padding: '2px 7px', border: 'none',
+                              background: view === 'json' ? 'rgba(0,122,255,0.12)' : 'transparent',
+                              color: view === 'json' ? '#007aff' : 'rgba(60,60,67,0.4)',
+                              fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                            }}
+                          >{'{ }'} JSON</button>
+                        </div>
+                      </div>
+
+                      {view === 'text' ? (
+                        <>
+                          {videoPrompt && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
+                              {([
+                                { label: 'Motion', value: videoPrompt.motion, color: '#007aff' },
+                                { label: 'Pacing', value: videoPrompt.pacing, color: '#af52de' },
+                                { label: 'Camera', value: videoPrompt.camera, color: '#ff6b35' },
+                              ] as { label: string; value: string; color: string }[]).map(({ label, value, color }) => value && (
+                                <span key={label} style={{
+                                  padding: '2px 7px', borderRadius: '10px',
+                                  background: `${color}18`,
+                                  border: `0.5px solid ${color}33`,
+                                  color, fontSize: '10px',
+                                }}>
+                                  {label}: {value}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {videoPrompt && videoPrompt.subject_action && (
+                            <div style={{ marginBottom: '6px' }}>
+                              <div style={{ color: 'rgba(60,60,67,0.4)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Subject Action</div>
+                              <div style={{ color: 'rgba(60,60,67,0.65)', fontSize: '11px', lineHeight: '1.4' }}>{videoPrompt.subject_action}</div>
+                            </div>
+                          )}
+                          {videoPrompt && videoPrompt.atmosphere && (
+                            <div style={{ marginBottom: '8px' }}>
+                              <div style={{ color: 'rgba(60,60,67,0.4)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Atmosphere</div>
+                              <div style={{ color: 'rgba(60,60,67,0.65)', fontSize: '11px', lineHeight: '1.4' }}>{videoPrompt.atmosphere}</div>
+                            </div>
+                          )}
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                              <span style={{ color: 'rgba(60,60,67,0.4)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Full Prompt (editable)</span>
+                              <span style={{ fontSize: '10px', fontWeight: 600, color: (customVideoPromptVal.length) > 200 ? '#ff3b30' : 'rgba(60,60,67,0.4)' }}>
+                                {customVideoPromptVal.length}/200
+                              </span>
+                            </div>
+                            <textarea
+                              value={customVideoPromptVal}
+                              onChange={e => updateAsset(sceneNum, { customVideoPrompt: e.target.value })}
+                              maxLength={250}
+                              rows={3}
+                              placeholder={videoPrompt?.full_prompt || 'Camera movement, subject action, atmosphere...'}
+                              style={{
+                                width: '100%',
+                                background: 'rgba(118,118,128,0.07)',
+                                border: '0.5px solid rgba(0,122,255,0.2)',
+                                borderRadius: '10px',
+                                padding: '7px 9px',
+                                color: '#1d1d1f', fontSize: '12px', lineHeight: '1.5',
+                                resize: 'vertical', outline: 'none',
+                                fontFamily: 'inherit', boxSizing: 'border-box',
+                              }}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <pre style={{
+                          background: 'rgba(0,0,0,0.04)',
+                          border: '0.5px solid rgba(0,0,0,0.08)',
+                          borderRadius: '10px', padding: '9px',
+                          fontSize: '10px', color: '#1d1d1f', lineHeight: '1.6',
+                          overflow: 'auto', margin: 0,
+                          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                        }}>
+                          {JSON.stringify(videoPrompt || { message: 'No video prompt generated yet' }, null, 2)}
+                        </pre>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => handleRegenerateVideoPromptScene(scene, sceneNum)}
+                          disabled={isRegening}
+                          style={{
+                            padding: '5px 10px', borderRadius: '10px',
+                            background: 'rgba(0,122,255,0.12)',
+                            border: '0.5px solid rgba(0,122,255,0.25)',
+                            color: '#007aff', fontSize: '11px', fontWeight: 600,
+                            cursor: isRegening ? 'not-allowed' : 'pointer',
+                            opacity: isRegening ? 0.6 : 1,
+                          }}
+                        >
+                          {isRegening ? '⏳ Regenerating...' : '🔄 Regenerate'}
+                        </button>
+                        {videoPrompt && customVideoPromptVal !== videoPrompt.full_prompt && (
+                          <button
+                            onClick={() => updateAsset(sceneNum, { customVideoPrompt: videoPrompt.full_prompt })}
+                            style={{
+                              padding: '5px 10px', borderRadius: '10px',
+                              background: 'rgba(255,59,48,0.08)',
+                              border: '0.5px solid rgba(255,59,48,0.2)',
+                              color: '#ff3b30', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                            }}
+                          >Reset</button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
             {/* VIDEO SECTION */}
             {(() => {
               const curVidModelId = videoModel[sceneNum] || defaultVideoModel
@@ -1254,39 +1543,50 @@ export function Storyboard() {
                 </>
               )}
 
-              {isVideoPolling && !hasVideo && (
+              {(isVideoPolling || (sceneAsset.videoStatus === 'generating' && !hasVideo)) && !hasVideo && (
                 <div style={{
-                  padding: '8px',
-                  background: 'rgba(0,122,255,0.06)',
+                  padding: '10px',
+                  background: 'rgba(0,122,255,0.05)',
                   border: '0.5px solid rgba(0,122,255,0.15)',
                   borderRadius: '12px',
                   marginBottom: '8px',
+                  animation: 'float-up 0.3s ease-out',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                    <div style={{ color: '#007aff', fontSize: '12px', fontWeight: 600 }}>
-                      Generating video...
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '16px', animation: 'spin 3s linear infinite', display: 'inline-block' }}>🎬</span>
+                      <div>
+                        <div style={{ color: '#007aff', fontSize: '12px', fontWeight: 600 }}>Generating video...</div>
+                        <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>
+                          Takes 2-5 min · {pollCount > 0 ? `~${pollCount * 8}s elapsed` : 'starting...'}
+                        </div>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => handleCancelVideo(sceneNum)}
-                      style={{
-                        padding: '2px 8px', borderRadius: '8px',
-                        border: '0.5px solid rgba(255,59,48,0.3)',
-                        background: 'rgba(255,59,48,0.08)',
-                        color: '#ff3b30',
-                        fontSize: '10px', fontWeight: 600, cursor: 'pointer',
-                      }}
-                    >
-                      Cancel
-                    </button>
+                    {isVideoPolling && (
+                      <button
+                        onClick={() => handleCancelVideo(sceneNum)}
+                        style={{
+                          padding: '3px 8px', borderRadius: '8px',
+                          border: '0.5px solid rgba(255,59,48,0.3)',
+                          background: 'rgba(255,59,48,0.08)',
+                          color: '#ff3b30',
+                          fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                        }}
+                      >Cancel</button>
+                    )}
                   </div>
-                  <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px' }}>
-                    Nova Reel takes 2-5 minutes. Polling every 8s.
+                  <div style={{ display: 'flex', gap: '3px', marginBottom: '5px' }}>
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <div key={i} style={{
+                        flex: 1, height: '5px', borderRadius: '2px',
+                        background: i < (pollCount % 9) ? '#007aff' : 'rgba(0,122,255,0.15)',
+                        transition: 'background 0.3s ease',
+                      }} />
+                    ))}
                   </div>
-                  {pollCount > 0 && (
-                    <div style={{ color: 'rgba(60,60,67,0.35)', fontSize: '10px', marginTop: '3px' }}>
-                      Checked {pollCount} time{pollCount !== 1 ? 's' : ''}
-                    </div>
-                  )}
+                  <div style={{ color: 'rgba(60,60,67,0.4)', fontSize: '10px' }}>
+                    Polling every 8s{pollCount > 0 ? ` · checked ${pollCount}×` : ''}
+                  </div>
                 </div>
               )}
 

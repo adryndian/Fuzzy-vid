@@ -176,6 +176,7 @@ Size format uses * separator (NOT x):
 GET  /api/health
 POST /api/brain/generate
 POST /api/brain/rewrite-vo
+POST /api/brain/regenerate-video-prompt    ← regenerate video_prompt for single scene
 POST /api/image/generate
 POST /api/image/enhance-prompt
 POST /api/video/start
@@ -303,6 +304,9 @@ wrangler tail          ← live Worker logs
 1. Dashscope URLs expire 24h — always re-upload to R2
 1. Nova Reel: us-east-1 ONLY | SD 3.5: us-west-2 ONLY
 1. After every change: npm run build → 0 errors required
+11. video_prompt.full_prompt max 200 chars — starts with camera movement
+12. customVideoPrompt overrides videoPrompt.full_prompt when sending to Nova Reel / Wan2.1
+13. Video Prompt section default: collapsed (videoPromptExpanded state)
 
 -----
 

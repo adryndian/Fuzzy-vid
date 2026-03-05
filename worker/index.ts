@@ -78,6 +78,10 @@ export default {
         const { handleRewriteVO } = await import('./brain')
         response = await handleRewriteVO(request, env, creds)
       }
+      else if (path === '/api/brain/regenerate-video-prompt') {
+        const { handleRegenerateVideoPrompt } = await import('./brain')
+        response = await handleRegenerateVideoPrompt(request, env, creds)
+      }
       else if (path === '/api/brain/generate' || path.startsWith('/api/brain/')) {
         const { handleBrainRequest } = await import('./brain')
         response = await handleBrainRequest(request, env, url, ctx, creds)
