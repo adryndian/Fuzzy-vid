@@ -106,7 +106,10 @@ amazon.nova-reel-v1:0  → async, 2-6s, polling via GetAsyncInvoke
 
 ### AWS Bedrock — Audio
 
-AWS Polly — voice: Marlene (id), Joanna (en)
+AWS Polly voices:
+  id-ID: Marlene, Andika (neural)
+  en-US: Ruth, Danielle (generative); Joanna, Kimberly, Salli, Kendra, Matthew, Joey, Stephen, Gregory (neural)
+Default: language=id → Marlene, language=en → Ruth
 
 ### Dashscope Singapore — Brain (OpenAI-compatible)
 
@@ -118,12 +121,12 @@ qwq-plus      ← deep reasoning
 
 ### Dashscope Singapore — Image (ALL async, use X-DashScope-Async: enable)
 
-wanx-v1  ← international endpoint (dashscope-intl.aliyuncs.com), standard wanx format
+wanx2.1-t2i-turbo  ← fast, standard wanx format: input: { prompt }
+wanx2.1-t2i-plus   ← best quality, standard wanx format: input: { prompt }
+wan2.6-image        ← latest, messages[] format: input: { messages: [{ role: 'user', content: [{ text: prompt }] }] }
 
-REMOVED (invalid on international endpoint — "Model not exist"):
-wanx2.1-t2i-turbo  ← China endpoint only, NOT available on dashscope-intl
-wanx2.1-t2i-plus   ← China endpoint only, NOT available on dashscope-intl
-wan2.6-image        ← wrong endpoint for this model ("url error")
+REMOVED (no longer valid):
+wanx-v1            ← was never valid on dashscope-intl endpoint
 wanx2.1-i2i        ← different endpoint, not implemented
 
 ### Dashscope Singapore — Video (ALL async)
@@ -365,13 +368,18 @@ Error: “signature does not match” / canonical URI mismatch
 Fix: aws-signature.ts → buildCanonicalUri must use encodeURIComponent(segment) WITHOUT .replace(/%3A/gi, ':')
      AWS SigV4 requires “:” to be “%3A” in the canonical URI, not a literal colon.
 
-Error: “Model not exist” from Dashscope
-Fix: Check model ID against VALID list above.
-     wanx2.1-t2i-turbo / wanx2.1-t2i-plus are China-endpoint-only. Use wanx-v1 for international.
+Error: Nova Reel “UnknownOperationException” from GetAsyncInvoke
+Fix: video.ts arnForUrl must be encodeURIComponent(arn) WITHOUT .replace(/%3A/gi, ':')
+     AWS needs fully-encoded ARN path to route to GetAsyncInvoke correctly.
+     NOTE: this is different from aws-signature.ts canonical URI (same rule, both need %3A).
+
+Error: “Model not exist” from Dashscope image
+Fix: Use wanx2.1-t2i-turbo, wanx2.1-t2i-plus, or wan2.6-image.
+     wanx-v1 is NOT valid on dashscope-intl.aliyuncs.com.
+     wan2.6-image uses messages[] format in input (not { prompt }).
 
 Error: “url error, please check url” from Dashscope image
 Fix: Remove img_url from t2i requests. Only i2v models need img_url.
-     Also: wan2.6-image uses a different endpoint — not supported, use wanx-v1 instead.
 
 Error: “API Usage Billing” in Claude Code header
 Fix: This is normal in v2.x — check ~/.claude/settings.json has env.CLAUDE_CODE_USE_BEDROCK = “1”
