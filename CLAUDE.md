@@ -121,13 +121,15 @@ qwq-plus      ← deep reasoning
 
 ### Dashscope Singapore — Image (ALL async, use X-DashScope-Async: enable)
 
-wanx2.1-t2i-turbo  ← fast, standard wanx format: input: { prompt }
-wanx2.1-t2i-plus   ← best quality, standard wanx format: input: { prompt }
-wan2.6-image        ← latest, messages[] format: input: { messages: [{ role: 'user', content: [{ text: prompt }] }] }
+qwen-image-2.0-pro  ← best quality, standard format: input: { prompt }
+qwen-image-2.0      ← balanced, standard format: input: { prompt }
+wan2.6-image        ← alt, messages[] format: input: { messages: [{ role: 'user', content: [{ text: prompt }] }] }
+wanx2.1-t2i-turbo  ← fast (legacy), standard format: input: { prompt }
 
 REMOVED (no longer valid):
 wanx-v1            ← was never valid on dashscope-intl endpoint
 wanx2.1-i2i        ← different endpoint, not implemented
+wanx2.1-t2i-plus   ← removed, replaced by qwen-image-2.0-pro
 
 ### Dashscope Singapore — Video (ALL async)
 
