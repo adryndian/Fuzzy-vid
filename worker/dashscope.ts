@@ -134,11 +134,11 @@ export async function handleDashscopeImageStart(
     model: body.image_model || 'wanx2.1-t2i-plus',
     input: {
       prompt: body.prompt,
-      negative_prompt: body.negative_prompt || 'blurry, low quality, distorted, watermark, text, ugly, deformed',
     },
     parameters: {
       size,
       n: 1,
+      negative_prompt: body.negative_prompt || 'blurry, low quality, distorted, watermark, text, ugly, deformed',
       prompt_extend: true,
       watermark: false,
     },
@@ -315,7 +315,7 @@ export async function handleDashscopeVideoStart(
     prompt: body.prompt,
   }
 
-  if (isImageToVideo && body.image_url) {
+  if (isImageToVideo && body.image_url && body.image_url.trim() !== '') {
     input.img_url = body.image_url
   }
 

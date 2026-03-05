@@ -27,6 +27,23 @@ const BRAIN_MODELS: { id: BrainModel; label: string; tag: 'AWS' | 'Qwen'; provid
 ]
 type ArtStyle = 'cinematic_realistic' | 'anime_stylized' | 'comic_book' | '3d_render' | 'oil_painting' | 'pixel_art'
 
+const IMAGE_MODELS = [
+  { id: 'nova_canvas',        label: 'Nova Canvas',     tag: 'AWS',  desc: 'Fast & consistent', provider: 'bedrock' },
+  { id: 'sd35',               label: 'SD 3.5 Large',    tag: 'AWS',  desc: 'Best quality',      provider: 'bedrock' },
+  { id: 'wanx2.1-t2i-plus',  label: 'Wanx 2.1 Plus',  tag: 'Qwen', desc: 'Best Qwen quality', provider: 'dashscope' },
+  { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo', tag: 'Qwen', desc: 'Fast Qwen',         provider: 'dashscope' },
+  { id: 'wan2.6-image',       label: 'Wan 2.6',         tag: 'Qwen', desc: 'Latest model',      provider: 'dashscope' },
+  { id: 'wanx-v1',            label: 'Wanx v1',         tag: 'Qwen', desc: 'Classic stable',    provider: 'dashscope' },
+] as const
+
+const VIDEO_MODELS_HOME = [
+  { id: 'nova_reel',         label: 'Nova Reel',        tag: 'AWS',  desc: 'Up to 6s',          provider: 'bedrock' },
+  { id: 'wan2.1-i2v-plus',  label: 'Wan2.1 I2V+',     tag: 'Qwen', desc: 'Image→Video best',  provider: 'dashscope' },
+  { id: 'wan2.1-i2v-turbo', label: 'Wan2.1 I2V',      tag: 'Qwen', desc: 'Image→Video fast',  provider: 'dashscope' },
+  { id: 'wan2.1-t2v-plus',  label: 'Wan2.1 T2V+',     tag: 'Qwen', desc: 'Text→Video best',   provider: 'dashscope' },
+  { id: 'wan2.1-t2v-turbo', label: 'Wan2.1 T2V',      tag: 'Qwen', desc: 'Text→Video fast',   provider: 'dashscope' },
+] as const
+
 const STEP_LABELS = [
   'Connecting to AI...',
   'Sending prompt...',
@@ -68,7 +85,8 @@ export function Home() {
   const [language, setLanguage] = useState<Language>('id')
   const [artStyle, setArtStyle] = useState<ArtStyle>('cinematic_realistic')
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9_16')
-  const [imageModel, setImageModel] = useState<'nova_canvas' | 'titan_v2'>('nova_canvas')
+  const [imageModel, setImageModel] = useState('nova_canvas')
+  const [videoModel, setVideoModel] = useState('nova_reel')
   const [audioModel, setAudioModel] = useState<'polly' | 'elevenlabs'>('polly')
   const [scenes, setScenes] = useState(5)
   const [totalDuration, setTotalDuration] = useState(60)
@@ -189,20 +207,22 @@ export function Home() {
 
       if (res.ok) {
         try {
-          JSON.parse(text) // validate
-          sessionStorage.setItem('storyboard_result', text)
-          sessionStorage.setItem('fuzzy_gen_imageModel', imageModel)
-          sessionStorage.setItem('fuzzy_gen_audioModel', audioModel)
-
-          const parsed = JSON.parse(text)
+          const parsed = JSON.parse(text) // validate + parse
           let storyData = parsed
           if (!storyData.scenes) {
             if (Array.isArray(parsed.storyboard?.scenes)) storyData = parsed.storyboard
             else if (Array.isArray(parsed.data?.scenes)) storyData = parsed.data
             else if (Array.isArray(parsed.project?.scenes)) storyData = parsed.project
           }
+          const storyboardWithMeta = { ...storyData, selected_image_model: imageModel, selected_video_model: videoModel }
+          const metaText = JSON.stringify(storyboardWithMeta)
+          sessionStorage.setItem('storyboard_result', metaText)
+          sessionStorage.setItem('fuzzy_gen_imageModel', imageModel)
+          sessionStorage.setItem('fuzzy_gen_videoModel', videoModel)
+          sessionStorage.setItem('fuzzy_gen_audioModel', audioModel)
+
           const sessionId = createSession({
-            rawJson: text,
+            rawJson: metaText,
             title: storyData.title || title,
             imageModel,
             audioEngine: audioModel,
@@ -560,14 +580,73 @@ export function Home() {
         {/* Image Model */}
         <div style={{ marginBottom: '14px' }}>
           <span style={labelStyle}>Image Model</span>
-          <select
-            value={imageModel}
-            onChange={e => setImageModel(e.target.value as 'nova_canvas' | 'titan_v2')}
-            style={dropdownStyle}
-          >
-            <option value="nova_canvas">Nova Canvas — Best Quality</option>
-            <option value="titan_v2">Titan V2 — Fast &amp; Cheap</option>
-          </select>
+          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+            <style>{`.model-pills::-webkit-scrollbar{display:none}`}</style>
+            {IMAGE_MODELS.map(m => (
+              <button
+                key={m.id}
+                className="model-pills"
+                onClick={() => setImageModel(m.id)}
+                style={{
+                  flexShrink: 0,
+                  padding: '6px 9px',
+                  borderRadius: '10px',
+                  border: imageModel === m.id ? '1.5px solid #007aff' : '0.5px solid rgba(0,0,0,0.1)',
+                  background: imageModel === m.id ? 'rgba(0,122,255,0.1)' : 'rgba(255,255,255,0.7)',
+                  cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', gap: '1px',
+                  textAlign: 'left',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{
+                    padding: '1px 4px', borderRadius: '4px',
+                    background: m.tag === 'Qwen' ? 'rgba(255,140,0,0.15)' : 'rgba(0,122,255,0.12)',
+                    color: m.tag === 'Qwen' ? '#ff8c00' : '#007aff',
+                    fontSize: '8px', fontWeight: 700,
+                  }}>{m.tag}</span>
+                  <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>{m.label}</span>
+                </div>
+                <span style={{ color: 'rgba(60,60,67,0.45)', fontSize: '10px' }}>{m.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Video Model */}
+        <div style={{ marginBottom: '14px' }}>
+          <span style={labelStyle}>Video Model</span>
+          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+            {VIDEO_MODELS_HOME.map(m => (
+              <button
+                key={m.id}
+                onClick={() => setVideoModel(m.id)}
+                style={{
+                  flexShrink: 0,
+                  padding: '6px 9px',
+                  borderRadius: '10px',
+                  border: videoModel === m.id ? '1.5px solid #007aff' : '0.5px solid rgba(0,0,0,0.1)',
+                  background: videoModel === m.id ? 'rgba(0,122,255,0.1)' : 'rgba(255,255,255,0.7)',
+                  cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', gap: '1px',
+                  textAlign: 'left',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{
+                    padding: '1px 4px', borderRadius: '4px',
+                    background: m.tag === 'Qwen' ? 'rgba(255,140,0,0.15)' : 'rgba(0,122,255,0.12)',
+                    color: m.tag === 'Qwen' ? '#ff8c00' : '#007aff',
+                    fontSize: '8px', fontWeight: 700,
+                  }}>{m.tag}</span>
+                  <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>{m.label}</span>
+                </div>
+                <span style={{ color: 'rgba(60,60,67,0.45)', fontSize: '10px' }}>{m.desc}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Audio Engine */}
@@ -581,21 +660,6 @@ export function Home() {
             <option value="polly">AWS Polly — Low Cost</option>
             <option value="elevenlabs">ElevenLabs — Premium Voice</option>
           </select>
-        </div>
-
-        {/* Video Model Info */}
-        <div style={{
-          marginBottom: '14px',
-          padding: '7px 10px',
-          background: 'rgba(0,122,255,0.06)',
-          border: '0.5px solid rgba(0,122,255,0.12)',
-          borderRadius: '10px',
-          display: 'flex', alignItems: 'center', gap: '6px',
-        }}>
-          <span style={{ fontSize: '11px' }}>🎬</span>
-          <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px' }}>
-            Video: <span style={{ color: '#007aff', fontWeight: 600 }}>Nova Reel</span> (only available model)
-          </span>
         </div>
 
         {/* Total Duration */}

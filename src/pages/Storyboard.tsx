@@ -68,6 +68,7 @@ export function Storyboard() {
   const [rawJson, setRawJson] = useState('')
   const [imageModel, setImageModel] = useState<string>('nova_canvas')
   const [videoModel, setVideoModel] = useState<Record<number, string>>({})
+  const [defaultVideoModel, setDefaultVideoModel] = useState('nova_reel')
   const [audioEngine, setAudioEngine] = useState<'polly' | 'elevenlabs'>('polly')
   const [audioVoice, setAudioVoice] = useState('Ruth')
   const [language, setLanguage] = useState('id')
@@ -91,6 +92,15 @@ export function Storyboard() {
 
   // Poll counts for display
   const [videoPollDisplayCounts, setVideoPollDisplayCounts] = useState<Record<number, number>>({})
+
+  // Desktop layout state
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' && window.innerWidth >= 768)
+  const [activeScene, setActiveScene] = useState<number>(1)
+  useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Page-level dismissable toast
   const [pageToast, setPageToast] = useState<{msg: string, type: 'error'|'success'} | null>(null)
@@ -189,6 +199,8 @@ export function Storyboard() {
       const storedAudioModel = sessionStorage.getItem('fuzzy_gen_audioModel')
       const audModel = (storedAudioModel === 'polly' || storedAudioModel === 'elevenlabs')
         ? storedAudioModel : 'polly'
+      const storedVideoModel = sessionStorage.getItem('fuzzy_gen_videoModel')
+      if (storedVideoModel) setDefaultVideoModel(storedVideoModel)
 
       setImageModel(imgModel)
       setAudioEngine(audModel)
@@ -245,6 +257,7 @@ export function Storyboard() {
         return
       }
       setStoryboard(data)
+      if (data.selected_video_model) setDefaultVideoModel(data.selected_video_model as string)
       // Initialize scene durations evenly across 60s default
       const scenes = (data.scenes as Record<string, unknown>[]) || []
       const initDurations: Record<number, number> = {}
@@ -522,7 +535,7 @@ export function Storyboard() {
       const projectId = (data.project_id as string) || 'storyboard'
       const durationSeconds = sceneDurations[sceneNum] || 6
       const aspectRatio = (data.aspect_ratio as string) || '9_16'
-      const selectedVideoModel = VIDEO_MODELS.find(m => m.id === (videoModel[sceneNum] || 'nova_reel')) || VIDEO_MODELS[0]
+      const selectedVideoModel = VIDEO_MODELS.find(m => m.id === (videoModel[sceneNum] || defaultVideoModel)) || VIDEO_MODELS[0]
 
       if (selectedVideoModel.provider === 'dashscope') {
         // Async Dashscope video generation
@@ -758,6 +771,696 @@ export function Storyboard() {
     ? costEntries.filter(e => e.service === costFilter)
     : costEntries
 
+  // ─── Scene thumbnail row (desktop left column) ────────────
+  const renderSceneThumbnail = (scene: Record<string, unknown>) => {
+    const sceneNum = scene.scene_number as number
+    const sceneAsset: SceneAssets = storedAssets[sceneNum] || defaultSceneAssets()
+    const hasImage = sceneAsset.imageStatus === 'done' && sceneAsset.imageUrl
+    const hasVideo = sceneAsset.videoStatus === 'done' && sceneAsset.videoUrl
+    const hasAudio = sceneAsset.audioStatus === 'done' && sceneAsset.audioUrl
+    const isActive = activeScene === sceneNum
+    return (
+      <div
+        key={sceneNum}
+        onClick={() => setActiveScene(sceneNum)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '9px',
+          padding: '10px 12px',
+          cursor: 'pointer',
+          borderLeft: isActive ? '3px solid #007aff' : '3px solid transparent',
+          background: isActive ? 'rgba(0,122,255,0.06)' : 'transparent',
+          borderBottom: '0.5px solid rgba(0,0,0,0.05)',
+          transition: 'all 0.15s',
+        }}
+      >
+        <div style={{
+          width: '56px', height: '56px', borderRadius: '8px',
+          overflow: 'hidden', flexShrink: 0,
+          background: 'rgba(118,118,128,0.1)',
+        }}>
+          {hasImage ? (
+            <img src={sceneAsset.imageUrl!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ff6b35', fontSize: '18px', fontWeight: 700 }}>
+              {sceneNum}
+            </div>
+          )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ color: '#1d1d1f', fontSize: '13px', fontWeight: 600 }}>Scene {sceneNum}</div>
+          <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+            {(scene.scene_type as string || '').replace(/_/g, ' ')}
+          </div>
+          <div style={{ display: 'flex', gap: '3px', marginTop: '3px', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', opacity: hasImage ? 1 : 0.2 }}>🖼️</span>
+            <span style={{ fontSize: '11px', opacity: hasVideo ? 1 : 0.2 }}>🎬</span>
+            <span style={{ fontSize: '11px', opacity: hasAudio ? 1 : 0.2 }}>🎵</span>
+            <span style={{ color: 'rgba(60,60,67,0.4)', fontSize: '10px', marginLeft: '4px' }}>{sceneDurations[sceneNum] || 6}s</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Full scene card ──────────────────────────────────────
+  const renderSceneCard = (scene: Record<string, unknown>) => {
+    const sceneNum = scene.scene_number as number
+    const sceneAsset: SceneAssets = storedAssets[sceneNum] || defaultSceneAssets()
+    const narration = language === 'id'
+      ? (scene.text_id as string) || (scene.text_en as string)
+      : (scene.text_en as string) || (scene.text_id as string)
+    const hasImage = sceneAsset.imageStatus === 'done' && sceneAsset.imageUrl
+    const hasVideo = sceneAsset.videoStatus === 'done' && sceneAsset.videoUrl
+    const hasAudio = sceneAsset.audioStatus === 'done' && sceneAsset.audioUrl
+    const isVideoPolling = sceneAsset.videoStatus === 'generating' && !!sceneAsset.videoJobId
+    const pollCount = videoPollDisplayCounts[sceneNum] || 0
+    const isCollapsed = collapsedScenes.has(sceneNum)
+    const currentPrompt = editedPrompts[sceneNum] ?? (scene.image_prompt as string ?? '')
+
+    return (
+      <div key={sceneNum} style={isDesktop ? { ...glassCard, marginBottom: '16px' } : glassCard}>
+
+        {/* Scene Header */}
+        <div style={{
+          padding: '10px 11px 7px',
+          borderBottom: isCollapsed ? 'none' : '0.5px solid rgba(0,0,0,0.06)',
+          display: 'flex', alignItems: 'center', gap: '8px',
+        }}>
+          <div style={{
+            width: '28px', height: '28px', borderRadius: '9px',
+            background: 'rgba(255,107,53,0.12)',
+            border: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#ff6b35', fontSize: '12px', fontWeight: 700, flexShrink: 0,
+          }}>{sceneNum}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: '#1d1d1f', fontSize: '13px', fontWeight: 600 }}>
+              Scene {sceneNum}
+            </div>
+            <div style={{ color: '#007aff', fontSize: '10px' }}>
+              {(scene.scene_type as string || '').replace(/_/g, ' ')}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            {scene.mood && (
+              <span style={{
+                padding: '2px 7px', borderRadius: '20px',
+                background: 'rgba(118,118,128,0.1)',
+                color: 'rgba(60,60,67,0.6)', fontSize: '10px',
+              }}>{scene.mood as string}</span>
+            )}
+            {/* Status summary badges when collapsed */}
+            {isCollapsed && (
+              <>
+                {hasImage && <span style={{ fontSize: '12px' }} title="Image ready">🖼️</span>}
+                {hasVideo && <span style={{ fontSize: '12px' }} title="Video ready">🎬</span>}
+                {hasAudio && <span style={{ fontSize: '12px' }} title="Audio ready">🎵</span>}
+                {isVideoPolling && <span style={{ fontSize: '12px' }} title="Video generating...">⏳</span>}
+              </>
+            )}
+            {/* Minimize/expand toggle */}
+            <button
+              onClick={() => setCollapsedScenes(prev => {
+                const next = new Set(prev)
+                if (next.has(sceneNum)) next.delete(sceneNum)
+                else next.add(sceneNum)
+                return next
+              })}
+              title={isCollapsed ? 'Expand scene' : 'Collapse scene'}
+              style={{
+                padding: '3px 8px',
+                borderRadius: '8px',
+                border: '0.5px solid rgba(0,0,0,0.1)',
+                background: 'rgba(255,255,255,0.8)',
+                color: 'rgba(60,60,67,0.6)',
+                fontSize: '11px', fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >
+              {isCollapsed ? '▼ Expand' : '▲ Collapse'}
+            </button>
+          </div>
+        </div>
+
+        {/* Scene body — hidden when collapsed */}
+        {!isCollapsed && (
+          <div style={{ padding: '10px 11px' }}>
+
+            {/* Image Prompt — editable textarea or JSON view */}
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <p style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>
+                  Image Prompt
+                </p>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  {/* Text / JSON toggle */}
+                  <div style={{ display: 'flex', borderRadius: '8px', overflow: 'hidden', border: '0.5px solid rgba(0,0,0,0.1)' }}>
+                    <button
+                      onClick={() => setPromptView(prev => ({ ...prev, [sceneNum]: 'text' }))}
+                      style={{
+                        padding: '2px 7px', border: 'none',
+                        background: (promptView[sceneNum] || 'text') === 'text' ? 'rgba(0,122,255,0.12)' : 'transparent',
+                        color: (promptView[sceneNum] || 'text') === 'text' ? '#007aff' : 'rgba(60,60,67,0.4)',
+                        fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >📝 Text</button>
+                    <button
+                      onClick={() => setPromptView(prev => ({ ...prev, [sceneNum]: 'json' }))}
+                      style={{
+                        padding: '2px 7px', border: 'none',
+                        background: promptView[sceneNum] === 'json' ? 'rgba(0,122,255,0.12)' : 'transparent',
+                        color: promptView[sceneNum] === 'json' ? '#007aff' : 'rgba(60,60,67,0.4)',
+                        fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >{'{ }'} JSON</button>
+                  </div>
+                  {currentPrompt !== (scene.image_prompt as string) && (
+                    <button
+                      onClick={() => setEditedPrompts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })}
+                      style={{ ...smallIconBtn, color: '#ff3b30', borderColor: 'rgba(255,59,48,0.2)', fontSize: '10px' }}
+                    >
+                      Reset
+                    </button>
+                  )}
+                  <button onClick={() => handleCopy(currentPrompt)} style={smallIconBtn}>
+                    Copy
+                  </button>
+                </div>
+              </div>
+              {(promptView[sceneNum] || 'text') === 'text' ? (
+                <textarea
+                  value={currentPrompt}
+                  onChange={e => setEditedPrompts(prev => ({ ...prev, [sceneNum]: e.target.value }))}
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(118,118,128,0.07)',
+                    border: currentPrompt !== (scene.image_prompt as string)
+                      ? '1px solid rgba(255,107,53,0.4)'
+                      : '0.5px solid rgba(0,0,0,0.08)',
+                    borderRadius: '10px',
+                    padding: '7px 9px',
+                    color: '#1d1d1f',
+                    fontSize: '12px',
+                    lineHeight: '1.5',
+                    resize: 'vertical',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box',
+                    transition: 'border-color 0.2s',
+                  }}
+                />
+              ) : (
+                <pre style={{
+                  background: 'rgba(0,0,0,0.04)',
+                  border: '0.5px solid rgba(0,0,0,0.08)',
+                  borderRadius: '10px',
+                  padding: '9px',
+                  fontSize: '10px',
+                  color: '#1d1d1f',
+                  lineHeight: '1.6',
+                  overflow: 'auto',
+                  margin: 0,
+                  fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                }}>
+                  {JSON.stringify({
+                    raw_prompt: scene.image_prompt as string,
+                    enhanced_prompt: sceneAsset.enhancedPrompt || null,
+                    art_style: (storyboard.art_style as string) || '',
+                    aspect_ratio: (storyboard.aspect_ratio as string) || '9_16',
+                    mood: (scene.mood as string) || '',
+                    camera_angle: (scene.camera_angle as string) || '',
+                    model: imageModel === 'titan_v2' ? 'Titan V2' : 'Nova Canvas',
+                    dimensions: (() => {
+                      const ar = (storyboard.aspect_ratio as string) || '9_16'
+                      const dimMap: Record<string, string> = {
+                        '9_16': imageModel === 'titan_v2' ? '768x1280' : '720x1280',
+                        '16_9': imageModel === 'titan_v2' ? '1280x768' : '1280x720',
+                        '1_1': '1024x1024',
+                        '4_5': imageModel === 'titan_v2' ? '896x1152' : '896x1120',
+                      }
+                      return dimMap[ar] || dimMap['9_16']
+                    })(),
+                  }, null, 2)}
+                </pre>
+              )}
+            </div>
+
+            {/* Narration + Rewrite VO */}
+            {narration && (
+              <div style={{ marginBottom: '11px' }}>
+                <div style={{
+                  background: 'rgba(0,0,0,0.03)',
+                  border: '0.5px solid rgba(0,0,0,0.08)',
+                  borderRadius: '14px',
+                  padding: '10px 12px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Narration VO
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {voCharInfo[sceneNum] && (
+                        <span style={{
+                          fontSize: '10px', fontWeight: 600,
+                          color: voCharInfo[sceneNum].count <= voCharInfo[sceneNum].limit ? '#34c759' : '#ff3b30'
+                        }}>
+                          {voCharInfo[sceneNum].count}/{voCharInfo[sceneNum].limit} chars
+                        </span>
+                      )}
+                      <button onClick={() => handleCopy(customVO[sceneNum] || narration)} style={smallIconBtn}>
+                        Copy
+                      </button>
+                      <button
+                        onClick={() => handleRewriteVO(scene, sceneNum)}
+                        disabled={rewritingVO[sceneNum]}
+                        style={{
+                          padding: '4px 10px', borderRadius: '8px',
+                          background: 'rgba(0,122,255,0.1)',
+                          border: '0.5px solid rgba(0,122,255,0.25)',
+                          color: '#007aff', fontSize: '10px', fontWeight: 600,
+                          cursor: rewritingVO[sceneNum] ? 'not-allowed' : 'pointer',
+                          opacity: rewritingVO[sceneNum] ? 0.6 : 1,
+                        }}>
+                        {rewritingVO[sceneNum] ? '⏳...' : `✏️ Rewrite (${sceneDurations[sceneNum] || 4}s)`}
+                      </button>
+                    </div>
+                  </div>
+                  <p style={{ color: '#1d1d1f', fontSize: '13px', lineHeight: '1.5', fontStyle: 'italic', margin: 0 }}>
+                    "{customVO[sceneNum] || narration}"
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* IMAGE SECTION */}
+            <div style={{
+              background: 'rgba(0,0,0,0.03)',
+              border: '0.5px solid rgba(0,0,0,0.08)',
+              borderRadius: '16px',
+              padding: '10px',
+              marginBottom: '8px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span style={{ fontSize: '13px' }}>🖼️</span>
+                  <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Image</span>
+                </div>
+                {statusBadge(sceneAsset.imageStatus, 'Image')}
+              </div>
+
+              {hasImage && (
+                <>
+                  <div style={{ position: 'relative', cursor: 'pointer', marginBottom: '6px' }}
+                    onClick={() => setPreviewModal({ type: 'image', url: sceneAsset.imageUrl!, sceneNum })}
+                  >
+                    <img
+                      src={sceneAsset.imageUrl}
+                      alt={`Scene ${sceneNum}`}
+                      style={{
+                        width: '100%', borderRadius: '9px',
+                        display: 'block',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        transition: 'opacity 0.2s',
+                      }}
+                    />
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      borderRadius: '9px',
+                      background: 'rgba(0,0,0,0)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      opacity: 0,
+                      transition: 'all 0.2s',
+                    }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLDivElement).style.opacity = '1';
+                        (e.currentTarget as HTMLDivElement).style.background = 'rgba(0,0,0,0.4)'
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLDivElement).style.opacity = '0';
+                        (e.currentTarget as HTMLDivElement).style.background = 'rgba(0,0,0,0)'
+                      }}
+                    >
+                      <span style={{ color: 'white', fontSize: '22px' }}>🔍</span>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => setPreviewModal({ type: 'image', url: sceneAsset.imageUrl!, sceneNum })}
+                      style={smallIconBtn}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      onClick={() => handleDownload(sceneAsset.imageUrl!, `scene-${sceneNum}-image.png`)}
+                      style={smallIconBtn}
+                    >
+                      Download PNG
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {sceneAsset.imageError && (
+                <p style={{ color: '#ff3b30', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
+                  {sceneAsset.imageError}
+                </p>
+              )}
+
+              {/* Image model dropdown */}
+              <div style={{ marginBottom: '7px' }}>
+                <select
+                  value={imageModel}
+                  onChange={e => handleImageModelChange(e.target.value)}
+                  style={{ ...dropdownStyle, width: 'auto' }}
+                >
+                  <optgroup label="AWS Bedrock">
+                    {IMAGE_MODELS.filter(m => m.provider === 'bedrock').map(m => (
+                      <option key={m.id} value={m.id}>{m.label}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Qwen Dashscope">
+                    {IMAGE_MODELS.filter(m => m.provider === 'dashscope').map(m => (
+                      <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+              {actionBtn('Generate Image', () => handleGenerateImage(scene), sceneAsset.imageStatus, false, '#ff6b35')}
+              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
+                Est. {formatCost(estimateImageCost(imageModel))}
+              </div>
+              {sceneAsset.enhancedPrompt && (
+                <div style={{
+                  marginTop: '7px',
+                  padding: '6px 8px',
+                  background: 'rgba(0,122,255,0.06)',
+                  border: '0.5px solid rgba(0,122,255,0.2)',
+                  borderRadius: '10px',
+                }}>
+                  <p style={{ color: '#007aff', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: '0 0 3px' }}>
+                    ✨ AI Enhanced Prompt
+                  </p>
+                  <p style={{ color: 'rgba(60,60,67,0.6)', fontSize: '10px', lineHeight: '1.5', margin: 0 }}>
+                    {sceneAsset.enhancedPrompt}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* VIDEO SECTION */}
+            {(() => {
+              const curVidModelId = videoModel[sceneNum] || defaultVideoModel
+              const curVidModel = VIDEO_MODELS.find(m => m.id === curVidModelId) || VIDEO_MODELS[0]
+              const isT2V = curVidModel.provider === 'dashscope' && curVidModelId.includes('t2v')
+              const canGenVideo = hasImage || isT2V
+              return (
+            <div style={{
+              background: 'rgba(0,122,255,0.04)',
+              border: `0.5px solid ${canGenVideo ? 'rgba(0,122,255,0.15)' : 'rgba(0,0,0,0.05)'}`,
+              borderRadius: '16px',
+              padding: '10px',
+              marginBottom: '8px',
+              opacity: canGenVideo ? 1 : 0.5,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span style={{ fontSize: '13px' }}>🎬</span>
+                  <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Video</span>
+                </div>
+                {!canGenVideo
+                  ? <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '10px' }}>Generate image first</span>
+                  : statusBadge(sceneAsset.videoStatus, 'Video', isVideoPolling)
+                }
+              </div>
+
+              {hasVideo && (
+                <>
+                  <div style={{ position: 'relative', cursor: 'pointer', marginBottom: '6px' }}
+                    onClick={() => setPreviewModal({ type: 'video', url: sceneAsset.videoUrl!, sceneNum })}
+                  >
+                    <video
+                      src={sceneAsset.videoUrl}
+                      style={{
+                        width: '100%', borderRadius: '9px',
+                        display: 'block',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                      }}
+                    />
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      borderRadius: '9px',
+                      background: 'rgba(0,0,0,0.35)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ color: 'white', fontSize: '28px' }}>▶</span>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => setPreviewModal({ type: 'video', url: sceneAsset.videoUrl!, sceneNum })}
+                      style={smallIconBtn}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      onClick={() => handleDownload(sceneAsset.videoUrl!, `scene-${sceneNum}-video.mp4`)}
+                      style={smallIconBtn}
+                    >
+                      Download MP4
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {isVideoPolling && !hasVideo && (
+                <div style={{
+                  padding: '8px',
+                  background: 'rgba(0,122,255,0.06)',
+                  border: '0.5px solid rgba(0,122,255,0.15)',
+                  borderRadius: '12px',
+                  marginBottom: '8px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
+                    <div style={{ color: '#007aff', fontSize: '12px', fontWeight: 600 }}>
+                      Generating video...
+                    </div>
+                    <button
+                      onClick={() => handleCancelVideo(sceneNum)}
+                      style={{
+                        padding: '2px 8px', borderRadius: '8px',
+                        border: '0.5px solid rgba(255,59,48,0.3)',
+                        background: 'rgba(255,59,48,0.08)',
+                        color: '#ff3b30',
+                        fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px' }}>
+                    Nova Reel takes 2-5 minutes. Polling every 8s.
+                  </div>
+                  {pollCount > 0 && (
+                    <div style={{ color: 'rgba(60,60,67,0.35)', fontSize: '10px', marginTop: '3px' }}>
+                      Checked {pollCount} time{pollCount !== 1 ? 's' : ''}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {sceneAsset.videoError && (
+                <p style={{ color: '#ff3b30', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
+                  {sceneAsset.videoError}
+                </p>
+              )}
+
+              {/* Duration slider */}
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>⏱ Duration</span>
+                  <span style={{ color: '#007aff', fontSize: '10px', fontWeight: 700 }}>{sceneDurations[sceneNum] || 6}s</span>
+                </div>
+                <input
+                  type="range" min={2} max={6} step={1}
+                  value={sceneDurations[sceneNum] || 6}
+                  onChange={e => handleSceneDurationChange(sceneNum, Number(e.target.value))}
+                  style={{ width: '100%', accentColor: '#007aff', height: '3px' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>2s</span>
+                  <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>6s</span>
+                </div>
+              </div>
+
+              {/* Video model selector */}
+              <div style={{ marginBottom: '7px' }}>
+                <select
+                  value={videoModel[sceneNum] || defaultVideoModel}
+                  onChange={e => setVideoModel(prev => ({ ...prev, [sceneNum]: e.target.value }))}
+                  style={{ ...dropdownStyle, width: 'auto' }}
+                >
+                  <optgroup label="AWS Bedrock">
+                    {VIDEO_MODELS.filter(m => m.provider === 'bedrock').map(m => (
+                      <option key={m.id} value={m.id}>{m.label}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Qwen Dashscope">
+                    {VIDEO_MODELS.filter(m => m.provider === 'dashscope').map(m => (
+                      <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+              {(() => {
+                const curVidModel = VIDEO_MODELS.find(m => m.id === (videoModel[sceneNum] || defaultVideoModel)) || VIDEO_MODELS[0]
+                const vidNeedsImage = curVidModel.provider === 'bedrock' || curVidModel.id.includes('i2v')
+                return actionBtn(
+                  `Generate Video (${sceneDurations[sceneNum] || 6}s)`,
+                  () => handleGenerateVideo(scene),
+                  sceneAsset.videoStatus,
+                  vidNeedsImage && !hasImage,
+                  '#007aff'
+                )
+              })()}
+              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
+                Est. {formatCost(estimateVideoCost())}
+              </div>
+            </div>
+              )
+            })()}
+
+            {/* AUDIO SECTION */}
+            <div style={{
+              background: 'rgba(175,82,222,0.05)',
+              border: '0.5px solid rgba(175,82,222,0.18)',
+              borderRadius: '16px',
+              padding: '10px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span style={{ fontSize: '13px' }}>🎵</span>
+                  <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Audio VO</span>
+                </div>
+                {statusBadge(sceneAsset.audioStatus, 'Audio')}
+              </div>
+
+              {/* Audio history (newest first) */}
+              {sceneAsset.audioHistory && sceneAsset.audioHistory.length > 0 && (
+                <div style={{ marginBottom: '8px' }}>
+                  {sceneAsset.audioHistory.map((item, idx) => (
+                    <div key={idx} style={{
+                      marginBottom: '6px',
+                      padding: '6px',
+                      background: 'rgba(175,82,222,0.06)',
+                      border: '0.5px solid rgba(175,82,222,0.15)',
+                      borderRadius: '10px',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>
+                          {idx === 0 ? '▶ Latest' : `Take ${sceneAsset.audioHistory.length - idx}`}
+                          {' · '}{item.engine === 'elevenlabs' ? 'ElevenLabs' : 'Polly'}
+                          {' · '}{item.voice}
+                        </span>
+                        <span style={{ color: 'rgba(60,60,67,0.35)', fontSize: '10px' }}>
+                          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <audio src={item.url} controls style={{ width: '100%', height: '28px' }} />
+                      <button
+                        onClick={() => handleDownload(item.url, `scene-${sceneNum}-audio-take${sceneAsset.audioHistory.length - idx}.mp3`)}
+                        style={{ ...smallIconBtn, marginTop: '4px' }}
+                      >
+                        Download MP3
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Legacy single audio (if no history yet but has audioUrl) */}
+              {hasAudio && (!sceneAsset.audioHistory || sceneAsset.audioHistory.length === 0) && (
+                <>
+                  <audio
+                    src={sceneAsset.audioUrl}
+                    controls
+                    style={{ width: '100%', marginBottom: '6px' }}
+                  />
+                  <div style={{ marginBottom: '8px' }}>
+                    <button
+                      onClick={() => handleDownload(sceneAsset.audioUrl!, `scene-${sceneNum}-audio.mp3`)}
+                      style={smallIconBtn}
+                    >
+                      Download MP3
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {sceneAsset.audioError && (
+                <p style={{ color: '#ff3b30', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
+                  {sceneAsset.audioError}
+                </p>
+              )}
+
+              {/* Engine + voice dropdowns */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '7px', flexWrap: 'wrap' }}>
+                <select
+                  value={audioEngine}
+                  onChange={e => handleAudioEngineChange(e.target.value as 'polly' | 'elevenlabs')}
+                  style={dropdownStyle}
+                >
+                  <option value="polly">AWS Polly</option>
+                  <option value="elevenlabs">ElevenLabs</option>
+                </select>
+                <select
+                  value={audioVoice}
+                  onChange={e => handleAudioVoiceChange(e.target.value)}
+                  style={dropdownStyle}
+                >
+                  {(audioEngine === 'polly' ? POLLY_VOICES : ELEVENLABS_VOICES).map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              </div>
+
+              {actionBtn(
+                'Generate Audio VO',
+                () => handleGenerateAudio(scene),
+                sceneAsset.audioStatus,
+                false,
+                '#af52de'
+              )}
+              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
+                Est. {narration ? formatCost(estimateAudioCost(audioEngine, narration.length)) : '<$0.01'}
+              </div>
+            </div>
+
+            {/* Camera + Transition info */}
+            <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+              {scene.camera_angle && (
+                <span style={{
+                  padding: '3px 8px', borderRadius: '20px',
+                  background: 'rgba(118,118,128,0.08)',
+                  border: 'none',
+                  color: 'rgba(60,60,67,0.5)', fontSize: '11px',
+                }}>📷 {scene.camera_angle as string}</span>
+              )}
+              {scene.transition && (
+                <span style={{
+                  padding: '3px 8px', borderRadius: '20px',
+                  background: 'rgba(118,118,128,0.08)',
+                  border: 'none',
+                  color: 'rgba(60,60,67,0.5)', fontSize: '11px',
+                }}>{(scene.transition as string).replace(/_/g, ' ')}</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div style={page}>
 
@@ -788,16 +1491,31 @@ export function Storyboard() {
               ✕ Close
             </button>
             {previewModal.type === 'image' ? (
-              <img
-                src={previewModal.url}
-                alt={`Scene ${previewModal.sceneNum} preview`}
-                style={{
-                  maxWidth: '90vw', maxHeight: '85vh',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  display: 'block',
-                }}
-              />
+              <>
+                <img
+                  src={previewModal.url}
+                  alt={`Scene ${previewModal.sceneNum} preview`}
+                  style={{
+                    maxWidth: '90vw', maxHeight: '85vh',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    display: 'block',
+                  }}
+                />
+                <button
+                  onClick={e => { e.stopPropagation(); handleDownload(previewModal.url, `scene_${previewModal.sceneNum}.jpg`) }}
+                  style={{
+                    position: 'absolute', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+                    background: 'rgba(255,255,255,0.15)',
+                    border: '0.5px solid rgba(255,255,255,0.3)',
+                    borderRadius: '14px', padding: '10px 20px',
+                    color: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                    backdropFilter: 'blur(8px)',
+                  }}
+                >
+                  ⬇️ Download
+                </button>
+              </>
             ) : (
               <video
                 src={previewModal.url}
@@ -851,8 +1569,13 @@ export function Storyboard() {
         backdropFilter: 'blur(30px)',
         WebkitBackdropFilter: 'blur(30px)',
         borderBottom: '0.5px solid rgba(0,0,0,0.1)',
-        padding: '10px 11px',
+        padding: isDesktop ? '10px 24px' : '10px 11px',
+      }}>
+      <div style={{
+        maxWidth: isDesktop ? '1400px' : undefined,
+        margin: isDesktop ? '0 auto' : undefined,
         display: 'flex', alignItems: 'center', gap: '10px',
+        width: '100%',
       }}>
         <button onClick={() => navigate('/')} style={{
           background: 'rgba(255,255,255,0.85)',
@@ -902,6 +1625,7 @@ export function Storyboard() {
           {isAlreadySaved ? '✓ Saved' : 'Save'}
         </button>
         <span style={{ fontSize: '18px' }}>🎬</span>
+      </div>
       </div>
 
       {/* Interactive Cost Tracker */}
@@ -1015,8 +1739,10 @@ export function Storyboard() {
         </div>
       )}
 
-      <div style={{ padding: '14px 11px 0', maxWidth: '720px', margin: '0 auto' }}>
+      <div style={{ padding: isDesktop ? '14px 0 0' : '14px 11px 0', maxWidth: isDesktop ? 'none' : '720px', margin: '0 auto' }}>
 
+        {/* Production Notes + Duration — centered on desktop */}
+        <div style={{ padding: isDesktop ? '0 24px' : undefined, maxWidth: isDesktop ? '720px' : undefined, margin: isDesktop ? '0 auto' : undefined }}>
         {/* Production Notes */}
         {productionNotes && (
           <div style={{ ...glassCard, padding: '11px', marginBottom: '14px' }}>
@@ -1069,650 +1795,35 @@ export function Storyboard() {
             <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>120s</span>
           </div>
         </div>
+        </div>
 
-        {/* Scenes */}
-        {scenes.map((scene) => {
-          const sceneNum = scene.scene_number as number
-          const sceneAsset: SceneAssets = storedAssets[sceneNum] || defaultSceneAssets()
-          const narration = language === 'id'
-            ? (scene.text_id as string) || (scene.text_en as string)
-            : (scene.text_en as string) || (scene.text_id as string)
-          const hasImage = sceneAsset.imageStatus === 'done' && sceneAsset.imageUrl
-          const hasVideo = sceneAsset.videoStatus === 'done' && sceneAsset.videoUrl
-          const hasAudio = sceneAsset.audioStatus === 'done' && sceneAsset.audioUrl
-          const isVideoPolling = sceneAsset.videoStatus === 'generating' && !!sceneAsset.videoJobId
-          const pollCount = videoPollDisplayCounts[sceneNum] || 0
-          const isCollapsed = collapsedScenes.has(sceneNum)
-          const currentPrompt = editedPrompts[sceneNum] ?? (scene.image_prompt as string ?? '')
-
-          return (
-            <div key={sceneNum} style={glassCard}>
-
-              {/* Scene Header */}
-              <div style={{
-                padding: '10px 11px 7px',
-                borderBottom: isCollapsed ? 'none' : '0.5px solid rgba(0,0,0,0.06)',
-                display: 'flex', alignItems: 'center', gap: '8px',
-              }}>
-                <div style={{
-                  width: '28px', height: '28px', borderRadius: '9px',
-                  background: 'rgba(255,107,53,0.12)',
-                  border: 'none',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#ff6b35', fontSize: '12px', fontWeight: 700, flexShrink: 0,
-                }}>{sceneNum}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: '#1d1d1f', fontSize: '13px', fontWeight: 600 }}>
-                    Scene {sceneNum}
-                  </div>
-                  <div style={{ color: '#007aff', fontSize: '10px' }}>
-                    {(scene.scene_type as string || '').replace(/_/g, ' ')}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                  {scene.mood && (
-                    <span style={{
-                      padding: '2px 7px', borderRadius: '20px',
-                      background: 'rgba(118,118,128,0.1)',
-                      color: 'rgba(60,60,67,0.6)', fontSize: '10px',
-                    }}>{scene.mood as string}</span>
-                  )}
-                  {/* Status summary badges when collapsed */}
-                  {isCollapsed && (
-                    <>
-                      {hasImage && <span style={{ fontSize: '12px' }} title="Image ready">🖼️</span>}
-                      {hasVideo && <span style={{ fontSize: '12px' }} title="Video ready">🎬</span>}
-                      {hasAudio && <span style={{ fontSize: '12px' }} title="Audio ready">🎵</span>}
-                      {isVideoPolling && <span style={{ fontSize: '12px' }} title="Video generating...">⏳</span>}
-                    </>
-                  )}
-                  {/* Minimize/expand toggle */}
-                  <button
-                    onClick={() => setCollapsedScenes(prev => {
-                      const next = new Set(prev)
-                      if (next.has(sceneNum)) next.delete(sceneNum)
-                      else next.add(sceneNum)
-                      return next
-                    })}
-                    title={isCollapsed ? 'Expand scene' : 'Collapse scene'}
-                    style={{
-                      padding: '3px 8px',
-                      borderRadius: '8px',
-                      border: '0.5px solid rgba(0,0,0,0.1)',
-                      background: 'rgba(255,255,255,0.8)',
-                      color: 'rgba(60,60,67,0.6)',
-                      fontSize: '11px', fontWeight: 500,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {isCollapsed ? '▼ Expand' : '▲ Collapse'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Scene body — hidden when collapsed */}
-              {!isCollapsed && (
-                <div style={{ padding: '10px 11px' }}>
-
-                  {/* Image Prompt — editable textarea or JSON view */}
-                  <div style={{ marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                      <p style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>
-                        Image Prompt
-                      </p>
-                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        {/* Text / JSON toggle */}
-                        <div style={{ display: 'flex', borderRadius: '8px', overflow: 'hidden', border: '0.5px solid rgba(0,0,0,0.1)' }}>
-                          <button
-                            onClick={() => setPromptView(prev => ({ ...prev, [sceneNum]: 'text' }))}
-                            style={{
-                              padding: '2px 7px', border: 'none',
-                              background: (promptView[sceneNum] || 'text') === 'text' ? 'rgba(0,122,255,0.12)' : 'transparent',
-                              color: (promptView[sceneNum] || 'text') === 'text' ? '#007aff' : 'rgba(60,60,67,0.4)',
-                              fontSize: '10px', fontWeight: 600, cursor: 'pointer',
-                            }}
-                          >📝 Text</button>
-                          <button
-                            onClick={() => setPromptView(prev => ({ ...prev, [sceneNum]: 'json' }))}
-                            style={{
-                              padding: '2px 7px', border: 'none',
-                              background: promptView[sceneNum] === 'json' ? 'rgba(0,122,255,0.12)' : 'transparent',
-                              color: promptView[sceneNum] === 'json' ? '#007aff' : 'rgba(60,60,67,0.4)',
-                              fontSize: '10px', fontWeight: 600, cursor: 'pointer',
-                            }}
-                          >{'{ }'} JSON</button>
-                        </div>
-                        {currentPrompt !== (scene.image_prompt as string) && (
-                          <button
-                            onClick={() => setEditedPrompts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })}
-                            style={{ ...smallIconBtn, color: '#ff3b30', borderColor: 'rgba(255,59,48,0.2)', fontSize: '10px' }}
-                          >
-                            Reset
-                          </button>
-                        )}
-                        <button onClick={() => handleCopy(currentPrompt)} style={smallIconBtn}>
-                          Copy
-                        </button>
-                      </div>
-                    </div>
-                    {(promptView[sceneNum] || 'text') === 'text' ? (
-                      <textarea
-                        value={currentPrompt}
-                        onChange={e => setEditedPrompts(prev => ({ ...prev, [sceneNum]: e.target.value }))}
-                        rows={3}
-                        style={{
-                          width: '100%',
-                          background: 'rgba(118,118,128,0.07)',
-                          border: currentPrompt !== (scene.image_prompt as string)
-                            ? '1px solid rgba(255,107,53,0.4)'
-                            : '0.5px solid rgba(0,0,0,0.08)',
-                          borderRadius: '10px',
-                          padding: '7px 9px',
-                          color: '#1d1d1f',
-                          fontSize: '12px',
-                          lineHeight: '1.5',
-                          resize: 'vertical',
-                          outline: 'none',
-                          fontFamily: 'inherit',
-                          boxSizing: 'border-box',
-                          transition: 'border-color 0.2s',
-                        }}
-                      />
-                    ) : (
-                      <pre style={{
-                        background: 'rgba(0,0,0,0.04)',
-                        border: '0.5px solid rgba(0,0,0,0.08)',
-                        borderRadius: '10px',
-                        padding: '9px',
-                        fontSize: '10px',
-                        color: '#1d1d1f',
-                        lineHeight: '1.6',
-                        overflow: 'auto',
-                        margin: 0,
-                        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                      }}>
-                        {JSON.stringify({
-                          raw_prompt: scene.image_prompt as string,
-                          enhanced_prompt: sceneAsset.enhancedPrompt || null,
-                          art_style: (storyboard.art_style as string) || '',
-                          aspect_ratio: (storyboard.aspect_ratio as string) || '9_16',
-                          mood: (scene.mood as string) || '',
-                          camera_angle: (scene.camera_angle as string) || '',
-                          model: imageModel === 'titan_v2' ? 'Titan V2' : 'Nova Canvas',
-                          dimensions: (() => {
-                            const ar = (storyboard.aspect_ratio as string) || '9_16'
-                            const dimMap: Record<string, string> = {
-                              '9_16': imageModel === 'titan_v2' ? '768x1280' : '720x1280',
-                              '16_9': imageModel === 'titan_v2' ? '1280x768' : '1280x720',
-                              '1_1': '1024x1024',
-                              '4_5': imageModel === 'titan_v2' ? '896x1152' : '896x1120',
-                            }
-                            return dimMap[ar] || dimMap['9_16']
-                          })(),
-                        }, null, 2)}
-                      </pre>
-                    )}
-                  </div>
-
-                  {/* Narration + Rewrite VO */}
-                  {narration && (
-                    <div style={{ marginBottom: '11px' }}>
-                      <div style={{
-                        background: 'rgba(0,0,0,0.03)',
-                        border: '0.5px solid rgba(0,0,0,0.08)',
-                        borderRadius: '14px',
-                        padding: '10px 12px',
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                            Narration VO
-                          </span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            {voCharInfo[sceneNum] && (
-                              <span style={{
-                                fontSize: '10px', fontWeight: 600,
-                                color: voCharInfo[sceneNum].count <= voCharInfo[sceneNum].limit ? '#34c759' : '#ff3b30'
-                              }}>
-                                {voCharInfo[sceneNum].count}/{voCharInfo[sceneNum].limit} chars
-                              </span>
-                            )}
-                            <button onClick={() => handleCopy(customVO[sceneNum] || narration)} style={smallIconBtn}>
-                              Copy
-                            </button>
-                            <button
-                              onClick={() => handleRewriteVO(scene, sceneNum)}
-                              disabled={rewritingVO[sceneNum]}
-                              style={{
-                                padding: '4px 10px', borderRadius: '8px',
-                                background: 'rgba(0,122,255,0.1)',
-                                border: '0.5px solid rgba(0,122,255,0.25)',
-                                color: '#007aff', fontSize: '10px', fontWeight: 600,
-                                cursor: rewritingVO[sceneNum] ? 'not-allowed' : 'pointer',
-                                opacity: rewritingVO[sceneNum] ? 0.6 : 1,
-                              }}>
-                              {rewritingVO[sceneNum] ? '⏳...' : `✏️ Rewrite (${sceneDurations[sceneNum] || 4}s)`}
-                            </button>
-                          </div>
-                        </div>
-                        <p style={{ color: '#1d1d1f', fontSize: '13px', lineHeight: '1.5', fontStyle: 'italic', margin: 0 }}>
-                          "{customVO[sceneNum] || narration}"
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* IMAGE SECTION */}
-                  <div style={{
-                    background: 'rgba(0,0,0,0.03)',
-                    border: '0.5px solid rgba(0,0,0,0.08)',
-                    borderRadius: '16px',
-                    padding: '10px',
-                    marginBottom: '8px',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span style={{ fontSize: '13px' }}>🖼️</span>
-                        <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Image</span>
-                      </div>
-                      {statusBadge(sceneAsset.imageStatus, 'Image')}
-                    </div>
-
-                    {hasImage && (
-                      <>
-                        <div style={{ position: 'relative', cursor: 'pointer', marginBottom: '6px' }}
-                          onClick={() => setPreviewModal({ type: 'image', url: sceneAsset.imageUrl!, sceneNum })}
-                        >
-                          <img
-                            src={sceneAsset.imageUrl}
-                            alt={`Scene ${sceneNum}`}
-                            style={{
-                              width: '100%', borderRadius: '9px',
-                              display: 'block',
-                              border: '1px solid rgba(255,255,255,0.1)',
-                              transition: 'opacity 0.2s',
-                            }}
-                          />
-                          <div style={{
-                            position: 'absolute', inset: 0,
-                            borderRadius: '9px',
-                            background: 'rgba(0,0,0,0)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            opacity: 0,
-                            transition: 'all 0.2s',
-                          }}
-                            onMouseEnter={e => {
-                              (e.currentTarget as HTMLDivElement).style.opacity = '1';
-                              (e.currentTarget as HTMLDivElement).style.background = 'rgba(0,0,0,0.4)'
-                            }}
-                            onMouseLeave={e => {
-                              (e.currentTarget as HTMLDivElement).style.opacity = '0';
-                              (e.currentTarget as HTMLDivElement).style.background = 'rgba(0,0,0,0)'
-                            }}
-                          >
-                            <span style={{ color: 'white', fontSize: '22px' }}>🔍</span>
-                          </div>
-                        </div>
-                        <div style={{ marginBottom: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          <button
-                            onClick={() => setPreviewModal({ type: 'image', url: sceneAsset.imageUrl!, sceneNum })}
-                            style={smallIconBtn}
-                          >
-                            Preview
-                          </button>
-                          <button
-                            onClick={() => handleDownload(sceneAsset.imageUrl!, `scene-${sceneNum}-image.png`)}
-                            style={smallIconBtn}
-                          >
-                            Download PNG
-                          </button>
-                        </div>
-                      </>
-                    )}
-
-                    {sceneAsset.imageError && (
-                      <p style={{ color: '#ff3b30', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
-                        {sceneAsset.imageError}
-                      </p>
-                    )}
-
-                    {/* Image model dropdown */}
-                    <div style={{ marginBottom: '7px' }}>
-                      <select
-                        value={imageModel}
-                        onChange={e => handleImageModelChange(e.target.value)}
-                        style={{ ...dropdownStyle, width: 'auto' }}
-                      >
-                        <optgroup label="AWS Bedrock">
-                          {IMAGE_MODELS.filter(m => m.provider === 'bedrock').map(m => (
-                            <option key={m.id} value={m.id}>{m.label}</option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="Qwen Dashscope">
-                          {IMAGE_MODELS.filter(m => m.provider === 'dashscope').map(m => (
-                            <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
-                          ))}
-                        </optgroup>
-                      </select>
-                    </div>
-                    {actionBtn('Generate Image', () => handleGenerateImage(scene), sceneAsset.imageStatus, false, '#ff6b35')}
-                    <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
-                      Est. {formatCost(estimateImageCost(imageModel))}
-                    </div>
-                    {sceneAsset.enhancedPrompt && (
-                      <div style={{
-                        marginTop: '7px',
-                        padding: '6px 8px',
-                        background: 'rgba(0,122,255,0.06)',
-                        border: '0.5px solid rgba(0,122,255,0.2)',
-                        borderRadius: '10px',
-                      }}>
-                        <p style={{ color: '#007aff', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: '0 0 3px' }}>
-                          ✨ AI Enhanced Prompt
-                        </p>
-                        <p style={{ color: 'rgba(60,60,67,0.6)', fontSize: '10px', lineHeight: '1.5', margin: 0 }}>
-                          {sceneAsset.enhancedPrompt}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* VIDEO SECTION */}
-                  {(() => {
-                    const curVidModelId = videoModel[sceneNum] || 'nova_reel'
-                    const curVidModel = VIDEO_MODELS.find(m => m.id === curVidModelId) || VIDEO_MODELS[0]
-                    const isT2V = curVidModel.provider === 'dashscope' && curVidModelId.includes('t2v')
-                    const canGenVideo = hasImage || isT2V
-                    return (
-                  <div style={{
-                    background: 'rgba(0,122,255,0.04)',
-                    border: `0.5px solid ${canGenVideo ? 'rgba(0,122,255,0.15)' : 'rgba(0,0,0,0.05)'}`,
-                    borderRadius: '16px',
-                    padding: '10px',
-                    marginBottom: '8px',
-                    opacity: canGenVideo ? 1 : 0.5,
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span style={{ fontSize: '13px' }}>🎬</span>
-                        <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Video</span>
-                      </div>
-                      {!canGenVideo
-                        ? <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '10px' }}>Generate image first</span>
-                        : statusBadge(sceneAsset.videoStatus, 'Video', isVideoPolling)
-                      }
-                    </div>
-
-                    {hasVideo && (
-                      <>
-                        <div style={{ position: 'relative', cursor: 'pointer', marginBottom: '6px' }}
-                          onClick={() => setPreviewModal({ type: 'video', url: sceneAsset.videoUrl!, sceneNum })}
-                        >
-                          <video
-                            src={sceneAsset.videoUrl}
-                            style={{
-                              width: '100%', borderRadius: '9px',
-                              display: 'block',
-                              border: '1px solid rgba(255,255,255,0.1)',
-                            }}
-                          />
-                          <div style={{
-                            position: 'absolute', inset: 0,
-                            borderRadius: '9px',
-                            background: 'rgba(0,0,0,0.35)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}>
-                            <span style={{ color: 'white', fontSize: '28px' }}>▶</span>
-                          </div>
-                        </div>
-                        <div style={{ marginBottom: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          <button
-                            onClick={() => setPreviewModal({ type: 'video', url: sceneAsset.videoUrl!, sceneNum })}
-                            style={smallIconBtn}
-                          >
-                            Preview
-                          </button>
-                          <button
-                            onClick={() => handleDownload(sceneAsset.videoUrl!, `scene-${sceneNum}-video.mp4`)}
-                            style={smallIconBtn}
-                          >
-                            Download MP4
-                          </button>
-                        </div>
-                      </>
-                    )}
-
-                    {isVideoPolling && !hasVideo && (
-                      <div style={{
-                        padding: '8px',
-                        background: 'rgba(0,122,255,0.06)',
-                        border: '0.5px solid rgba(0,122,255,0.15)',
-                        borderRadius: '12px',
-                        marginBottom: '8px',
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                          <div style={{ color: '#007aff', fontSize: '12px', fontWeight: 600 }}>
-                            Generating video...
-                          </div>
-                          <button
-                            onClick={() => handleCancelVideo(sceneNum)}
-                            style={{
-                              padding: '2px 8px', borderRadius: '8px',
-                              border: '0.5px solid rgba(255,59,48,0.3)',
-                              background: 'rgba(255,59,48,0.08)',
-                              color: '#ff3b30',
-                              fontSize: '10px', fontWeight: 600, cursor: 'pointer',
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                        <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px' }}>
-                          Nova Reel takes 2-5 minutes. Polling every 8s.
-                        </div>
-                        {pollCount > 0 && (
-                          <div style={{ color: 'rgba(60,60,67,0.35)', fontSize: '10px', marginTop: '3px' }}>
-                            Checked {pollCount} time{pollCount !== 1 ? 's' : ''}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {sceneAsset.videoError && (
-                      <p style={{ color: '#ff3b30', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
-                        {sceneAsset.videoError}
-                      </p>
-                    )}
-
-                    {/* Duration slider */}
-                    <div style={{ marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>⏱ Duration</span>
-                        <span style={{ color: '#007aff', fontSize: '10px', fontWeight: 700 }}>{sceneDurations[sceneNum] || 6}s</span>
-                      </div>
-                      <input
-                        type="range" min={2} max={6} step={1}
-                        value={sceneDurations[sceneNum] || 6}
-                        onChange={e => handleSceneDurationChange(sceneNum, Number(e.target.value))}
-                        style={{ width: '100%', accentColor: '#007aff', height: '3px' }}
-                      />
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>2s</span>
-                        <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>6s</span>
-                      </div>
-                    </div>
-
-                    {/* Video model selector */}
-                    <div style={{ marginBottom: '7px' }}>
-                      <select
-                        value={videoModel[sceneNum] || 'nova_reel'}
-                        onChange={e => setVideoModel(prev => ({ ...prev, [sceneNum]: e.target.value }))}
-                        style={{ ...dropdownStyle, width: 'auto' }}
-                      >
-                        <optgroup label="AWS Bedrock">
-                          {VIDEO_MODELS.filter(m => m.provider === 'bedrock').map(m => (
-                            <option key={m.id} value={m.id}>{m.label}</option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="Qwen Dashscope">
-                          {VIDEO_MODELS.filter(m => m.provider === 'dashscope').map(m => (
-                            <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
-                          ))}
-                        </optgroup>
-                      </select>
-                    </div>
-                    {(() => {
-                      const curVidModel = VIDEO_MODELS.find(m => m.id === (videoModel[sceneNum] || 'nova_reel')) || VIDEO_MODELS[0]
-                      const vidNeedsImage = curVidModel.provider === 'bedrock' || curVidModel.id.includes('i2v')
-                      return actionBtn(
-                        `Generate Video (${sceneDurations[sceneNum] || 6}s)`,
-                        () => handleGenerateVideo(scene),
-                        sceneAsset.videoStatus,
-                        vidNeedsImage && !hasImage,
-                        '#007aff'
-                      )
-                    })()}
-                    <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
-                      Est. {formatCost(estimateVideoCost())}
-                    </div>
-                  </div>
-                    )
-                  })()}
-
-                  {/* AUDIO SECTION */}
-                  <div style={{
-                    background: 'rgba(175,82,222,0.05)',
-                    border: '0.5px solid rgba(175,82,222,0.18)',
-                    borderRadius: '16px',
-                    padding: '10px',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span style={{ fontSize: '13px' }}>🎵</span>
-                        <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Audio VO</span>
-                      </div>
-                      {statusBadge(sceneAsset.audioStatus, 'Audio')}
-                    </div>
-
-                    {/* Audio history (newest first) */}
-                    {sceneAsset.audioHistory && sceneAsset.audioHistory.length > 0 && (
-                      <div style={{ marginBottom: '8px' }}>
-                        {sceneAsset.audioHistory.map((item, idx) => (
-                          <div key={idx} style={{
-                            marginBottom: '6px',
-                            padding: '6px',
-                            background: 'rgba(175,82,222,0.06)',
-                            border: '0.5px solid rgba(175,82,222,0.15)',
-                            borderRadius: '10px',
-                          }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>
-                                {idx === 0 ? '▶ Latest' : `Take ${sceneAsset.audioHistory.length - idx}`}
-                                {' · '}{item.engine === 'elevenlabs' ? 'ElevenLabs' : 'Polly'}
-                                {' · '}{item.voice}
-                              </span>
-                              <span style={{ color: 'rgba(60,60,67,0.35)', fontSize: '10px' }}>
-                                {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                            <audio src={item.url} controls style={{ width: '100%', height: '28px' }} />
-                            <button
-                              onClick={() => handleDownload(item.url, `scene-${sceneNum}-audio-take${sceneAsset.audioHistory.length - idx}.mp3`)}
-                              style={{ ...smallIconBtn, marginTop: '4px' }}
-                            >
-                              Download MP3
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Legacy single audio (if no history yet but has audioUrl) */}
-                    {hasAudio && (!sceneAsset.audioHistory || sceneAsset.audioHistory.length === 0) && (
-                      <>
-                        <audio
-                          src={sceneAsset.audioUrl}
-                          controls
-                          style={{ width: '100%', marginBottom: '6px' }}
-                        />
-                        <div style={{ marginBottom: '8px' }}>
-                          <button
-                            onClick={() => handleDownload(sceneAsset.audioUrl!, `scene-${sceneNum}-audio.mp3`)}
-                            style={smallIconBtn}
-                          >
-                            Download MP3
-                          </button>
-                        </div>
-                      </>
-                    )}
-
-                    {sceneAsset.audioError && (
-                      <p style={{ color: '#ff3b30', fontSize: '11px', marginBottom: '6px', margin: '0 0 6px' }}>
-                        {sceneAsset.audioError}
-                      </p>
-                    )}
-
-                    {/* Engine + voice dropdowns */}
-                    <div style={{ display: 'flex', gap: '6px', marginBottom: '7px', flexWrap: 'wrap' }}>
-                      <select
-                        value={audioEngine}
-                        onChange={e => handleAudioEngineChange(e.target.value as 'polly' | 'elevenlabs')}
-                        style={dropdownStyle}
-                      >
-                        <option value="polly">AWS Polly</option>
-                        <option value="elevenlabs">ElevenLabs</option>
-                      </select>
-                      <select
-                        value={audioVoice}
-                        onChange={e => handleAudioVoiceChange(e.target.value)}
-                        style={dropdownStyle}
-                      >
-                        {(audioEngine === 'polly' ? POLLY_VOICES : ELEVENLABS_VOICES).map(v => (
-                          <option key={v} value={v}>{v}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {actionBtn(
-                      'Generate Audio VO',
-                      () => handleGenerateAudio(scene),
-                      sceneAsset.audioStatus,
-                      false,
-                      '#af52de'
-                    )}
-                    <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
-                      Est. {narration ? formatCost(estimateAudioCost(audioEngine, narration.length)) : '<$0.01'}
-                    </div>
-                  </div>
-
-                  {/* Camera + Transition info */}
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
-                    {scene.camera_angle && (
-                      <span style={{
-                        padding: '3px 8px', borderRadius: '20px',
-                        background: 'rgba(118,118,128,0.08)',
-                        border: 'none',
-                        color: 'rgba(60,60,67,0.5)', fontSize: '11px',
-                      }}>📷 {scene.camera_angle as string}</span>
-                    )}
-                    {scene.transition && (
-                      <span style={{
-                        padding: '3px 8px', borderRadius: '20px',
-                        background: 'rgba(118,118,128,0.08)',
-                        border: 'none',
-                        color: 'rgba(60,60,67,0.5)', fontSize: '11px',
-                      }}>{(scene.transition as string).replace(/_/g, ' ')}</span>
-                    )}
-                  </div>
-                </div>
-              )}
+        {/* Scenes — responsive 2-col on desktop */}
+        {isDesktop ? (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '300px 1fr',
+            height: 'calc(100vh - 56px)',
+            overflow: 'hidden',
+          }}>
+            {/* LEFT: Scene thumbnail list */}
+            <div style={{ overflowY: 'auto', borderRight: '0.5px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.4)' }}>
+              {scenes.map(scene => renderSceneThumbnail(scene))}
             </div>
-          )
-        })}
+            {/* RIGHT: Active scene detail */}
+            <div style={{ overflowY: 'auto', padding: '16px 20px' }}>
+              {scenes.filter(s => (s.scene_number as number) === activeScene).map(s => renderSceneCard(s))}
+            </div>
+          </div>
+        ) : (
+          scenes.map(scene => renderSceneCard(scene))
+        )}
 
         {/* Footer */}
-        <p style={{ textAlign: 'center', color: 'rgba(60,60,67,0.3)', fontSize: '11px', marginTop: '17px' }}>
-          {scenes.length} scenes · Fuzzy Short
-        </p>
+        {!isDesktop && (
+          <p style={{ textAlign: 'center', color: 'rgba(60,60,67,0.3)', fontSize: '11px', marginTop: '17px' }}>
+            {scenes.length} scenes · Fuzzy Short
+          </p>
+        )}
       </div>
 
       <style>{`select option { background: #f2f2f7; color: #1d1d1f; }`}</style>

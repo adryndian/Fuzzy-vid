@@ -2,18 +2,16 @@
 // A stripped-down and simplified version of AWS V4 signer for Cloudflare Workers.
 // Based on https://github.com/Cloudflare/workers-sdk/blob/main/templates/worker-aws-s3-presigned-urls/src/aws.ts
 
-function encodeURIPath(path: string): string {
-  const result = path
+function buildCanonicalUri(pathname: string): string {
+  return pathname
     .split('/')
     .map(segment => {
-      // Decode %3A back to : for canonical URI (handles both literal : and encoded %3A in URL)
-      const decoded = decodeURIComponent(segment)
-      // Re-encode safely keeping : literal — AWS canonical URI requires literal ':'
+      let decoded: string
+      try { decoded = decodeURIComponent(segment) }
+      catch { decoded = segment }
       return encodeURIComponent(decoded).replace(/%3A/gi, ':')
     })
     .join('/')
-  console.log('[AWS-SIG] canonicalUri:', result)
-  return result
 }
 
 export class AwsV4Signer {
@@ -103,7 +101,7 @@ export class AwsV4Signer {
 
         return [
             request.method.toUpperCase(),
-            encodeURIPath(url.pathname),
+            buildCanonicalUri(url.pathname),
             canonicalQuery,
             canonicalHeaders.join('\n') + '\n',
             signedHeaders,
