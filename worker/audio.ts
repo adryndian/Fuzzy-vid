@@ -10,6 +10,9 @@ interface AudioRequestBody {
   project_id: string
   engine?: 'polly' | 'elevenlabs'
   voice?: string
+  stability?: number
+  similarity_boost?: number
+  style?: number
 }
 
 export async function handleAudioRequest(
@@ -44,7 +47,11 @@ export async function handleAudioRequest(
             { status: 400 }
           )
         }
-        audioBuffer = await generateWithElevenLabs(text, language, apiKey, voice)
+        audioBuffer = await generateWithElevenLabs(text, language, apiKey, voice, {
+          stability: body.stability,
+          similarity_boost: body.similarity_boost,
+          style: body.style,
+        })
       } else {
         // Default: Polly
         if (!creds.awsAccessKeyId || !creds.awsSecretAccessKey) {
@@ -79,7 +86,24 @@ export async function handleAudioRequest(
   return Response.json({ error: 'Not Found' }, { status: 404 })
 }
 
-const POLLY_GENERATIVE_VOICES = new Set(['Ruth', 'Danielle'])
+// Voice metadata: LanguageCode + Engine for each supported voice
+const POLLY_VOICE_LANG: Record<string, { lang: string; engine: 'generative' | 'neural' | 'standard' }> = {
+  // Indonesian (id-ID) — neural only
+  Marlene: { lang: 'id-ID', engine: 'neural' },
+  Andika:  { lang: 'id-ID', engine: 'neural' },
+  // English (en-US) — generative
+  Ruth:     { lang: 'en-US', engine: 'generative' },
+  Danielle: { lang: 'en-US', engine: 'generative' },
+  // English (en-US) — neural
+  Joanna:   { lang: 'en-US', engine: 'neural' },
+  Kimberly: { lang: 'en-US', engine: 'neural' },
+  Salli:    { lang: 'en-US', engine: 'neural' },
+  Kendra:   { lang: 'en-US', engine: 'neural' },
+  Matthew:  { lang: 'en-US', engine: 'neural' },
+  Joey:     { lang: 'en-US', engine: 'neural' },
+  Stephen:  { lang: 'en-US', engine: 'neural' },
+  Gregory:  { lang: 'en-US', engine: 'neural' },
+}
 
 async function generateWithPolly(
   text: string,
@@ -90,13 +114,13 @@ async function generateWithPolly(
 ): Promise<ArrayBuffer> {
   const endpoint = `https://polly.${region}.amazonaws.com/v1/speech`
 
-  const voiceId = voice || 'Ruth'
-  const langCode = language === 'id' ? 'id-ID' : 'en-US'
-  const engineType = POLLY_GENERATIVE_VOICES.has(voiceId) ? 'generative' : 'neural'
+  const defaultVoice = language === 'id' ? 'Marlene' : 'Ruth'
+  const voiceId = voice || defaultVoice
+  const voiceMeta = POLLY_VOICE_LANG[voiceId] || { lang: 'en-US', engine: 'neural' as const }
 
   const pollyBody = JSON.stringify({
-    Engine: engineType,
-    LanguageCode: langCode,
+    Engine: voiceMeta.engine,
+    LanguageCode: voiceMeta.lang,
     OutputFormat: 'mp3',
     Text: text,
     TextType: 'text',
@@ -125,17 +149,25 @@ async function generateWithPolly(
 }
 
 const ELEVENLABS_VOICE_MAP: Record<string, string> = {
-  Adam: '29vD33N1zt5gjR81Q3oR',
-  Rachel: '21m00Tcm4TlvDq8ikWAM',
-  Antoni: 'ErXwobaYiN019PkySvjV',
-  Bella: 'EXAVITQu4vr4xnSDxMaL',
+  // Verified voices
+  Adam:    '29vD33N1zt5gjR81Q3oR',
+  Rachel:  '21m00Tcm4TlvDq8ikWAM',
+  Antoni:  'ErXwobaYiN019PkySvjV',
+  Bella:   'EXAVITQu4vr4xnSDxMaL',
+  // Additional voices
+  Josh:    'TxGEqnHWrfWFTfGW9XjX',
+  Arnold:  'VR6AewLTigWG4xSOukaG',
+  Sam:     'yoZ06aMxZJJ28mfd3POQ',
+  Elli:    'MF3mGyEYCl7XYWbV9V6O',
+  Domi:    'AZnzlk1XvdvUeBnXmlld',
 }
 
 async function generateWithElevenLabs(
   text: string,
   language: string,
   apiKey: string,
-  voice?: string
+  voice?: string,
+  settings?: { stability?: number; similarity_boost?: number; style?: number }
 ): Promise<ArrayBuffer> {
   // Resolve voice ID: named voice → ID map, else fall back to language default
   const resolvedVoiceId = (voice && ELEVENLABS_VOICE_MAP[voice])
@@ -153,9 +185,9 @@ async function generateWithElevenLabs(
       text,
       model_id: 'eleven_multilingual_v2',
       voice_settings: {
-        stability: 0.7,
-        similarity_boost: 0.75,
-        style: 0.5,
+        stability: settings?.stability ?? 0.7,
+        similarity_boost: settings?.similarity_boost ?? 0.75,
+        style: settings?.style ?? 0.5,
         use_speaker_boost: true,
       },
     }),

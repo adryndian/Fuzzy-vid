@@ -34,6 +34,7 @@ export async function handleVideoStart(
     project_id: string
     aspect_ratio: string
     duration_seconds: number
+    seed?: number
   }
 
   if (!creds.awsAccessKeyId || !creds.awsSecretAccessKey) {
@@ -60,7 +61,7 @@ export async function handleVideoStart(
         durationSeconds: duration,
         fps: 24,
         dimension,
-        seed: Math.floor(Math.random() * 1000000),
+        seed: typeof body.seed === 'number' ? body.seed : Math.floor(Math.random() * 1000000),
       },
     },
     outputDataConfig: {
@@ -128,7 +129,7 @@ export async function handleVideoStatus(
       return Response.json({ error: 'Missing AWS credentials' }, { status: 400 })
     }
     const region = 'us-east-1'
-    const arnForUrl = encodeURIComponent(jobId).replace(/%3A/gi, ':')
+    const arnForUrl = encodeURIComponent(jobId)
     const statusEndpoint = `https://bedrock-runtime.${region}.amazonaws.com/async-invoke/${arnForUrl}`
 
     const signer = new AwsV4Signer(
@@ -315,8 +316,7 @@ export async function handleVideoRequest(
       // Poll Bedrock for status
       if (jobData.invocationArn && creds.awsAccessKeyId && creds.awsSecretAccessKey) {
         const region = 'us-east-1'
-        // Keep colons literal in path (AWS canonical URI requirement), encode only the / inside the ARN
-        const arnForUrl = encodeURIComponent(jobData.invocationArn).replace(/%3A/gi, ':')
+        const arnForUrl = encodeURIComponent(jobData.invocationArn)
         const statusEndpoint = `https://bedrock-runtime.${region}.amazonaws.com/async-invoke/${arnForUrl}`
 
         const signer = new AwsV4Signer(

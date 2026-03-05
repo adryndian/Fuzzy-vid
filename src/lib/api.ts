@@ -92,6 +92,8 @@ export async function startVideoJob(params: {
   project_id: string
   aspect_ratio: string
   duration_seconds: number
+  seed?: number
+  prompt_extend?: boolean
 }): Promise<{ job_id: string; scene_number: number; status: string }> {
   const res = await fetch(`${WORKER_URL}/api/video/start`, {
     method: 'POST',
@@ -157,6 +159,9 @@ export async function generateAudio(params: {
   project_id: string
   engine?: 'polly' | 'elevenlabs'
   voice?: string
+  stability?: number
+  similarity_boost?: number
+  style?: number
 }): Promise<{ audio_url: string }> {
   const res = await fetch(`${WORKER_URL}/api/audio/generate`, {
     method: 'POST',

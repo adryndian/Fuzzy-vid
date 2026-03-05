@@ -9,13 +9,16 @@ import { useCostStore } from '../store/costStore'
 import { useStoryboardSessionStore } from '../store/storyboardSessionStore'
 import { estimateImageCost, estimateVideoCost, estimateAudioCost, formatCost } from '../lib/costEstimate'
 
-const POLLY_VOICES = ['Ruth', 'Joanna', 'Matthew', 'Joey'] as const
-const ELEVENLABS_VOICES = ['Bella', 'Adam', 'Rachel', 'Antoni'] as const
+const POLLY_VOICES_ID = ['Marlene', 'Andika'] as const
+const POLLY_VOICES_EN = ['Ruth', 'Danielle', 'Joanna', 'Kimberly', 'Salli', 'Kendra', 'Matthew', 'Joey', 'Stephen', 'Gregory'] as const
+const ELEVENLABS_VOICES = ['Bella', 'Adam', 'Rachel', 'Antoni', 'Josh', 'Arnold', 'Sam', 'Elli', 'Domi'] as const
 
 const IMAGE_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen'; desc: string; provider: 'bedrock' | 'dashscope'; badge?: string }[] = [
-  { id: 'nova_canvas', label: 'Nova Canvas',  tag: 'AWS',  desc: 'Fast & consistent', provider: 'bedrock' },
-  { id: 'sd35',        label: 'SD 3.5 Large', tag: 'AWS',  desc: 'Best quality',       provider: 'bedrock' },
-  { id: 'wanx-v1',    label: 'Wanx v1',       tag: 'Qwen', desc: 'Text-to-image',     provider: 'dashscope', badge: '🎨' },
+  { id: 'nova_canvas',        label: 'Nova Canvas',     tag: 'AWS',  desc: 'Fast & consistent', provider: 'bedrock' },
+  { id: 'sd35',               label: 'SD 3.5 Large',    tag: 'AWS',  desc: 'Best quality',       provider: 'bedrock' },
+  { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo', tag: 'Qwen', desc: 'Fast generation',    provider: 'dashscope', badge: '⚡' },
+  { id: 'wanx2.1-t2i-plus',  label: 'Wanx 2.1 Plus',  tag: 'Qwen', desc: 'Best quality',       provider: 'dashscope', badge: '⭐' },
+  { id: 'wan2.6-image',       label: 'Wan 2.6',         tag: 'Qwen', desc: 'Latest model',       provider: 'dashscope', badge: '🆕' },
 ]
 
 const VIDEO_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen'; desc: string; provider: 'bedrock' | 'dashscope'; badge?: string }[] = [
@@ -90,6 +93,15 @@ export function Storyboard() {
   // Poll counts for display
   const [videoPollDisplayCounts, setVideoPollDisplayCounts] = useState<Record<number, number>>({})
 
+  // ElevenLabs voice settings
+  const [elStability, setElStability] = useState(0.7)
+  const [elSimilarity, setElSimilarity] = useState(0.75)
+  const [elStyle, setElStyle] = useState(0.5)
+
+  // Per-scene video params
+  const [videoSeed, setVideoSeed] = useState<Record<number, number | undefined>>({})
+  const [promptExtend, setPromptExtend] = useState<Record<number, boolean>>({})
+
   // Desktop layout state
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' && window.innerWidth >= 768)
   const [activeScene, setActiveScene] = useState<number>(1)
@@ -129,10 +141,14 @@ export function Storyboard() {
     ? (sessions[activeSessionId]?.assets || {})
     : {}
 
-  // Reset voice when engine changes
+  // Reset voice when engine or language changes
   useEffect(() => {
-    setAudioVoice(audioEngine === 'polly' ? 'Ruth' : 'Bella')
-  }, [audioEngine])
+    if (audioEngine === 'polly') {
+      setAudioVoice(language === 'id' ? 'Marlene' : 'Ruth')
+    } else {
+      setAudioVoice('Bella')
+    }
+  }, [audioEngine, language])
 
   const handleSave = () => {
     if (!storyboard || !rawJson || isAlreadySaved) return
@@ -547,6 +563,7 @@ export function Storyboard() {
             duration_seconds: durationSeconds,
             scene_number: sceneNum,
             project_id: projectId,
+            prompt_extend: promptExtend[sceneNum] !== false,
           }),
         })
         const startData = await startRes.json() as { task_id?: string; error?: string }
@@ -568,6 +585,7 @@ export function Storyboard() {
           project_id: projectId,
           aspect_ratio: aspectRatio,
           duration_seconds: durationSeconds,
+          seed: videoSeed[sceneNum],
         })
         const vidCost = estimateVideoCost()
         addCostEntry({ service: 'video', model: 'Nova Reel', cost: vidCost })
@@ -639,6 +657,11 @@ export function Storyboard() {
         project_id: (data.project_id as string) || 'storyboard',
         engine: audioEngine,
         voice: audioVoice,
+        ...(audioEngine === 'elevenlabs' ? {
+          stability: elStability,
+          similarity_boost: elSimilarity,
+          style: elStyle,
+        } : {}),
       })
       const audCost = estimateAudioCost(audioEngine, text.length)
       const modelLabel = audioEngine === 'elevenlabs' ? 'ElevenLabs' : 'Polly'
@@ -1309,6 +1332,57 @@ export function Storyboard() {
                   </optgroup>
                 </select>
               </div>
+
+              {/* Model-specific params */}
+              {(() => {
+                const curVidModelId = videoModel[sceneNum] || defaultVideoModel
+                const curVidModel = VIDEO_MODELS.find(m => m.id === curVidModelId) || VIDEO_MODELS[0]
+                if (curVidModel.provider === 'bedrock') {
+                  return (
+                    <div style={{ marginBottom: '7px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', flexShrink: 0 }}>Seed</span>
+                      <input
+                        type="number"
+                        placeholder="Random"
+                        value={videoSeed[sceneNum] ?? ''}
+                        onChange={e => setVideoSeed(prev => ({
+                          ...prev,
+                          [sceneNum]: e.target.value ? Number(e.target.value) : undefined,
+                        }))}
+                        style={{
+                          width: '90px',
+                          background: 'rgba(118,118,128,0.1)',
+                          border: '0.5px solid rgba(0,0,0,0.1)',
+                          borderRadius: '8px',
+                          padding: '3px 7px',
+                          color: '#1d1d1f',
+                          fontSize: '11px',
+                          outline: 'none',
+                          fontFamily: 'inherit',
+                        }}
+                      />
+                      <span style={{ color: 'rgba(60,60,67,0.35)', fontSize: '10px' }}>6s (API limit)</span>
+                    </div>
+                  )
+                }
+                if (curVidModel.provider === 'dashscope') {
+                  return (
+                    <div style={{ marginBottom: '7px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={promptExtend[sceneNum] !== false}
+                          onChange={e => setPromptExtend(prev => ({ ...prev, [sceneNum]: e.target.checked }))}
+                          style={{ accentColor: '#007aff' }}
+                        />
+                        <span style={{ color: 'rgba(60,60,67,0.6)', fontSize: '10px' }}>Prompt Extend</span>
+                      </label>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+
               {(() => {
                 const curVidModel = VIDEO_MODELS.find(m => m.id === (videoModel[sceneNum] || defaultVideoModel)) || VIDEO_MODELS[0]
                 const vidNeedsImage = curVidModel.provider === 'bedrock' || curVidModel.id.includes('i2v')
@@ -1415,11 +1489,39 @@ export function Storyboard() {
                   onChange={e => handleAudioVoiceChange(e.target.value)}
                   style={dropdownStyle}
                 >
-                  {(audioEngine === 'polly' ? POLLY_VOICES : ELEVENLABS_VOICES).map(v => (
-                    <option key={v} value={v}>{v}</option>
-                  ))}
+                  {audioEngine === 'polly' ? (
+                    language === 'id' ? (
+                      POLLY_VOICES_ID.map(v => <option key={v} value={v}>{v}</option>)
+                    ) : (
+                      POLLY_VOICES_EN.map(v => <option key={v} value={v}>{v}</option>)
+                    )
+                  ) : (
+                    ELEVENLABS_VOICES.map(v => <option key={v} value={v}>{v}</option>)
+                  )}
                 </select>
               </div>
+
+              {/* ElevenLabs voice settings sliders */}
+              {audioEngine === 'elevenlabs' && (
+                <div style={{ marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  {([
+                    { label: 'Stability', value: elStability, set: setElStability },
+                    { label: 'Similarity', value: elSimilarity, set: setElSimilarity },
+                    { label: 'Style', value: elStyle, set: setElStyle },
+                  ] as const).map(({ label, value, set }) => (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', width: '60px', flexShrink: 0 }}>{label}</span>
+                      <input
+                        type="range" min={0} max={1} step={0.05}
+                        value={value}
+                        onChange={e => set(Number(e.target.value))}
+                        style={{ flex: 1, accentColor: '#af52de', height: '3px' }}
+                      />
+                      <span style={{ color: '#af52de', fontSize: '10px', fontWeight: 700, width: '28px', textAlign: 'right' }}>{value.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {actionBtn(
                 'Generate Audio VO',
