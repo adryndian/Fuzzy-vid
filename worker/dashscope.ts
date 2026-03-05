@@ -92,9 +92,10 @@ export async function handleDashscopeBrain(
 
 // ─── IMAGE GENERATION (Wanx / Wan models) ─────────────────────────
 export const QWEN_IMAGE_MODELS = [
-  { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo', tag: 'Qwen', desc: 'Fast generation',  badge: '⚡ Fast' },
-  { id: 'wanx2.1-t2i-plus',  label: 'Wanx 2.1 Plus',  tag: 'Qwen', desc: 'Best quality',      badge: '⭐ Best' },
-  { id: 'wan2.6-image',       label: 'Wan 2.6',         tag: 'Qwen', desc: 'Latest model',      badge: '🆕 Latest' },
+  { id: 'qwen-image-2.0-pro', label: 'Qwen Image 2.0 Pro', tag: 'Qwen', desc: 'Best quality',    badge: '⭐ Pro' },
+  { id: 'qwen-image-2.0',     label: 'Qwen Image 2.0',     tag: 'Qwen', desc: 'Balanced',         badge: '✨ New' },
+  { id: 'wan2.6-image',       label: 'Wan 2.6 Image',      tag: 'Qwen', desc: 'Latest Wan model', badge: '🆕 Alt' },
+  { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo',     tag: 'Qwen', desc: 'Fast (legacy)',    badge: '⚡ Legacy' },
 ]
 
 function getWanxSize(aspectRatio: string): string {
@@ -135,7 +136,7 @@ export async function handleDashscopeImageStart(
     : { prompt: body.prompt }
 
   const payload = JSON.stringify({
-    model: body.image_model || 'wanx2.1-t2i-turbo',
+    model: body.image_model || 'qwen-image-2.0-pro',
     input: inputPayload,
     parameters: {
       size,
@@ -272,9 +273,9 @@ async function downloadAndUploadToR2(sourceUrl: string, ext: string, env: Env): 
 
 // ─── VIDEO GENERATION (Wan2.1 i2v / t2v) ──────────────────────────
 export const QWEN_VIDEO_MODELS = [
-  { id: 'wan2.1-i2v-plus',  label: 'Wan2.1 I2V Plus',  tag: 'Qwen', desc: 'Image→Video best quality', badge: '⭐ Best' },
-  { id: 'wan2.1-i2v-turbo', label: 'Wan2.1 I2V Turbo', tag: 'Qwen', desc: 'Image→Video fast',         badge: '⚡ Fast' },
-  { id: 'wan2.1-t2v-plus',  label: 'Wan2.1 T2V Plus',  tag: 'Qwen', desc: 'Text→Video best quality',  badge: '📝 Text→Video' },
+  { id: 'wan2.6-i2v-flash',  label: 'Wan2.6 I2V Plus',  tag: 'Qwen', desc: 'Image→Video best quality', badge: '⭐ Best' },
+  { id: 'wanx2.1-i2v-turbo', label: 'Wan2.1 I2V Turbo', tag: 'Qwen', desc: 'Image→Video fast',         badge: '⚡ Fast' },
+  { id: 'wan2.6-t2v-flash',  label: 'Wan2.6 T2V Plus',  tag: 'Qwen', desc: 'Text→Video best quality',  badge: '📝 Text→Video' },
   { id: 'wan2.1-t2v-turbo', label: 'Wan2.1 T2V Turbo', tag: 'Qwen', desc: 'Text→Video fast',          badge: '📝⚡ T2V Fast' },
 ]
 
