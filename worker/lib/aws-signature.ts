@@ -10,7 +10,7 @@ function buildCanonicalUri(rawUrl: string): string {
       let decoded: string
       try { decoded = decodeURIComponent(segment) }
       catch { decoded = segment }
-      return encodeURIComponent(decoded).replace(/%3A/gi, ':')
+      return encodeURIComponent(decoded)
     })
     .join('/')
 }

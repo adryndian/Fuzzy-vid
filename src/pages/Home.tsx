@@ -28,11 +28,9 @@ const BRAIN_MODELS: { id: BrainModel; label: string; tag: 'AWS' | 'Qwen'; provid
 type ArtStyle = 'cinematic_realistic' | 'anime_stylized' | 'comic_book' | '3d_render' | 'oil_painting' | 'pixel_art'
 
 const IMAGE_MODELS = [
-  { id: 'nova_canvas',        label: 'Nova Canvas',     tag: 'AWS',  desc: 'Fast & consistent', provider: 'bedrock' },
-  { id: 'sd35',               label: 'SD 3.5 Large',    tag: 'AWS',  desc: 'Best quality',       provider: 'bedrock' },
-  { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo', tag: 'Qwen', desc: 'Fast generation',    provider: 'dashscope' },
-  { id: 'wanx2.1-t2i-plus',  label: 'Wanx 2.1 Plus',  tag: 'Qwen', desc: 'Best quality',       provider: 'dashscope' },
-  { id: 'wan2.6-image',       label: 'Wan 2.6',         tag: 'Qwen', desc: 'Latest model',       provider: 'dashscope' },
+  { id: 'nova_canvas', label: 'Nova Canvas',   tag: 'AWS',  desc: 'Fast & consistent', provider: 'bedrock' },
+  { id: 'sd35',        label: 'SD 3.5 Large',  tag: 'AWS',  desc: 'Best quality',       provider: 'bedrock' },
+  { id: 'wanx-v1',    label: 'Wanx v1',        tag: 'Qwen', desc: 'Text-to-image',     provider: 'dashscope' },
 ] as const
 
 const VIDEO_MODELS_HOME = [

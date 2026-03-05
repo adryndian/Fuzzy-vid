@@ -55,29 +55,32 @@ aws-signature.ts ← HMAC signing — CRITICAL, see rules below
 
 ## CRITICAL — AWS SIGNATURE RULE (DO NOT BREAK)
 
-The buildCanonicalUri function MUST decode %3A before signing.
+The buildCanonicalUri function MUST percent-encode ALL non-unreserved characters.
+AWS SigV4 requires ":" to be encoded as "%3A" in the canonical URI.
 This is the #1 bug source. ALWAYS use this exact function:
 
 ```typescript
 function buildCanonicalUri(rawUrl: string): string {
   const pathname = new URL(rawUrl).pathname
   return pathname
-    .split('/')
+    .split(‘/’)
     .map(segment => {
       let decoded: string
       try { decoded = decodeURIComponent(segment) }
       catch { decoded = segment }
-      return encodeURIComponent(decoded).replace(/%3A/gi, ':')
+      // CORRECT — encode ":" as "%3A" (AWS SigV4 requires percent-encoding of non-unreserved chars)
+      return encodeURIComponent(decoded)
+      // NOTE: Do NOT add .replace(/%3A/gi, ‘:’) — this was incorrect and caused Nova Canvas failures
     })
-    .join('/')
+    .join(‘/’)
 }
 ```
 
 In signRequest: ALWAYS call buildCanonicalUri(url) NOT new URL(url).pathname
 
 Verify before deploying:
-buildCanonicalUri(’…/model/amazon.nova-canvas-v1%3A0/invoke’)
-→ MUST output: /model/amazon.nova-canvas-v1:0/invoke  (literal colon)
+buildCanonicalUri(‘…/model/amazon.nova-canvas-v1%3A0/invoke’)
+→ MUST output: /model/amazon.nova-canvas-v1%3A0/invoke  ("%3A" percent-encoded, NOT literal colon)
 
 -----
 
@@ -89,7 +92,7 @@ us.anthropic.claude-sonnet-4-6          ← primary brain model
 us.anthropic.claude-haiku-4-5-20251001  ← fast/cheap tasks
 us.meta.llama4-maverick-17b-instruct-v1:0
 
-### AWS Bedrock — Image (use %3A in fetch URL, literal : in canonical URI)
+### AWS Bedrock — Image (use %3A in fetch URL AND in canonical URI)
 
 amazon.nova-canvas-v1:0     → us-east-1 → fetch URL: nova-canvas-v1%3A0
 stability.sd3-5-large-v1:0  → us-west-2 ONLY → fetch URL: sd3-5-large-v1%3A0
@@ -115,13 +118,13 @@ qwq-plus      ← deep reasoning
 
 ### Dashscope Singapore — Image (ALL async, use X-DashScope-Async: enable)
 
-wanx2.1-t2i-turbo  ← fast, standard wanx format
-wanx2.1-t2i-plus   ← best quality, standard wanx format
-wan2.6-image        ← latest, uses messages[] format (DIFFERENT!)
+wanx-v1  ← international endpoint (dashscope-intl.aliyuncs.com), standard wanx format
 
-REMOVED (invalid/not exist):
-wanx-v1        ← DOES NOT EXIST, never use
-wanx2.1-i2i   ← different endpoint, not implemented
+REMOVED (invalid on international endpoint — "Model not exist"):
+wanx2.1-t2i-turbo  ← China endpoint only, NOT available on dashscope-intl
+wanx2.1-t2i-plus   ← China endpoint only, NOT available on dashscope-intl
+wan2.6-image        ← wrong endpoint for this model ("url error")
+wanx2.1-i2i        ← different endpoint, not implemented
 
 ### Dashscope Singapore — Video (ALL async)
 
@@ -142,11 +145,10 @@ Brain endpoint:
 POST /compatible-mode/v1/chat/completions
 Body: { model, messages, max_tokens }
 
-Image endpoint (ALL models):
+Image endpoint (wanx-v1):
 POST /api/v1/services/aigc/text2image/image-synthesis
 Header: X-DashScope-Async: enable
-wanx2.1 body:  { model, input: { prompt }, parameters: { size, n, negative_prompt, watermark } }
-wan2.6 body:   { model, input: { messages: [{ role: ‘user’, content: [{ text: prompt }] }] }, parameters }
+Body: { model, input: { prompt }, parameters: { size, n, negative_prompt, watermark } }
 Response: { output: { task_id } }
 
 Video endpoint (ALL models):
@@ -351,7 +353,6 @@ wrangler secret put SECRET_NAME
 1. NEVER use invalid model IDs — check this file’s model list first
 1. NEVER commit API keys — all keys via wrangler secrets or localStorage
 1. After EVERY change: npm run build must show 0 errors
-1. wan2.6-image uses messages[] format, not input.prompt
 1. Dashscope poll URLs expire 24h — always re-upload to R2
 1. Nova Reel: us-east-1 ONLY, SD 3.5: us-west-2 ONLY
 1. Dashscope size uses * separator: 768*1280 not 768x1280
@@ -360,17 +361,17 @@ wrangler secret put SECRET_NAME
 
 ## COMMON ERRORS & FIXES
 
-Error: “signature does not match” / %3A in canonical string
-Fix: aws-signature.ts → buildCanonicalUri must decode %3A → :
+Error: “signature does not match” / canonical URI mismatch
+Fix: aws-signature.ts → buildCanonicalUri must use encodeURIComponent(segment) WITHOUT .replace(/%3A/gi, ':')
+     AWS SigV4 requires “:” to be “%3A” in the canonical URI, not a literal colon.
 
 Error: “Model not exist” from Dashscope
-Fix: Check model ID against VALID list above. wanx-v1 does not exist.
+Fix: Check model ID against VALID list above.
+     wanx2.1-t2i-turbo / wanx2.1-t2i-plus are China-endpoint-only. Use wanx-v1 for international.
 
 Error: “url error, please check url” from Dashscope image
 Fix: Remove img_url from t2i requests. Only i2v models need img_url.
-
-Error: “Invalid parameter” from Dashscope wan2.6
-Fix: Use messages[] format, not input.prompt
+     Also: wan2.6-image uses a different endpoint — not supported, use wanx-v1 instead.
 
 Error: “API Usage Billing” in Claude Code header
 Fix: This is normal in v2.x — check ~/.claude/settings.json has env.CLAUDE_CODE_USE_BEDROCK = “1”
