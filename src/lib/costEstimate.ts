@@ -1,8 +1,6 @@
-type BrainModel = 'gemini' | 'llama4_maverick' | 'claude_sonnet'
-type ImageModel = 'nova_canvas' | 'gemini' | 'titan_v2'
 type AudioModel = 'polly' | 'elevenlabs' | 'gemini_tts'
 
-export function estimateBrainCost(model: BrainModel, scenesCount: number): number {
+export function estimateBrainCost(model: string, scenesCount: number): number {
   // Rough estimate based on typical prompt/response sizes per scene
   const inputTokensPerScene = 200
   const outputTokensPerScene = 300
@@ -18,12 +16,20 @@ export function estimateBrainCost(model: BrainModel, scenesCount: number): numbe
       return ((totalInput + totalOutput) / 1000) * 0.0002
     case 'gemini':
       return 0 // free tier
+    case 'qwen3_max':
+      return ((totalInput + totalOutput) / 1000) * 0.001
+    case 'qwen_plus':
+    case 'qwq_plus':
+      return ((totalInput + totalOutput) / 1000) * 0.0005
+    case 'qwen_flash':
+    case 'qwen_turbo':
+      return ((totalInput + totalOutput) / 1000) * 0.0001
     default:
       return 0
   }
 }
 
-export function estimateImageCost(model?: ImageModel): number {
+export function estimateImageCost(model?: string): number {
   if (model === 'titan_v2') return 0.008 // Titan V2: ~$0.008 per image
   return 0.04 // Nova Canvas: ~$0.04 per image
 }

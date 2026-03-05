@@ -271,6 +271,7 @@ export interface AppSettings {
   // Optional
   elevenLabsApiKey: string
   runwayApiKey: string
+  dashscopeApiKey: string
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -283,6 +284,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   videoRegion: 'us-east-1',
   elevenLabsApiKey: '',
   runwayApiKey: '',
+  dashscopeApiKey: '',
 }
 
 export const SETTINGS_STORAGE_KEY = 'fuzzy_short_settings'
@@ -309,5 +311,6 @@ export function buildApiHeaders(settings: AppSettings): Record<string, string> {
   if (settings.audioRegion) headers['X-Audio-Region'] = settings.audioRegion
   if (settings.elevenLabsApiKey) headers['X-ElevenLabs-Key'] = settings.elevenLabsApiKey
   if (settings.runwayApiKey) headers['X-Runway-Key'] = settings.runwayApiKey
+  if (settings.dashscopeApiKey) headers['X-Dashscope-Api-Key'] = settings.dashscopeApiKey
   return headers
 }

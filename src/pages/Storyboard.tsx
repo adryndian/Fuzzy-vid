@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import type { SceneAssets, SceneAssetsMap, GenerationStatus, AudioHistoryItem } from '../types/schema'
 import { defaultSceneAssets, saveVideoJob, loadVideoJob, clearVideoJob, redistributeDurations } from '../types/schema'
-import { generateImage, generateAudio, checkVideoStatus, startVideoJob, enhancePrompt, rewriteVO } from '../lib/api'
+import { generateImage, generateAudio, checkVideoStatus, startVideoJob, enhancePrompt, rewriteVO, getApiHeaders, WORKER_URL } from '../lib/api'
 import { useHistoryStore } from '../store/historyStore'
 import { useCostStore } from '../store/costStore'
 import { useStoryboardSessionStore } from '../store/storyboardSessionStore'
@@ -11,6 +11,23 @@ import { estimateImageCost, estimateVideoCost, estimateAudioCost, formatCost } f
 
 const POLLY_VOICES = ['Ruth', 'Joanna', 'Matthew', 'Joey'] as const
 const ELEVENLABS_VOICES = ['Bella', 'Adam', 'Rachel', 'Antoni'] as const
+
+const IMAGE_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen'; desc: string; provider: 'bedrock' | 'dashscope'; badge?: string }[] = [
+  { id: 'nova_canvas',         label: 'Nova Canvas',     tag: 'AWS',  desc: 'Best quality',    provider: 'bedrock' },
+  { id: 'titan_v2',            label: 'Titan V2',        tag: 'AWS',  desc: 'Fast & cheap',    provider: 'bedrock' },
+  { id: 'wanx2.1-t2i-plus',   label: 'Wanx 2.1 Plus',  tag: 'Qwen', desc: 'Best quality',    provider: 'dashscope', badge: '⭐' },
+  { id: 'wanx2.1-t2i-turbo',  label: 'Wanx 2.1 Turbo', tag: 'Qwen', desc: 'Fast',            provider: 'dashscope', badge: '⚡' },
+  { id: 'wan2.6-image',        label: 'Wan 2.6',         tag: 'Qwen', desc: 'Latest model',    provider: 'dashscope', badge: '🆕' },
+  { id: 'wanx-v1',             label: 'Wanx v1',         tag: 'Qwen', desc: 'Classic stable',  provider: 'dashscope', badge: '🎨' },
+]
+
+const VIDEO_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen'; desc: string; provider: 'bedrock' | 'dashscope'; badge?: string }[] = [
+  { id: 'nova_reel',         label: 'Nova Reel',         tag: 'AWS',  desc: 'Up to 6s',            provider: 'bedrock' },
+  { id: 'wan2.1-i2v-plus',  label: 'Wan2.1 I2V Plus',  tag: 'Qwen', desc: 'Image→Video best',    provider: 'dashscope', badge: '⭐' },
+  { id: 'wan2.1-i2v-turbo', label: 'Wan2.1 I2V Turbo', tag: 'Qwen', desc: 'Image→Video fast',    provider: 'dashscope', badge: '⚡' },
+  { id: 'wan2.1-t2v-plus',  label: 'Wan2.1 T2V Plus',  tag: 'Qwen', desc: 'Text→Video best',     provider: 'dashscope', badge: '📝⭐' },
+  { id: 'wan2.1-t2v-turbo', label: 'Wan2.1 T2V Turbo', tag: 'Qwen', desc: 'Text→Video fast',     provider: 'dashscope', badge: '📝⚡' },
+]
 
 const dropdownStyle: React.CSSProperties = {
   background: 'rgba(118,118,128,0.1)',
@@ -49,7 +66,8 @@ export function Storyboard() {
   const [storyboard, setStoryboard] = useState<Record<string, unknown> | null>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [rawJson, setRawJson] = useState('')
-  const [imageModel, setImageModel] = useState<'nova_canvas' | 'titan_v2'>('nova_canvas')
+  const [imageModel, setImageModel] = useState<string>('nova_canvas')
+  const [videoModel, setVideoModel] = useState<Record<number, string>>({})
   const [audioEngine, setAudioEngine] = useState<'polly' | 'elevenlabs'>('polly')
   const [audioVoice, setAudioVoice] = useState('Ruth')
   const [language, setLanguage] = useState('id')
@@ -83,6 +101,8 @@ export function Storyboard() {
 
   // Video polling refs
   const videoPollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({})
+  // Dashscope polling refs (image + video async tasks)
+  const dashscopePollingRefs = useRef<Record<string, ReturnType<typeof setInterval>>>({})
 
   // Cost tracking
   const addCostEntry = useCostStore((s) => s.addEntry)
@@ -133,6 +153,7 @@ export function Storyboard() {
   useEffect(() => {
     return () => {
       Object.values(videoPollingRefs.current).forEach(clearInterval)
+      Object.values(dashscopePollingRefs.current).forEach(clearInterval)
     }
   }, [])
 
@@ -163,7 +184,7 @@ export function Storyboard() {
       if (!raw) { navigate('/'); return }
 
       const storedImageModel = sessionStorage.getItem('fuzzy_gen_imageModel')
-      const imgModel = (storedImageModel === 'nova_canvas' || storedImageModel === 'titan_v2')
+      const imgModel = storedImageModel && IMAGE_MODELS.some(m => m.id === storedImageModel)
         ? storedImageModel : 'nova_canvas'
       const storedAudioModel = sessionStorage.getItem('fuzzy_gen_audioModel')
       const audModel = (storedAudioModel === 'polly' || storedAudioModel === 'elevenlabs')
@@ -266,9 +287,9 @@ export function Storyboard() {
   }
 
   // Also update session settings when user changes them
-  const handleImageModelChange = (val: 'nova_canvas' | 'titan_v2') => {
+  const handleImageModelChange = (val: string) => {
     setImageModel(val)
-    if (activeSessionId) updateSession(activeSessionId, { imageModel: val })
+    if (activeSessionId) updateSession(activeSessionId, { imageModel: val as 'nova_canvas' | 'titan_v2' })
   }
 
   const handleAudioEngineChange = (val: 'polly' | 'elevenlabs') => {
@@ -367,6 +388,65 @@ export function Storyboard() {
     videoPollingRefs.current[sceneNum] = interval
   }, [updateAsset])
 
+  const startDashscopePolling = useCallback((sceneNum: number, taskId: string, type: 'image' | 'video') => {
+    const key = `${type}_${sceneNum}_${taskId}`
+    if (dashscopePollingRefs.current[key]) {
+      clearInterval(dashscopePollingRefs.current[key])
+    }
+    const intervalMs = type === 'image' ? 5000 : 8000
+    const maxPolls = type === 'image' ? 60 : 90
+    let pollCount = 0
+
+    const interval = setInterval(async () => {
+      pollCount++
+      if (pollCount > maxPolls) {
+        clearInterval(interval)
+        delete dashscopePollingRefs.current[key]
+        const errMsg = `Dashscope ${type} timed out`
+        if (type === 'image') {
+          updateAsset(sceneNum, { imageStatus: 'error', imageError: errMsg })
+        } else {
+          updateAsset(sceneNum, { videoStatus: 'error', videoError: errMsg })
+        }
+        setPageToast({ msg: `Scene ${sceneNum} ${type} timed out`, type: 'error' })
+        return
+      }
+
+      try {
+        const res = await fetch(`${WORKER_URL}/api/dashscope/task/${taskId}`, {
+          headers: getApiHeaders(),
+        })
+        const data = await res.json() as { status: string; url?: string; message?: string }
+
+        if (data.status === 'done' && data.url) {
+          clearInterval(interval)
+          delete dashscopePollingRefs.current[key]
+          if (type === 'image') {
+            updateAsset(sceneNum, { imageStatus: 'done', imageUrl: data.url })
+            toast.success(`Scene ${sceneNum} image ready (Qwen)!`)
+          } else {
+            updateAsset(sceneNum, { videoStatus: 'done', videoUrl: data.url })
+            toast.success(`Scene ${sceneNum} video ready (Qwen)!`)
+          }
+        } else if (data.status === 'error') {
+          clearInterval(interval)
+          delete dashscopePollingRefs.current[key]
+          if (type === 'image') {
+            updateAsset(sceneNum, { imageStatus: 'error', imageError: data.message || 'Dashscope error' })
+          } else {
+            updateAsset(sceneNum, { videoStatus: 'error', videoError: data.message || 'Dashscope error' })
+          }
+          setPageToast({ msg: `Scene ${sceneNum} ${type} failed: ${data.message}`, type: 'error' })
+        }
+        // status === 'processing' → keep polling
+      } catch {
+        // Network error — keep polling
+      }
+    }, intervalMs)
+
+    dashscopePollingRefs.current[key] = interval
+  }, [updateAsset]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleGenerateImage = async (scene: Record<string, unknown>) => {
     const sceneNum = scene.scene_number as number
     const prompt = editedPrompts[sceneNum] ?? (scene.image_prompt as string)
@@ -389,19 +469,43 @@ export function Storyboard() {
         updateAsset(sceneNum, { enhancedPrompt: finalPrompt })
       } catch { /* fall through with original prompt */ }
 
-      const result = await generateImage({
-        prompt: finalPrompt,
-        scene_number: sceneNum,
-        project_id: (data.project_id as string) || 'storyboard',
-        aspect_ratio: aspectRatio,
-        art_style: artStyle,
-        image_model: imageModel,
-      })
-      const imgCost = estimateImageCost(imageModel)
-      const modelLabel = imageModel === 'titan_v2' ? 'Titan V2' : 'Nova Canvas'
-      updateAsset(sceneNum, { imageStatus: 'done', imageUrl: result.image_url })
-      addCostEntry({ service: 'image', model: modelLabel, cost: imgCost })
-      toast.success(`Scene ${sceneNum} image ready · ${formatCost(imgCost)}`)
+      const selectedImageModel = IMAGE_MODELS.find(m => m.id === imageModel) || IMAGE_MODELS[0]
+
+      if (selectedImageModel.provider === 'dashscope') {
+        // Async Dashscope image generation
+        const startRes = await fetch(`${WORKER_URL}/api/dashscope/image/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
+          body: JSON.stringify({
+            prompt: finalPrompt,
+            image_model: selectedImageModel.id,
+            aspect_ratio: aspectRatio,
+            scene_number: sceneNum,
+            project_id: (data.project_id as string) || 'storyboard',
+          }),
+        })
+        const startData = await startRes.json() as { task_id?: string; error?: string }
+        if (!startRes.ok || !startData.task_id) {
+          throw new Error(startData.error || 'Failed to start Dashscope image task')
+        }
+        toast(`Scene ${sceneNum} image started (Qwen) · polling every 5s`, { icon: '🖼️', duration: 4000 })
+        startDashscopePolling(sceneNum, startData.task_id, 'image')
+      } else {
+        // AWS Bedrock image generation
+        const result = await generateImage({
+          prompt: finalPrompt,
+          scene_number: sceneNum,
+          project_id: (data.project_id as string) || 'storyboard',
+          aspect_ratio: aspectRatio,
+          art_style: artStyle,
+          image_model: imageModel as 'nova_canvas' | 'titan_v2',
+        })
+        const imgCost = estimateImageCost(imageModel)
+        const modelLabel = imageModel === 'titan_v2' ? 'Titan V2' : 'Nova Canvas'
+        updateAsset(sceneNum, { imageStatus: 'done', imageUrl: result.image_url })
+        addCostEntry({ service: 'image', model: modelLabel, cost: imgCost })
+        toast.success(`Scene ${sceneNum} image ready · ${formatCost(imgCost)}`)
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       updateAsset(sceneNum, { imageStatus: 'error', imageError: msg })
@@ -412,39 +516,68 @@ export function Storyboard() {
   const handleGenerateVideo = async (scene: Record<string, unknown>) => {
     const sceneNum = scene.scene_number as number
     const sceneAsset = storedAssets[sceneNum]
-    if (!sceneAsset?.imageUrl) return
     updateAsset(sceneNum, { videoStatus: 'generating', videoError: undefined })
     try {
       const data = storyboard as Record<string, unknown>
       const projectId = (data.project_id as string) || 'storyboard'
       const durationSeconds = sceneDurations[sceneNum] || 6
-      const result = await startVideoJob({
-        image_url: sceneAsset.imageUrl,
-        prompt: editedPrompts[sceneNum] ?? (scene.image_prompt as string),
-        scene_number: sceneNum,
-        project_id: projectId,
-        aspect_ratio: (data.aspect_ratio as string) || '9_16',
-        duration_seconds: durationSeconds,
-      })
-      const vidCost = estimateVideoCost()
-      addCostEntry({ service: 'video', model: 'Nova Reel', cost: vidCost })
+      const aspectRatio = (data.aspect_ratio as string) || '9_16'
+      const selectedVideoModel = VIDEO_MODELS.find(m => m.id === (videoModel[sceneNum] || 'nova_reel')) || VIDEO_MODELS[0]
 
-      if (result.job_id) {
-        updateAsset(sceneNum, { videoStatus: 'generating', videoJobId: result.job_id })
-        // Save to localStorage so we can resume on page reload
-        saveVideoJob({
-          jobId: result.job_id,
-          sceneNumber: sceneNum,
-          projectId,
-          startedAt: Date.now(),
-          status: 'processing',
-          durationSeconds,
+      if (selectedVideoModel.provider === 'dashscope') {
+        // Async Dashscope video generation
+        const startRes = await fetch(`${WORKER_URL}/api/dashscope/video/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
+          body: JSON.stringify({
+            prompt: editedPrompts[sceneNum] ?? (scene.image_prompt as string),
+            image_url: sceneAsset?.imageUrl,
+            video_model: selectedVideoModel.id,
+            aspect_ratio: aspectRatio,
+            duration_seconds: durationSeconds,
+            scene_number: sceneNum,
+            project_id: projectId,
+          }),
         })
-        toast(`Scene ${sceneNum} video started (${durationSeconds}s) · polling every 8s`, { icon: '🎬', duration: 4000 })
-        pollVideoStatus(sceneNum, result.job_id)
+        const startData = await startRes.json() as { task_id?: string; error?: string }
+        if (!startRes.ok || !startData.task_id) {
+          throw new Error(startData.error || 'Failed to start Dashscope video task')
+        }
+        toast(`Scene ${sceneNum} video started (Qwen) · polling every 8s`, { icon: '🎬', duration: 4000 })
+        startDashscopePolling(sceneNum, startData.task_id, 'video')
       } else {
-        updateAsset(sceneNum, { videoStatus: 'error', videoError: 'No job_id returned' })
-        setPageToast({ msg: 'Video generation returned no job ID', type: 'error' })
+        // AWS Nova Reel
+        if (!sceneAsset?.imageUrl) {
+          updateAsset(sceneNum, { videoStatus: 'error', videoError: 'Generate image first' })
+          return
+        }
+        const result = await startVideoJob({
+          image_url: sceneAsset.imageUrl,
+          prompt: editedPrompts[sceneNum] ?? (scene.image_prompt as string),
+          scene_number: sceneNum,
+          project_id: projectId,
+          aspect_ratio: aspectRatio,
+          duration_seconds: durationSeconds,
+        })
+        const vidCost = estimateVideoCost()
+        addCostEntry({ service: 'video', model: 'Nova Reel', cost: vidCost })
+
+        if (result.job_id) {
+          updateAsset(sceneNum, { videoStatus: 'generating', videoJobId: result.job_id })
+          saveVideoJob({
+            jobId: result.job_id,
+            sceneNumber: sceneNum,
+            projectId,
+            startedAt: Date.now(),
+            status: 'processing',
+            durationSeconds,
+          })
+          toast(`Scene ${sceneNum} video started (${durationSeconds}s) · polling every 8s`, { icon: '🎬', duration: 4000 })
+          pollVideoStatus(sceneNum, result.job_id)
+        } else {
+          updateAsset(sceneNum, { videoStatus: 'error', videoError: 'No job_id returned' })
+          setPageToast({ msg: 'Video generation returned no job ID', type: 'error' })
+        }
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
@@ -1246,11 +1379,19 @@ export function Storyboard() {
                     <div style={{ marginBottom: '7px' }}>
                       <select
                         value={imageModel}
-                        onChange={e => handleImageModelChange(e.target.value as 'nova_canvas' | 'titan_v2')}
+                        onChange={e => handleImageModelChange(e.target.value)}
                         style={{ ...dropdownStyle, width: 'auto' }}
                       >
-                        <option value="nova_canvas">Nova Canvas</option>
-                        <option value="titan_v2">Titan V2</option>
+                        <optgroup label="AWS Bedrock">
+                          {IMAGE_MODELS.filter(m => m.provider === 'bedrock').map(m => (
+                            <option key={m.id} value={m.id}>{m.label}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Qwen Dashscope">
+                          {IMAGE_MODELS.filter(m => m.provider === 'dashscope').map(m => (
+                            <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
+                          ))}
+                        </optgroup>
                       </select>
                     </div>
                     {actionBtn('Generate Image', () => handleGenerateImage(scene), sceneAsset.imageStatus, false, '#ff6b35')}
@@ -1276,20 +1417,26 @@ export function Storyboard() {
                   </div>
 
                   {/* VIDEO SECTION */}
+                  {(() => {
+                    const curVidModelId = videoModel[sceneNum] || 'nova_reel'
+                    const curVidModel = VIDEO_MODELS.find(m => m.id === curVidModelId) || VIDEO_MODELS[0]
+                    const isT2V = curVidModel.provider === 'dashscope' && curVidModelId.includes('t2v')
+                    const canGenVideo = hasImage || isT2V
+                    return (
                   <div style={{
                     background: 'rgba(0,122,255,0.04)',
-                    border: `0.5px solid ${hasImage ? 'rgba(0,122,255,0.15)' : 'rgba(0,0,0,0.05)'}`,
+                    border: `0.5px solid ${canGenVideo ? 'rgba(0,122,255,0.15)' : 'rgba(0,0,0,0.05)'}`,
                     borderRadius: '16px',
                     padding: '10px',
                     marginBottom: '8px',
-                    opacity: hasImage ? 1 : 0.5,
+                    opacity: canGenVideo ? 1 : 0.5,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <span style={{ fontSize: '13px' }}>🎬</span>
                         <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Video</span>
                       </div>
-                      {!hasImage
+                      {!canGenVideo
                         ? <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '10px' }}>Generate image first</span>
                         : statusBadge(sceneAsset.videoStatus, 'Video', isVideoPolling)
                       }
@@ -1394,17 +1541,42 @@ export function Storyboard() {
                       </div>
                     </div>
 
-                    {actionBtn(
-                      `Generate Video (${sceneDurations[sceneNum] || 6}s)`,
-                      () => handleGenerateVideo(scene),
-                      sceneAsset.videoStatus,
-                      !hasImage,
-                      '#007aff'
-                    )}
+                    {/* Video model selector */}
+                    <div style={{ marginBottom: '7px' }}>
+                      <select
+                        value={videoModel[sceneNum] || 'nova_reel'}
+                        onChange={e => setVideoModel(prev => ({ ...prev, [sceneNum]: e.target.value }))}
+                        style={{ ...dropdownStyle, width: 'auto' }}
+                      >
+                        <optgroup label="AWS Bedrock">
+                          {VIDEO_MODELS.filter(m => m.provider === 'bedrock').map(m => (
+                            <option key={m.id} value={m.id}>{m.label}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Qwen Dashscope">
+                          {VIDEO_MODELS.filter(m => m.provider === 'dashscope').map(m => (
+                            <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
+                          ))}
+                        </optgroup>
+                      </select>
+                    </div>
+                    {(() => {
+                      const curVidModel = VIDEO_MODELS.find(m => m.id === (videoModel[sceneNum] || 'nova_reel')) || VIDEO_MODELS[0]
+                      const vidNeedsImage = curVidModel.provider === 'bedrock' || curVidModel.id.includes('i2v')
+                      return actionBtn(
+                        `Generate Video (${sceneDurations[sceneNum] || 6}s)`,
+                        () => handleGenerateVideo(scene),
+                        sceneAsset.videoStatus,
+                        vidNeedsImage && !hasImage,
+                        '#007aff'
+                      )
+                    })()}
                     <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
                       Est. {formatCost(estimateVideoCost())}
                     </div>
                   </div>
+                    )
+                  })()}
 
                   {/* AUDIO SECTION */}
                   <div style={{

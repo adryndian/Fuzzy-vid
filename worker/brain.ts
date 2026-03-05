@@ -69,6 +69,54 @@ OUTPUT RULES:
   even if narasi_language is set to one language
 `;
 
+export function buildBrainPrompts(body: Record<string, unknown>): {
+  systemPrompt: string
+  userPrompt: string
+} {
+  const { title, story, platform, language: narasi_language = 'en', art_style, total_scenes } = body as any
+  const scene_durations = (body.scene_durations as number[]) || []
+  const total_duration = (body.total_duration as number) || 60
+  const avgDuration = scene_durations.length > 0
+    ? total_duration / scene_durations.length
+    : total_duration / ((total_scenes as number) || 5)
+
+  const aspectRatioMap: Record<string, string> = {
+    '9_16': '1080x1920 vertical (9:16) - optimized for mobile full screen',
+    '16_9': '1920x1080 landscape (16:9) - optimized for desktop/TV',
+    '1_1':  '1080x1080 square (1:1) - optimized for social feed',
+    '4_5':  '864x1080 portrait (4:5) - optimized for Instagram feed',
+  }
+  const aspectRatio = (body.aspect_ratio as string) || '9_16'
+  const resolution = (body.resolution as string) || '1080p'
+  const frameSpec = aspectRatioMap[aspectRatio] || aspectRatioMap['9_16']
+
+  const userPrompt = `Title: ${title}
+Story: ${story}
+Platform: ${platform}
+Art Style: ${art_style}
+Total Scenes: ${total_scenes}
+Language: ${narasi_language}
+Frame Specification: ${frameSpec}
+Resolution: ${resolution}
+Total Video Duration: ${total_duration} seconds
+
+SCENE DURATION TARGETS:
+${scene_durations.length > 0
+  ? scene_durations.map((d: number, i: number) =>
+      `Scene ${i + 1}: ${d}s → max ${getVoCharLimit(d, narasi_language)} chars narration`
+    ).join('\n')
+  : `Each scene: ~${Math.round(total_duration / ((total_scenes as number) || 5))}s → max ${getVoCharLimit(Math.round(total_duration / ((total_scenes as number) || 5)), narasi_language)} chars narration`
+}
+
+IMPORTANT: All image prompts must be composed for ${frameSpec}.
+${aspectRatio === '9_16' ? 'Use vertical composition - subjects centered, portrait orientation.' : ''}
+${aspectRatio === '16_9' ? 'Use horizontal composition - wide establishing shots, landscape orientation.' : ''}
+${aspectRatio === '1_1' ? 'Use square composition - centered subjects, balanced framing.' : ''}
+${aspectRatio === '4_5' ? 'Use portrait composition - slightly wider than phone screen.' : ''}`
+
+  return { systemPrompt: getSystemPrompt(narasi_language, avgDuration), userPrompt }
+}
+
 async function callBedrock(creds: import('./index').Credentials, modelId: string, prompt: string, systemPrompt: string): Promise<string> {
   const region = creds.brainRegion || 'us-east-1'
   const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
@@ -177,13 +225,9 @@ export async function handleBrainRequest(
             }
 
             const body = await request.json() as any;
-            const { title, story, platform, brain_model: model, language: narasi_language = 'en', art_style, total_scenes } = body;
-
-            const scene_durations = (body.scene_durations as number[]) || []
-            const total_duration = (body.total_duration as number) || 60
-            const avgDuration = scene_durations.length > 0
-              ? total_duration / scene_durations.length
-              : total_duration / (total_scenes as number || 5)
+            const { brain_model: model } = body;
+            const title = body.title
+            const story = body.story
 
             const selectedModel = model || 'gemini'
             if (selectedModel === 'gemini' && !creds.geminiApiKey) {
@@ -197,53 +241,7 @@ export async function handleBrainRequest(
                 return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing title, story or brain_model' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
 
-            const prompt = `
-Title: ${title}
-Story: ${story}
-Platform: ${platform}
-Art Style: ${art_style}
-Total Scenes: ${total_scenes}
-Language: ${narasi_language}
-`;
-
-            const aspectRatioMap: Record<string, string> = {
-              '9_16': '1080x1920 vertical (9:16) - optimized for mobile full screen',
-              '16_9': '1920x1080 landscape (16:9) - optimized for desktop/TV',
-              '1_1': '1080x1080 square (1:1) - optimized for social feed',
-              '4_5': '864x1080 portrait (4:5) - optimized for Instagram feed',
-            }
-
-            const aspectRatio = body.aspect_ratio || '9_16'
-            const resolution = body.resolution || '1080p'
-            const frameSpec = aspectRatioMap[aspectRatio] || aspectRatioMap['9_16']
-
-            const promptWithContext = `
-Title: ${title}
-Story: ${story}
-Platform: ${platform}
-Art Style: ${art_style}
-Total Scenes: ${total_scenes}
-Language: ${narasi_language}
-Frame Specification: ${frameSpec}
-Resolution: ${resolution}
-Total Video Duration: ${total_duration} seconds
-
-SCENE DURATION TARGETS:
-${scene_durations.length > 0
-  ? scene_durations.map((d: number, i: number) =>
-      `Scene ${i + 1}: ${d}s → max ${getVoCharLimit(d, narasi_language)} chars narration`
-    ).join('\n')
-  : `Each scene: ~${Math.round(total_duration / (total_scenes as number || 5))}s → max ${getVoCharLimit(Math.round(total_duration / (total_scenes as number || 5)), narasi_language)} chars narration`
-}
-
-IMPORTANT: All image prompts must be composed for ${frameSpec}.
-${aspectRatio === '9_16' ? 'Use vertical composition - subjects centered, portrait orientation.' : ''}
-${aspectRatio === '16_9' ? 'Use horizontal composition - wide establishing shots, landscape orientation.' : ''}
-${aspectRatio === '1_1' ? 'Use square composition - centered subjects, balanced framing.' : ''}
-${aspectRatio === '4_5' ? 'Use portrait composition - slightly wider than phone screen.' : ''}
-`;
-
-            const systemPrompt = getSystemPrompt(narasi_language, avgDuration);
+            const { systemPrompt, userPrompt: promptWithContext } = buildBrainPrompts(body);
             let responseText: string
 
             if (model === 'claude_sonnet' || model === 'gemini') {

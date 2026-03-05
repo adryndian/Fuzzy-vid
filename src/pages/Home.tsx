@@ -12,8 +12,19 @@ import type { GenStep } from '../components/GenerationOverlay'
 import { useElapsedTimer } from '../hooks/useElapsedTimer'
 
 type Platform = 'youtube_shorts' | 'reels' | 'tiktok'
-type BrainModel = 'gemini' | 'llama4_maverick' | 'claude_sonnet'
+type BrainModel = 'gemini' | 'llama4_maverick' | 'claude_sonnet' | 'qwen3_max' | 'qwen_plus' | 'qwen_flash' | 'qwen_turbo' | 'qwq_plus'
 type Language = 'id' | 'en'
+
+const BRAIN_MODELS: { id: BrainModel; label: string; tag: 'AWS' | 'Qwen'; provider: 'bedrock' | 'dashscope'; badge?: string }[] = [
+  { id: 'claude_sonnet',   label: 'Claude Sonnet 4.6', tag: 'AWS',  provider: 'bedrock' },
+  { id: 'llama4_maverick', label: 'Llama 4 Maverick',  tag: 'AWS',  provider: 'bedrock' },
+  { id: 'gemini',          label: 'Gemini (legacy)',   tag: 'AWS',  provider: 'bedrock' },
+  { id: 'qwen3_max',  label: 'Qwen3 Max',   tag: 'Qwen', provider: 'dashscope', badge: '⭐' },
+  { id: 'qwen_plus',  label: 'Qwen Plus',   tag: 'Qwen', provider: 'dashscope', badge: '⚡' },
+  { id: 'qwen_flash', label: 'Qwen Flash',  tag: 'Qwen', provider: 'dashscope', badge: '🚀' },
+  { id: 'qwen_turbo', label: 'Qwen Turbo',  tag: 'Qwen', provider: 'dashscope', badge: '💰' },
+  { id: 'qwq_plus',   label: 'QwQ Plus',    tag: 'Qwen', provider: 'dashscope', badge: '🧠' },
+]
 type ArtStyle = 'cinematic_realistic' | 'anime_stylized' | 'comic_book' | '3d_render' | 'oil_painting' | 'pixel_art'
 
 const STEP_LABELS = [
@@ -112,14 +123,25 @@ export function Home() {
         if (s.audioRegion) apiHeaders['X-Audio-Region'] = s.audioRegion
         if (s.elevenLabsApiKey) apiHeaders['X-ElevenLabs-Key'] = s.elevenLabsApiKey
         if (s.runwayApiKey) apiHeaders['X-Runway-Key'] = s.runwayApiKey
+        if (s.dashscopeApiKey) apiHeaders['X-Dashscope-Api-Key'] = s.dashscopeApiKey
       }
     } catch { /* ignore */ }
 
-    if (!apiHeaders['X-Gemini-Key'] && !apiHeaders['X-AWS-Access-Key-Id']) {
+    const selectedBrainModel = BRAIN_MODELS.find(m => m.id === brainModel)
+    const isDashscopeBrain = selectedBrainModel?.provider === 'dashscope'
+
+    if (!isDashscopeBrain && !apiHeaders['X-Gemini-Key'] && !apiHeaders['X-AWS-Access-Key-Id']) {
       setError('Please add your API keys in Settings first')
       setLoading(false)
       setCurrentStep(-1)
       updateTask(taskId, { status: 'error', error: 'Missing API keys' })
+      return
+    }
+    if (isDashscopeBrain && !apiHeaders['X-Dashscope-Api-Key']) {
+      setError('Please add your Dashscope API key in Settings first')
+      setLoading(false)
+      setCurrentStep(-1)
+      updateTask(taskId, { status: 'error', error: 'Missing Dashscope key' })
       return
     }
 
@@ -138,7 +160,11 @@ export function Home() {
         Math.round(totalDuration / scenes)
       )
 
-      const res = await fetch('https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/generate', {
+      const brainEndpoint = isDashscopeBrain
+        ? 'https://fuzzy-vid-worker.officialdian21.workers.dev/api/dashscope/brain'
+        : 'https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/generate'
+
+      const res = await fetch(brainEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...apiHeaders },
         body: JSON.stringify({
@@ -411,10 +437,31 @@ export function Home() {
             onChange={e => setBrainModel(e.target.value as BrainModel)}
             style={dropdownStyle}
           >
-            <option value="gemini">Gemini — Fast &amp; Free</option>
-            <option value="llama4_maverick">Llama 4 — Balanced</option>
-            <option value="claude_sonnet">Claude Sonnet — Best Quality</option>
+            <optgroup label="── AWS Bedrock ──">
+              {BRAIN_MODELS.filter(m => m.provider === 'bedrock').map(m => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="── Qwen Dashscope ──">
+              {BRAIN_MODELS.filter(m => m.provider === 'dashscope').map(m => (
+                <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
+              ))}
+            </optgroup>
           </select>
+          {BRAIN_MODELS.find(m => m.id === brainModel)?.tag === 'Qwen' && (
+            <div style={{
+              marginTop: '5px',
+              padding: '4px 8px',
+              background: 'rgba(255,140,0,0.1)',
+              border: '0.5px solid rgba(255,140,0,0.25)',
+              borderRadius: '8px',
+              fontSize: '10px',
+              color: '#ff8c00',
+              fontWeight: 600,
+            }}>
+              Qwen model — requires Dashscope API key in Settings
+            </div>
+          )}
         </div>
 
         {/* Language */}

@@ -10,6 +10,8 @@ export interface Env {
   R2_SECRET_ACCESS_KEY: string;
   RUNWAY_API_KEY: string;
   ELEVENLABS_API_KEY: string;
+  DASHSCOPE_API_KEY: string;
+  R2_BUCKET_NAME?: string;
   ENVIRONMENT: string;
 }
 
@@ -23,6 +25,7 @@ export interface Credentials {
   videoRegion: string
   elevenLabsApiKey: string
   runwayApiKey: string
+  dashscopeApiKey: string
   r2AccountId: string
   r2AccessKeyId: string
   r2SecretAccessKey: string
@@ -41,6 +44,7 @@ export function extractCredentials(request: Request, env: Env): Credentials {
     videoRegion:        'us-east-1', // always fixed for Nova Reel
     elevenLabsApiKey:   h.get('X-ElevenLabs-Key')         || env.ELEVENLABS_API_KEY      || '',
     runwayApiKey:       h.get('X-Runway-Key')             || env.RUNWAY_API_KEY           || '',
+    dashscopeApiKey:    h.get('X-Dashscope-Api-Key')      || env.DASHSCOPE_API_KEY        || '',
     r2AccountId:        h.get('X-R2-Account-Id')          || env.R2_ACCOUNT_ID            || '',
     r2AccessKeyId:      h.get('X-R2-Access-Key-Id')       || env.R2_ACCESS_KEY_ID         || '',
     r2SecretAccessKey:  h.get('X-R2-Secret-Access-Key')   || env.R2_SECRET_ACCESS_KEY     || '',
@@ -54,7 +58,7 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Gemini-Key, X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key, X-Brain-Region, X-Image-Region, X-Audio-Region, X-ElevenLabs-Key, X-Runway-Key, X-R2-Account-Id, X-R2-Access-Key-Id, X-R2-Secret-Access-Key, X-R2-Bucket',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Gemini-Key, X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key, X-Brain-Region, X-Image-Region, X-Audio-Region, X-ElevenLabs-Key, X-Runway-Key, X-Dashscope-Api-Key, X-R2-Account-Id, X-R2-Access-Key-Id, X-R2-Secret-Access-Key, X-R2-Bucket',
       'Access-Control-Max-Age': '86400',
     }
 
@@ -100,6 +104,24 @@ export default {
       else if (path.startsWith('/api/video/')) {
         const { handleVideoRequest } = await import('./video')
         response = await handleVideoRequest(request, env, url, ctx, creds)
+      }
+      // Dashscope routes
+      else if (path === '/api/dashscope/brain') {
+        const { handleDashscopeBrain } = await import('./dashscope')
+        response = await handleDashscopeBrain(request, env, creds)
+      }
+      else if (path === '/api/dashscope/image/start') {
+        const { handleDashscopeImageStart } = await import('./dashscope')
+        response = await handleDashscopeImageStart(request, env, creds)
+      }
+      else if (path === '/api/dashscope/video/start') {
+        const { handleDashscopeVideoStart } = await import('./dashscope')
+        response = await handleDashscopeVideoStart(request, env, creds)
+      }
+      else if (path.startsWith('/api/dashscope/task/')) {
+        const taskId = path.replace('/api/dashscope/task/', '')
+        const { handleDashscopeTaskStatus } = await import('./dashscope')
+        response = await handleDashscopeTaskStatus(request, env, taskId, creds)
       }
       // Audio routes
       else if (path.startsWith('/api/audio/')) {

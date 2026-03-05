@@ -411,6 +411,14 @@ export function Settings() {
             fieldKey="runwayApiKey"
             placeholder="Optional — uses Nova Reel if empty"
           />
+          <SecretInput
+            label="Dashscope API Key (Singapore)"
+            fieldKey="dashscopeApiKey"
+            placeholder="sk-..."
+          />
+          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', marginTop: 4, marginBottom: '14px' }}>
+            Alibaba Cloud Model Studio • Singapore Region — Enables Qwen brain + Wanx image + Wan2.1 video models
+          </p>
 
           <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', marginTop: '4px', margin: 0 }}>
             App works without these — AWS services used as fallback

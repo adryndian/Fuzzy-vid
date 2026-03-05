@@ -1,7 +1,5 @@
 /// <reference types="vite/client" />
 
-const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
-
 export const api = {
   get: async (path: string) => {
     const res = await fetch(`${WORKER_URL}${path}`)
@@ -17,7 +15,9 @@ export const api = {
   }
 }
 
-function getApiHeaders(): Record<string, string> {
+export const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
+
+export function getApiHeaders(): Record<string, string> {
   const headers: Record<string, string> = {}
   try {
     const stored = localStorage.getItem('fuzzy_short_settings')
@@ -28,6 +28,7 @@ function getApiHeaders(): Record<string, string> {
       if (keys.imageRegion)        headers['X-Image-Region'] = keys.imageRegion
       if (keys.audioRegion)        headers['X-Audio-Region'] = keys.audioRegion
       if (keys.elevenLabsApiKey)   headers['X-ElevenLabs-Key'] = keys.elevenLabsApiKey
+      if (keys.dashscopeApiKey)    headers['X-Dashscope-Api-Key'] = keys.dashscopeApiKey
     }
   } catch { /* ignore */ }
   return headers

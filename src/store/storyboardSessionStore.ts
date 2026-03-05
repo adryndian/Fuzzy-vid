@@ -8,7 +8,7 @@ export interface StoryboardSession {
   id: string
   rawJson: string
   title: string
-  imageModel: 'nova_canvas' | 'titan_v2'
+  imageModel: string
   audioEngine: 'polly' | 'elevenlabs'
   audioVoice: string
   language: string
@@ -22,7 +22,7 @@ interface StoryboardSessionState {
   createSession: (params: {
     rawJson: string
     title: string
-    imageModel: 'nova_canvas' | 'titan_v2'
+    imageModel: string
     audioEngine: 'polly' | 'elevenlabs'
     audioVoice: string
     language: string
