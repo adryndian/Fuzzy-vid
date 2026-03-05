@@ -1409,9 +1409,16 @@ export function Storyboard() {
                           <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
                               <span style={{ color: 'rgba(60,60,67,0.4)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Full Prompt (editable)</span>
-                              <span style={{ fontSize: '10px', fontWeight: 600, color: (customVideoPromptVal.length) > 200 ? '#ff3b30' : 'rgba(60,60,67,0.4)' }}>
-                                {customVideoPromptVal.length}/200
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <span style={{ fontSize: '10px', fontWeight: 600, color: (customVideoPromptVal.length) > 200 ? '#ff3b30' : 'rgba(60,60,67,0.4)' }}>
+                                  {customVideoPromptVal.length}/200
+                                </span>
+                                {customVideoPromptVal && (
+                                  <button onClick={() => handleCopy(customVideoPromptVal)} style={smallIconBtn}>
+                                    Copy
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             <textarea
                               value={customVideoPromptVal}
