@@ -9,7 +9,7 @@ interface ImageRequestBody {
   project_id: string
   aspect_ratio: string
   art_style: string
-  image_model?: 'nova_canvas' | 'titan_v2'
+  image_model?: 'nova_canvas' | 'sd35'
 }
 
 function getDimensions(aspect: string): { width: number; height: number } {
@@ -21,18 +21,6 @@ function getDimensions(aspect: string): { width: number; height: number } {
   }
 }
 
-// Titan V2 only supports specific preset dimensions.
-// See: https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-titan-image.html
-// Confirmed supported: 512×512, 768×768, 1024×1024, 768×1152, 1152×768,
-//                      768×1280, 1280×768, 896×1152, 1152×896, 768×1024, 1024×768
-function getDimensionsTitanV2(aspect: string): { width: number; height: number } {
-  switch (aspect) {
-    case '16_9': return { width: 1280, height: 768 }  // closest to 16:9
-    case '1_1':  return { width: 1024, height: 1024 } // exact
-    case '4_5':  return { width: 896, height: 1152 }  // closest to 4:5
-    default:     return { width: 768, height: 1280 }  // closest to 9:16
-  }
-}
 
 export async function handleEnhancePrompt(
   request: Request,
@@ -133,29 +121,36 @@ export async function handleImageRequest(
         )
       }
 
-      const region = creds.imageRegion || 'us-east-1'
-      const modelId = image_model === 'titan_v2'
-        ? 'amazon.titan-image-generator-v2:0'
-        : 'amazon.nova-canvas-v1:0'
+      const isSd35 = image_model === 'sd35'
+      const region = isSd35 ? 'us-west-2' : (creds.imageRegion || 'us-east-1')
+      const modelId = isSd35 ? 'stability.sd3-5-large-v1:0' : 'amazon.nova-canvas-v1:0'
       const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
-      const dims = image_model === 'titan_v2'
-        ? getDimensionsTitanV2(aspect_ratio)
-        : getDimensions(aspect_ratio)
+      const dims = getDimensions(aspect_ratio)
 
-      const bedrockBody = JSON.stringify({
-        taskType: 'TEXT_IMAGE',
-        textToImageParams: {
-          text: `${art_style} style. ${prompt}`,
-          negativeText: 'blurry, low quality, distorted, watermark, text overlay',
-        },
-        imageGenerationConfig: {
-          numberOfImages: 1,
-          height: dims.height,
-          width: dims.width,
-          cfgScale: 8.0,
-          seed: Math.floor(Math.random() * 858993459),
-        },
-      })
+      const sd35AspectMap: Record<string, string> = {
+        '9_16': '9:16', '16_9': '16:9', '1_1': '1:1', '4_5': '4:5',
+      }
+      const bedrockBody = isSd35
+        ? JSON.stringify({
+            prompt: `${art_style} style. ${prompt}`,
+            mode: 'text-to-image',
+            aspect_ratio: sd35AspectMap[aspect_ratio] || '9:16',
+            output_format: 'jpeg',
+          })
+        : JSON.stringify({
+            taskType: 'TEXT_IMAGE',
+            textToImageParams: {
+              text: `${art_style} style. ${prompt}`,
+              negativeText: 'blurry, low quality, distorted, watermark, text overlay',
+            },
+            imageGenerationConfig: {
+              numberOfImages: 1,
+              height: dims.height,
+              width: dims.width,
+              cfgScale: 8.0,
+              seed: Math.floor(Math.random() * 858993459),
+            },
+          })
 
       const signer = new AwsV4Signer(
         { awsAccessKeyId: creds.awsAccessKeyId, awsSecretKey: creds.awsSecretAccessKey },
@@ -195,9 +190,10 @@ export async function handleImageRequest(
         imageBuffer[i] = byteString.charCodeAt(i)
       }
 
-      const r2Key = `projects/${project_id}/scene_${scene_number}/img_${Date.now()}.png`
+      const ext = isSd35 ? 'jpg' : 'png'
+      const r2Key = `projects/${project_id}/scene_${scene_number}/img_${Date.now()}.${ext}`
       await env.STORY_STORAGE.put(r2Key, imageBuffer, {
-        httpMetadata: { contentType: 'image/png' },
+        httpMetadata: { contentType: isSd35 ? 'image/jpeg' : 'image/png' },
       })
 
       const imageUrl = `${WORKER_URL}/api/storage/file/${r2Key}`

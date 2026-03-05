@@ -40,7 +40,7 @@ export async function generateImage(params: {
   project_id: string
   aspect_ratio: string
   art_style: string
-  image_model?: 'nova_canvas' | 'titan_v2'
+  image_model?: 'nova_canvas' | 'sd35'
 }): Promise<{ image_url: string }> {
   const res = await fetch(`${WORKER_URL}/api/image/generate`, {
     method: 'POST',

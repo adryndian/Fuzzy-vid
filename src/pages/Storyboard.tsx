@@ -13,12 +13,11 @@ const POLLY_VOICES = ['Ruth', 'Joanna', 'Matthew', 'Joey'] as const
 const ELEVENLABS_VOICES = ['Bella', 'Adam', 'Rachel', 'Antoni'] as const
 
 const IMAGE_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen'; desc: string; provider: 'bedrock' | 'dashscope'; badge?: string }[] = [
-  { id: 'nova_canvas',         label: 'Nova Canvas',     tag: 'AWS',  desc: 'Best quality',    provider: 'bedrock' },
-  { id: 'titan_v2',            label: 'Titan V2',        tag: 'AWS',  desc: 'Fast & cheap',    provider: 'bedrock' },
-  { id: 'wanx2.1-t2i-plus',   label: 'Wanx 2.1 Plus',  tag: 'Qwen', desc: 'Best quality',    provider: 'dashscope', badge: '⭐' },
-  { id: 'wanx2.1-t2i-turbo',  label: 'Wanx 2.1 Turbo', tag: 'Qwen', desc: 'Fast',            provider: 'dashscope', badge: '⚡' },
-  { id: 'wan2.6-image',        label: 'Wan 2.6',         tag: 'Qwen', desc: 'Latest model',    provider: 'dashscope', badge: '🆕' },
-  { id: 'wanx-v1',             label: 'Wanx v1',         tag: 'Qwen', desc: 'Classic stable',  provider: 'dashscope', badge: '🎨' },
+  { id: 'nova_canvas',        label: 'Nova Canvas',     tag: 'AWS',  desc: 'Fast & consistent', provider: 'bedrock' },
+  { id: 'sd35',               label: 'SD 3.5 Large',    tag: 'AWS',  desc: 'Best quality',       provider: 'bedrock' },
+  { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo', tag: 'Qwen', desc: 'Fast generation',    provider: 'dashscope', badge: '⚡' },
+  { id: 'wanx2.1-t2i-plus',  label: 'Wanx 2.1 Plus',  tag: 'Qwen', desc: 'Best quality',       provider: 'dashscope', badge: '⭐' },
+  { id: 'wan2.6-image',       label: 'Wan 2.6',         tag: 'Qwen', desc: 'Latest model',       provider: 'dashscope', badge: '🆕' },
 ]
 
 const VIDEO_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen'; desc: string; provider: 'bedrock' | 'dashscope'; badge?: string }[] = [
@@ -302,7 +301,7 @@ export function Storyboard() {
   // Also update session settings when user changes them
   const handleImageModelChange = (val: string) => {
     setImageModel(val)
-    if (activeSessionId) updateSession(activeSessionId, { imageModel: val as 'nova_canvas' | 'titan_v2' })
+    if (activeSessionId) updateSession(activeSessionId, { imageModel: val })
   }
 
   const handleAudioEngineChange = (val: 'polly' | 'elevenlabs') => {
@@ -511,10 +510,10 @@ export function Storyboard() {
           project_id: (data.project_id as string) || 'storyboard',
           aspect_ratio: aspectRatio,
           art_style: artStyle,
-          image_model: imageModel as 'nova_canvas' | 'titan_v2',
+          image_model: imageModel as 'nova_canvas' | 'sd35',
         })
         const imgCost = estimateImageCost(imageModel)
-        const modelLabel = imageModel === 'titan_v2' ? 'Titan V2' : 'Nova Canvas'
+        const modelLabel = imageModel === 'sd35' ? 'SD 3.5 Large' : 'Nova Canvas'
         updateAsset(sceneNum, { imageStatus: 'done', imageUrl: result.image_url })
         addCostEntry({ service: 'image', model: modelLabel, cost: imgCost })
         toast.success(`Scene ${sceneNum} image ready · ${formatCost(imgCost)}`)
@@ -990,14 +989,14 @@ export function Storyboard() {
                     aspect_ratio: (storyboard.aspect_ratio as string) || '9_16',
                     mood: (scene.mood as string) || '',
                     camera_angle: (scene.camera_angle as string) || '',
-                    model: imageModel === 'titan_v2' ? 'Titan V2' : 'Nova Canvas',
+                    model: imageModel === 'sd35' ? 'SD 3.5 Large' : 'Nova Canvas',
                     dimensions: (() => {
                       const ar = (storyboard.aspect_ratio as string) || '9_16'
                       const dimMap: Record<string, string> = {
-                        '9_16': imageModel === 'titan_v2' ? '768x1280' : '720x1280',
-                        '16_9': imageModel === 'titan_v2' ? '1280x768' : '1280x720',
+                        '9_16': '720x1280',
+                        '16_9': '1280x720',
                         '1_1': '1024x1024',
-                        '4_5': imageModel === 'titan_v2' ? '896x1152' : '896x1120',
+                        '4_5': '896x1120',
                       }
                       return dimMap[ar] || dimMap['9_16']
                     })(),

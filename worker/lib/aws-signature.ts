@@ -2,7 +2,8 @@
 // A stripped-down and simplified version of AWS V4 signer for Cloudflare Workers.
 // Based on https://github.com/Cloudflare/workers-sdk/blob/main/templates/worker-aws-s3-presigned-urls/src/aws.ts
 
-function buildCanonicalUri(pathname: string): string {
+function buildCanonicalUri(rawUrl: string): string {
+  const pathname = new URL(rawUrl).pathname
   return pathname
     .split('/')
     .map(segment => {
@@ -101,7 +102,7 @@ export class AwsV4Signer {
 
         return [
             request.method.toUpperCase(),
-            buildCanonicalUri(url.pathname),
+            buildCanonicalUri(request.url),
             canonicalQuery,
             canonicalHeaders.join('\n') + '\n',
             signedHeaders,

@@ -92,10 +92,9 @@ export async function handleDashscopeBrain(
 
 // ─── IMAGE GENERATION (Wanx / Wan models) ─────────────────────────
 export const QWEN_IMAGE_MODELS = [
-  { id: 'wanx2.1-t2i-plus',  label: 'Wanx 2.1 Plus',  tag: 'Qwen', desc: 'Best quality image', badge: '⭐ Best' },
-  { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo', tag: 'Qwen', desc: 'Fast generation',    badge: '⚡ Fast' },
-  { id: 'wan2.6-image',       label: 'Wan 2.6',         tag: 'Qwen', desc: 'Latest model',        badge: '🆕 Latest' },
-  { id: 'wanx-v1',            label: 'Wanx v1',         tag: 'Qwen', desc: 'Classic stable',      badge: '🎨 Classic' },
+  { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo', tag: 'Qwen', desc: 'Fast generation',       badge: '⚡ Fast' },
+  { id: 'wanx2.1-t2i-plus',  label: 'Wanx 2.1 Plus',  tag: 'Qwen', desc: 'Best quality',           badge: '⭐ Best' },
+  { id: 'wan2.6-image',       label: 'Wan 2.6',         tag: 'Qwen', desc: 'Latest — messages fmt',  badge: '🆕 Latest' },
 ]
 
 function getWanxSize(aspectRatio: string): string {
@@ -129,12 +128,22 @@ export async function handleDashscopeImageStart(
 
   const endpoint = `${DASHSCOPE_BASE}/api/v1/services/aigc/text2image/image-synthesis`
   const size = getWanxSize(body.aspect_ratio)
+  const isWan26 = (body.image_model || '') === 'wan2.6-image'
+
+  const inputPayload = isWan26
+    ? {
+        messages: [{
+          role: 'user',
+          content: [{ text: body.prompt }],
+        }],
+      }
+    : {
+        prompt: body.prompt,
+      }
 
   const payload = JSON.stringify({
     model: body.image_model || 'wanx2.1-t2i-plus',
-    input: {
-      prompt: body.prompt,
-    },
+    input: inputPayload,
     parameters: {
       size,
       n: 1,
