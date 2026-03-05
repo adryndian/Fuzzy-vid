@@ -2,6 +2,31 @@
 
 ---
 
+## v2.4 — 2026-03-05
+
+**Feat: add qwen-image-2.0-pro and qwen-image-2.0 as primary Dashscope image models**
+
+### Changes
+- **New image models** — `qwen-image-2.0-pro` (⭐ Pro, best quality) and `qwen-image-2.0` (✨ New, balanced) added as the primary Dashscope image options.
+- **`wanx2.1-t2i-plus` removed** — replaced by `qwen-image-2.0-pro`. `wanx2.1-t2i-turbo` retained as a legacy fast option.
+- **Default model updated** — `handleDashscopeImageStart` fallback changed from `wanx2.1-t2i-turbo` → `qwen-image-2.0-pro`.
+- Both new models use standard `input: { prompt }` format (same as `wanx2.1-t2i-turbo`). `wan2.6-image` still uses `messages[]` format — no logic changes needed.
+
+### Image Models (updated)
+| ID | Label | Provider |
+|----|-------|----------|
+| `nova_canvas` | Nova Canvas | AWS Bedrock |
+| `sd35` | SD 3.5 Large | AWS Bedrock |
+| `qwen-image-2.0-pro` | Qwen Image 2.0 Pro ⭐ | Dashscope |
+| `qwen-image-2.0` | Qwen Image 2.0 ✨ | Dashscope |
+| `wan2.6-image` | Wan 2.6 Image 🆕 | Dashscope |
+| `wanx2.1-t2i-turbo` | Wanx 2.1 Turbo ⚡ | Dashscope |
+
+### Files Changed
+`worker/dashscope.ts` · `src/pages/Home.tsx` · `src/pages/Storyboard.tsx` · `CLAUDE.md`
+
+---
+
 ## v2.3 — 2026-03-05
 
 **Fix: restore wanx2.1 models + Nova Reel ARN encoding + model controls UI**
