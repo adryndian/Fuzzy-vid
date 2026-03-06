@@ -2,6 +2,40 @@
 
 ---
 
+## v3.0 — 2026-03-05
+
+**Feat: Clerk auth + Cloudflare D1 cloud sync + dashboard**
+
+### Changes
+- **Clerk authentication** — Email OTP + Google OAuth via `@clerk/clerk-react`. App gate: unauthenticated users see Auth page (sign-in/sign-up with iOS 26 Liquid Glass styling). `ClerkProvider` wraps app in `main.tsx`.
+- **Cloudflare D1 database** — `fuzzy-short-db` SQLite database with 5 tables: `users`, `api_keys`, `storyboards`, `scene_assets`, `usage_log`.
+- **D1 migration** — `worker/migrations/001_init.sql` with full schema + indexes.
+- **`worker/lib/auth.ts`** — Clerk JWT verification via JWKS (cached 1hr on CF edge). `verifyClerkJWT` + `ensureUser` (upserts user on every protected request, 500 free credits on first login).
+- **`worker/db.ts`** — All D1 operations: profile, preferences, AES-GCM encrypted API keys, storyboards CRUD, scene assets upsert (COALESCE pattern), usage log. `CREDIT_COSTS`: brain=20, image=10, video=50, audio=5, enhance=2.
+- **Credit system** — `deductCredits` called in worker routes; brain routes check before generation (returns 402 on insufficient); image/video/audio deduct after success via `ctx.waitUntil`.
+- **CORS updated** — Added `PUT`, `DELETE` methods and `Authorization` header.
+- **`src/lib/userApi.ts`** — `useUserApi()` hook with `getToken()` JWT for all D1 API calls.
+- **Dashboard page** (`/dashboard`) — Lists saved storyboards with credits badge, delete (optimistic), platform/language/scene metadata. `UserButton` in header.
+- **Settings** — Loads API keys from D1 on mount (falls back to localStorage), saves to D1 + localStorage. Shows cloud/offline save status. `UserButton` in header.
+- **Auto-save storyboard** — Home.tsx calls `saveStoryboard()` non-blocking after brain generation.
+- **Auto-save scene assets** — Storyboard.tsx calls `saveSceneAsset()` after each image/video/audio generation.
+- **Auth guard** — `App.tsx` shows loading spinner, then Auth page if not signed in.
+
+### New Files
+`worker/lib/auth.ts` · `worker/db.ts` · `worker/migrations/001_init.sql` · `src/lib/userApi.ts` · `src/pages/Auth.tsx` · `src/pages/Dashboard.tsx`
+
+### Files Changed
+`wrangler.toml` · `worker/index.ts` · `src/main.tsx` · `src/App.tsx` · `src/pages/Settings.tsx` · `src/pages/Home.tsx` · `src/pages/Storyboard.tsx`
+
+### Setup Required (manual)
+1. Create Clerk app at clerk.dev (Email OTP + Google OAuth)
+2. Add `VITE_CLERK_PUBLISHABLE_KEY` to `.env.local`
+3. `wrangler secret put CLERK_SECRET_KEY` + `wrangler secret put CLERK_JWKS_URL`
+4. `wrangler d1 create fuzzy-short-db` → update `database_id` in `wrangler.toml`
+5. `wrangler d1 execute fuzzy-short-db --file=worker/migrations/001_init.sql --remote`
+
+---
+
 ## v2.5 — 2026-03-05
 
 **Feat: smart video prompt per scene + interactive generation animations**

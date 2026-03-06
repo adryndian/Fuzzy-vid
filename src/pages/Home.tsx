@@ -10,6 +10,7 @@ import { useStoryboardSessionStore } from '../store/storyboardSessionStore'
 import { GenerationOverlay } from '../components/GenerationOverlay'
 import type { GenStep } from '../components/GenerationOverlay'
 import { useElapsedTimer } from '../hooks/useElapsedTimer'
+import { useUserApi } from '../lib/userApi'
 
 type Platform = 'youtube_shorts' | 'reels' | 'tiktok'
 type BrainModel = 'gemini' | 'llama4_maverick' | 'claude_sonnet' | 'qwen3_max' | 'qwen_plus' | 'qwen_flash' | 'qwen_turbo' | 'qwq_plus'
@@ -103,6 +104,7 @@ export function Home() {
   const addTask = useGenTaskStore((s) => s.addTask)
   const updateTask = useGenTaskStore((s) => s.updateTask)
   const createSession = useStoryboardSessionStore((s) => s.createSession)
+  const { saveStoryboard } = useUserApi()
 
   const elapsedMs = useElapsedTimer(loading)
 
@@ -229,6 +231,22 @@ export function Home() {
             audioVoice: audioModel === 'polly' ? 'Ruth' : 'Bella',
             language,
           })
+
+          saveStoryboard({
+            id: sessionId,
+            title: storyData.title || title,
+            story,
+            platform,
+            language,
+            art_style: artStyle,
+            aspect_ratio: aspectRatio,
+            total_scenes: scenes,
+            brain_model: brainModel,
+            image_model: imageModel,
+            video_model: videoModel,
+            scenes_data: storyData.scenes,
+            status: 'draft',
+          }).catch(console.error)
 
           addHistoryItem({
             title,

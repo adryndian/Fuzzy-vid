@@ -213,6 +213,18 @@ GET  /api/dashscope/task/:taskId  ← Dashscope poll (image + video)
 
 POST /api/audio/generate          ← AWS Polly
 
+GET  /api/user/profile            ← get user profile + credits (auth required)
+PUT  /api/user/profile            ← update preferences (auth required)
+GET  /api/user/keys               ← get decrypted API keys from D1 (auth required)
+POST /api/user/keys               ← save encrypted API keys to D1 (auth required)
+GET  /api/user/usage              ← credit usage summary + recent log (auth required)
+
+GET  /api/storyboards             ← list user storyboards (auth required)
+POST /api/storyboards             ← save/upsert storyboard (auth required)
+GET  /api/storyboards/:id         ← get single storyboard (auth required)
+DELETE /api/storyboards/:id       ← delete storyboard (auth required)
+POST /api/storyboards/:id/scenes  ← upsert scene asset (auth required)
+
 -----
 
 ## REQUEST HEADERS
@@ -238,6 +250,8 @@ R2_ACCOUNT_ID           ← Cloudflare account ID
 R2_BUCKET_NAME          ← igome-story-storage
 R2_PUBLIC_URL           ← https://pub-xxx.r2.dev
 DASHSCOPE_API_KEY       ← Alibaba Cloud Dashscope Singapore key
+CLERK_SECRET_KEY        ← Clerk secret key (from clerk.dev dashboard)
+CLERK_JWKS_URL          ← Clerk JWKS URL: https://YOUR_CLERK_DOMAIN/.well-known/jwks.json
 
 -----
 

@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import type { SceneAssets, SceneAssetsMap, GenerationStatus, AudioHistoryItem, VideoPromptData } from '../types/schema'
 import { defaultSceneAssets, saveVideoJob, loadVideoJob, clearVideoJob, redistributeDurations } from '../types/schema'
 import { generateImage, generateAudio, checkVideoStatus, startVideoJob, enhancePrompt, rewriteVO, regenerateVideoPrompt, getApiHeaders, WORKER_URL } from '../lib/api'
+import { useUserApi } from '../lib/userApi'
 import { useHistoryStore } from '../store/historyStore'
 import { useCostStore } from '../store/costStore'
 import { useStoryboardSessionStore } from '../store/storyboardSessionStore'
@@ -62,6 +63,8 @@ export function Storyboard() {
   const createSession = useStoryboardSessionStore((s) => s.createSession)
   const updateAssetInStore = useStoryboardSessionStore((s) => s.updateAsset)
   const updateSession = useStoryboardSessionStore((s) => s.updateSession)
+
+  const { saveSceneAsset } = useUserApi()
 
   // Local UI state (not persisted)
   const [storyboard, setStoryboard] = useState<Record<string, unknown> | null>(null)
@@ -164,6 +167,8 @@ export function Storyboard() {
   const videoPollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({})
   // Dashscope polling refs (image + video async tasks)
   const dashscopePollingRefs = useRef<Record<string, ReturnType<typeof setInterval>>>({})
+  // Ref for activeSessionId to avoid stale closures in polling callbacks
+  const activeSessionIdRef = useRef<string | null>(null)
 
   // Cost tracking
   const addCostEntry = useCostStore((s) => s.addEntry)
@@ -298,6 +303,7 @@ export function Storyboard() {
 
     setRawJson(raw)
     setActiveSessionId(sid)
+    activeSessionIdRef.current = sid
 
     try {
       const parsed = JSON.parse(raw)
@@ -449,6 +455,12 @@ export function Storyboard() {
           setVideoPollDisplayCounts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })
           updateAsset(sceneNum, { videoStatus: 'done', videoUrl: result.video_url, videoJobId: jobId })
           toast.success(`Scene ${sceneNum} video ready!`)
+          saveSceneAsset({
+            storyboard_id: activeSessionIdRef.current || 'storyboard',
+            scene_number: sceneNum,
+            video_url: result.video_url,
+            video_model: 'nova_reel',
+          }).catch(console.error)
         } else if (result.status === 'failed') {
           clearInterval(interval)
           delete videoPollingRefs.current[sceneNum]
@@ -465,7 +477,7 @@ export function Storyboard() {
       }
     }, 8000)
     videoPollingRefs.current[sceneNum] = interval
-  }, [updateAsset])
+  }, [updateAsset, saveSceneAsset])
 
   const startDashscopePolling = useCallback((sceneNum: number, taskId: string, type: 'image' | 'video') => {
     const key = `${type}_${sceneNum}_${taskId}`
@@ -503,9 +515,19 @@ export function Storyboard() {
           if (type === 'image') {
             updateAsset(sceneNum, { imageStatus: 'done', imageUrl: data.url })
             toast.success(`Scene ${sceneNum} image ready (Qwen)!`)
+            saveSceneAsset({
+              storyboard_id: activeSessionIdRef.current || 'storyboard',
+              scene_number: sceneNum,
+              image_url: data.url,
+            }).catch(console.error)
           } else {
             updateAsset(sceneNum, { videoStatus: 'done', videoUrl: data.url })
             toast.success(`Scene ${sceneNum} video ready (Qwen)!`)
+            saveSceneAsset({
+              storyboard_id: activeSessionIdRef.current || 'storyboard',
+              scene_number: sceneNum,
+              video_url: data.url,
+            }).catch(console.error)
           }
         } else if (data.status === 'error') {
           clearInterval(interval)
@@ -524,7 +546,7 @@ export function Storyboard() {
     }, intervalMs)
 
     dashscopePollingRefs.current[key] = interval
-  }, [updateAsset]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [updateAsset, saveSceneAsset]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerateImage = async (scene: Record<string, unknown>) => {
     const sceneNum = scene.scene_number as number
@@ -584,6 +606,13 @@ export function Storyboard() {
         updateAsset(sceneNum, { imageStatus: 'done', imageUrl: result.image_url })
         addCostEntry({ service: 'image', model: modelLabel, cost: imgCost })
         toast.success(`Scene ${sceneNum} image ready · ${formatCost(imgCost)}`)
+        saveSceneAsset({
+          storyboard_id: (data.project_id as string) || activeSessionId || 'storyboard',
+          scene_number: sceneNum,
+          image_url: result.image_url,
+          image_model: imageModel,
+          enhanced_prompt: finalPrompt,
+        }).catch(console.error)
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
@@ -772,6 +801,13 @@ export function Storyboard() {
       })
       addCostEntry({ service: 'audio', model: modelLabel, cost: audCost })
       toast.success(`Scene ${sceneNum} audio ready · ${formatCost(audCost)}`)
+      saveSceneAsset({
+        storyboard_id: (data.project_id as string) || activeSessionIdRef.current || 'storyboard',
+        scene_number: sceneNum,
+        audio_url: result.audio_url,
+        audio_voice: audioVoice,
+        custom_vo: customVO[sceneNum] || null,
+      }).catch(console.error)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       updateAsset(sceneNum, { audioStatus: 'error', audioError: msg })

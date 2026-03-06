@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useUser, UserButton } from '@clerk/clerk-react'
 import type { AppSettings } from '../types/schema'
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../types/schema'
+import { useUserApi } from '../lib/userApi'
 
 type TestStatus = 'idle' | 'testing' | 'success' | 'failed'
 
@@ -15,25 +17,43 @@ const REGIONS = [
 
 export function Settings() {
   const navigate = useNavigate()
+  const { user } = useUser()
+  const { saveApiKeys, getApiKeys } = useUserApi()
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [saved, setSaved] = useState(false)
+  const [savedMsg, setSavedMsg] = useState('')
   const [showKey, setShowKey] = useState<Record<string, boolean>>({})
   const [geminiStatus, setGeminiStatus] = useState<TestStatus>('idle')
   const [awsStatus, setAwsStatus] = useState<TestStatus>('idle')
   const [geminiMsg, setGeminiMsg] = useState('')
   const [awsMsg, setAwsMsg] = useState('')
 
-  useEffect(() => { setSettings(loadSettings()) }, [])
+  useEffect(() => {
+    const local = loadSettings()
+    setSettings(local)
+    // Try to load from D1 cloud, merge over local
+    getApiKeys().then((cloud: Partial<AppSettings>) => {
+      if (cloud && Object.keys(cloud).length > 0) {
+        setSettings(prev => ({ ...prev, ...cloud }))
+      }
+    }).catch(() => { /* offline — use local */ })
+  }, [])
 
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }))
     setSaved(false)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     saveSettings(settings)
+    try {
+      await saveApiKeys(settings as unknown as Record<string, unknown>)
+      setSavedMsg('Saved to cloud')
+    } catch {
+      setSavedMsg('Saved locally (offline mode)')
+    }
     setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    setTimeout(() => { setSaved(false); setSavedMsg('') }, 2500)
   }
 
   const toggleShow = (key: string) =>
@@ -321,7 +341,12 @@ export function Settings() {
         <span style={{ color: '#1d1d1f', fontSize: '17px', fontWeight: 700, flex: 1 }}>
           Settings
         </span>
-        <span style={{ fontSize: '22px' }}>⚙️</span>
+        {user && (
+          <span style={{ fontSize: '12px', color: 'rgba(60,60,67,0.5)', marginRight: '8px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {user.primaryEmailAddress?.emailAddress}
+          </span>
+        )}
+        <UserButton afterSignOutUrl="/auth" />
       </div>
 
       <div style={{ padding: '20px 16px 0' }}>
@@ -465,7 +490,7 @@ export function Settings() {
             transition: 'all 0.3s',
             letterSpacing: '0.01em',
           }}>
-          {saved ? '✅ Settings Saved!' : '💾 Save Settings'}
+          {saved ? `✅ ${savedMsg || 'Settings Saved!'}` : '💾 Save Settings'}
         </button>
 
       </div>
