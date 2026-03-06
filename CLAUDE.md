@@ -1,6 +1,6 @@
 # Fuzzy Short — Claude Code Project Instructions
 
-# Version 2.0 — Updated March 2026
+# Version 3.3 — Updated March 2026
 
 # READ THIS COMPLETELY before starting any task
 
@@ -242,16 +242,23 @@ X-Dashscope-Api-Key: from localStorage settings.dashscopeApiKey
 
 ## WORKER SECRETS (set via wrangler secret put)
 
-AWS_ACCESS_KEY_ID       ← IAM user key (NOT compromised key)
-AWS_SECRET_ACCESS_KEY   ← IAM user secret
+# Internal R2/D1 operations only — NOT used as fallback for user generation routes
+AWS_ACCESS_KEY_ID       ← R2 operations only (since v3.3, NOT used in extractCredentials)
+AWS_SECRET_ACCESS_KEY   ← R2 operations only
 R2_ACCESS_KEY_ID        ← R2 API token key
 R2_SECRET_ACCESS_KEY    ← R2 API token secret
 R2_ACCOUNT_ID           ← Cloudflare account ID
 R2_BUCKET_NAME          ← igome-story-storage
 R2_PUBLIC_URL           ← https://pub-xxx.r2.dev
-DASHSCOPE_API_KEY       ← Alibaba Cloud Dashscope Singapore key
+DASHSCOPE_API_KEY       ← kept in env but NOT used as user fallback (since v3.3)
 CLERK_SECRET_KEY        ← Clerk secret key (from clerk.dev dashboard)
-CLERK_JWKS_URL          ← Clerk JWKS URL: https://YOUR_CLERK_DOMAIN/.well-known/jwks.json
+CLERK_JWKS_URL          ← https://[app-slug].clerk.accounts.dev/.well-known/jwks.json
+
+## AUTH — Clerk
+
+Use DEVELOPMENT keys (pk_test_) for .pages.dev deployments.
+pk_live_ requires a real custom domain — .pages.dev cannot host Clerk subdomains.
+Dev key JWKS: https://[app-slug].clerk.accounts.dev/.well-known/jwks.json
 
 -----
 
@@ -369,16 +376,22 @@ wrangler secret put SECRET_NAME
 
 1. TypeScript strict — 0 errors before deploy (npx tsc –noEmit)
 1. ALWAYS use buildCanonicalUri() in aws-signature.ts — never url.pathname directly
+1. buildCanonicalUri: encodeURIComponent(decoded) ONLY — NO .replace(/%3A/gi, ‘:’)
+1. video.ts ARN path: encodeURIComponent(arn) WITHOUT .replace — colons must be %3A
 1. NEVER send img_url to Dashscope t2i models (text-to-image)
 1. NEVER use invalid model IDs — check this file’s model list first
 1. NEVER commit API keys — all keys via wrangler secrets or localStorage
 1. After EVERY change: npm run build must show 0 errors
 1. Dashscope poll URLs expire 24h — always re-upload to R2
-1. Nova Reel: us-east-1 ONLY, SD 3.5: us-west-2 ONLY
-1. Dashscope size uses * separator: 768*1280 not 768x1280
-11. video_prompt.full_prompt max 200 chars — starts with camera movement
-12. customVideoPrompt overrides videoPrompt.full_prompt when sending to Nova Reel / Wan2.1
-13. Video Prompt section default: collapsed (videoPromptExpanded state)
+10. Nova Reel: us-east-1 ONLY, SD 3.5: us-west-2 ONLY
+11. Dashscope size uses * separator: 768*1280 not 768x1280
+12. video_prompt.full_prompt max 200 chars — starts with camera movement
+13. customVideoPrompt overrides videoPrompt.full_prompt when sending to Nova Reel / Wan2.1
+14. Video Prompt section default: collapsed (videoPromptExpanded state)
+15. NEVER use env.AWS_ACCESS_KEY_ID as fallback in extractCredentials (security)
+16. All generation routes call requireAwsKeys(creds) or requireDashscopeKey(creds) → 401 if missing
+17. localStorage user settings key: fuzzy_settings_{userId} NOT ‘fuzzy_short_settings’
+18. getApiHeaders(userId?) — always pass userId from useUser() in all page components
 
 -----
 
@@ -391,15 +404,25 @@ Fix: aws-signature.ts → buildCanonicalUri must use encodeURIComponent(segment)
 Error: Nova Reel “UnknownOperationException” from GetAsyncInvoke
 Fix: video.ts arnForUrl must be encodeURIComponent(arn) WITHOUT .replace(/%3A/gi, ':')
      AWS needs fully-encoded ARN path to route to GetAsyncInvoke correctly.
-     NOTE: this is different from aws-signature.ts canonical URI (same rule, both need %3A).
 
 Error: “Model not exist” from Dashscope image
-Fix: Use wanx2.1-t2i-turbo, wanx2.1-t2i-plus, or wan2.6-image.
+Fix: Use qwen-image-2.0-pro, qwen-image-2.0, wan2.6-image, or wanx2.1-t2i-turbo.
      wanx-v1 is NOT valid on dashscope-intl.aliyuncs.com.
+     wanx2.1-t2i-plus removed — replaced by qwen-image-2.0-pro.
      wan2.6-image uses messages[] format in input (not { prompt }).
 
 Error: “url error, please check url” from Dashscope image
 Fix: Remove img_url from t2i requests. Only i2v models need img_url.
+
+Error: “AWS credentials required” (401 from Worker)
+Fix: User must provide keys in Settings. Worker no longer falls back to env.AWS_ACCESS_KEY_ID.
+     All generation routes call requireAwsKeys(creds) — 401 if no header supplied.
+
+Error: “Clerk: Failed to load Clerk” / failed_to_load_clerk_js
+Fix: Publishable key domain doesn't resolve. Use pk_test_ (dev keys) for .pages.dev.
+     pk_live_ requires a real custom domain — .pages.dev cannot host Clerk subdomains.
+     Update VITE_CLERK_PUBLISHABLE_KEY in .env.local + Cloudflare Pages env vars.
+     Update CLERK_JWKS_URL secret: https://[slug].clerk.accounts.dev/.well-known/jwks.json
 
 Error: “API Usage Billing” in Claude Code header
 Fix: This is normal in v2.x — check ~/.claude/settings.json has env.CLAUDE_CODE_USE_BEDROCK = “1”

@@ -2,6 +2,72 @@
 
 ---
 
+## v3.3 — 2026-03-06
+
+**Fix: Block Worker env key fallback + clear session on user change + API key warnings**
+
+### Security Fix (critical)
+- **`worker/index.ts` — `extractCredentials`** no longer falls back to `env.AWS_ACCESS_KEY_ID` / `env.AWS_SECRET_ACCESS_KEY` / `env.DASHSCOPE_API_KEY` for user-facing generation routes. Env secrets are now R2/D1 internal only.
+- **`requireAwsKeys(creds)`** and **`requireDashscopeKey(creds)`** helper functions added. Every generation route calls the appropriate guard — returns `401 { error: "AWS credentials required…" }` if headers are missing.
+- Routes guarded: `/api/brain/*`, `/api/image/*`, `/api/video/start`, `/api/audio/*`, `/api/dashscope/brain`, `/api/dashscope/image/start`, `/api/dashscope/video/start`.
+
+### Session Isolation Fix
+- **`src/App.tsx`** — `clearSessionData()` called when `user?.id` changes or user signs out. Clears `sessionStorage` (storyboard_result, model keys) and `localStorage` (`fuzzy_storyboard_sessions`, `video_job_*` keys).
+
+### UI Improvements
+- **`src/pages/Storyboard.tsx`** — `hasApiKeys` state: reads `fuzzy_settings_{userId}` on load. Shows red warning banner + disables Generate Image / Video / Audio buttons if no keys found.
+- **`src/lib/api.ts`** — `generateImage`, `startVideoJob`, `generateAudio` now surface `error` field from 401 responses. Storyboard catch blocks show `"🔑 API key required — go to Settings"` for credential errors.
+
+### Files Changed
+`worker/index.ts` · `src/App.tsx` · `src/lib/api.ts` · `src/pages/Storyboard.tsx`
+
+---
+
+## v3.2 — 2026-03-06
+
+**Fix: Isolate API keys per user — localStorage keyed by userId**
+
+### Root Cause
+Settings used shared `fuzzy_short_settings` localStorage key → all users on same device shared API keys.
+
+### Changes
+- **`src/lib/api.ts`** — `getApiHeaders(userId?)` accepts optional userId. Reads `fuzzy_settings_{userId}` when provided, falls back to legacy `fuzzy_short_settings`. Added `clearUserSessionData(userId)` utility.
+- **`src/pages/Settings.tsx`** — useEffect depends on `user?.id`. One-time migration: removes old shared key and sets `migrated_{userId}` flag. Loads D1 first then user-specific localStorage. `handleSave` writes to `fuzzy_settings_{userId}` and calls `updatePreferences` for cloud sync.
+- **`src/pages/Home.tsx`** — Added `useUser`. useEffect reads user-specific key + pre-fills language/artStyle/model defaults. `handleSubmit` reads user-specific storage key for API headers.
+- **`src/pages/Storyboard.tsx`** — Added `useUser`. All 3 `getApiHeaders()` calls pass `user?.id`.
+
+### Security
+```
+BEFORE: 'fuzzy_short_settings' — shared by all users on device ❌
+AFTER:  'fuzzy_settings_{userId}' — isolated per user ✅
+D1:     primary source (encrypted api_keys table)
+localStorage: offline fallback per user
+```
+
+### Files Changed
+`src/lib/api.ts` · `src/pages/Settings.tsx` · `src/pages/Home.tsx` · `src/pages/Storyboard.tsx`
+
+---
+
+## v3.1 — 2026-03-06
+
+**Fix: Switch Clerk to development keys for .pages.dev deployment**
+
+### Root Cause
+`pk_live_` key encoded `clerk.fuzzystuf.pages.dev` as Frontend API domain. Cloudflare does not allow custom subdomains on `.pages.dev` — the subdomain can never resolve, so Clerk JS fails to load.
+
+### Changes
+- **`.env.local`** — `VITE_CLERK_PUBLISHABLE_KEY` changed from `pk_live_` to `pk_test_` (honest-squid-92.clerk.accounts.dev).
+- **Worker secrets updated** — `CLERK_SECRET_KEY` + `CLERK_JWKS_URL` updated to match dev app.
+
+### Rule Going Forward
+Use `pk_test_` keys for `.pages.dev` deployments. Only switch to `pk_live_` when a real custom domain (not `.pages.dev`) is configured.
+
+### Files Changed
+`.env.local`
+
+---
+
 ## v3.0 — 2026-03-05
 
 **Feat: Clerk auth + Cloudflare D1 cloud sync + dashboard**

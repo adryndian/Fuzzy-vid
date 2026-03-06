@@ -1,6 +1,6 @@
 # Fuzzy Short — Gemini CLI Project Instructions
 
-# Version 2.0 — Updated March 2026
+# Version 3.3 — Updated March 2026
 
 # READ THIS COMPLETELY before starting any task
 
@@ -55,10 +55,10 @@ aws-signature.ts ← HMAC signing — see CRITICAL RULE below
 
 ## CRITICAL — AWS SIGNATURE RULE (NEVER SKIP)
 
-The #1 bug in this project. The canonical URI for AWS SigV4
-MUST use literal colon “:” not “%3A”.
+The #1 bug in this project. AWS SigV4 requires “:” to be encoded as “%3A”
+in the canonical URI — NOT a literal colon.
 
-ALWAYS use this function in aws-signature.ts:
+ALWAYS use this exact function in aws-signature.ts:
 
 ```typescript
 function buildCanonicalUri(rawUrl: string): string {
@@ -69,7 +69,9 @@ function buildCanonicalUri(rawUrl: string): string {
       let decoded: string
       try { decoded = decodeURIComponent(segment) }
       catch { decoded = segment }
-      return encodeURIComponent(decoded).replace(/%3A/gi, ':')
+      // CORRECT — “:” must be “%3A” in canonical URI (AWS SigV4 requirement)
+      return encodeURIComponent(decoded)
+      // ⚠️ NEVER add .replace(/%3A/gi, ':') — this was the old bug that caused Nova Canvas failures
     })
     .join('/')
 }
@@ -77,14 +79,17 @@ function buildCanonicalUri(rawUrl: string): string {
 
 signRequest MUST call buildCanonicalUri(url) — NEVER use url.pathname directly.
 
+Same rule applies in video.ts: ARN path must use encodeURIComponent(arn) WITHOUT
+.replace(/%3A/gi, ':') — literal colons cause UnknownOperationException on GetAsyncInvoke.
+
 Test before deploying:
 
 ```bash
-node -e "
-function b(u){const p=new URL(u).pathname;return p.split('/').map(s=>{let d;try{d=decodeURIComponent(s)}catch{d=s};return encodeURIComponent(d).replace(/%3A/gi,':')}).join('/')}
+node -e “
+function b(u){const p=new URL(u).pathname;return p.split('/').map(s=>{let d;try{d=decodeURIComponent(s)}catch{d=s};return encodeURIComponent(d)}).join('/')}
 console.log(b('https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.nova-canvas-v1%3A0/invoke'))
-// MUST print: /model/amazon.nova-canvas-v1:0/invoke
-"
+// MUST print: /model/amazon.nova-canvas-v1%3A0/invoke  ('%3A' encoded, NOT literal colon)
+“
 ```
 
 -----
@@ -114,11 +119,12 @@ qwen3-max, qwen-plus, qwen-flash, qwen-turbo, qwq-plus
 
 ### Dashscope Singapore — Image (ALL async)
 
-wanx2.1-t2i-turbo  ← standard wanx format
-wanx2.1-t2i-plus   ← standard wanx format
-wan2.6-image        ← messages[] format (DIFFERENT from others!)
+qwen-image-2.0-pro  ← best quality, standard format: input: { prompt }
+qwen-image-2.0      ← balanced, standard format: input: { prompt }
+wan2.6-image        ← messages[] format: input: { messages: [{role:'user', content:[{text:prompt}]}] }
+wanx2.1-t2i-turbo  ← fast (legacy), standard format: input: { prompt }
 
-❌ REMOVED: wanx-v1 (DOES NOT EXIST), wanx2.1-i2i (different endpoint)
+❌ REMOVED: wanx-v1 (DOES NOT EXIST on dashscope-intl), wanx2.1-t2i-plus (replaced by qwen-image-2.0-pro)
 
 ### Dashscope Singapore — Video (ALL async)
 
@@ -174,18 +180,29 @@ Size format uses * separator (NOT x):
 ## WORKER ROUTES
 
 GET  /api/health
-POST /api/brain/generate
-POST /api/brain/rewrite-vo
-POST /api/brain/regenerate-video-prompt    ← regenerate video_prompt for single scene
-POST /api/image/generate
-POST /api/image/enhance-prompt
-POST /api/video/start
-GET  /api/video/status/:jobId
-POST /api/audio/generate
-POST /api/dashscope/brain
-POST /api/dashscope/image/start
-POST /api/dashscope/video/start
-GET  /api/dashscope/task/:taskId
+POST /api/brain/generate                   ← AWS Bedrock brain (requireAwsKeys)
+POST /api/brain/rewrite-vo                 ← (requireAwsKeys)
+POST /api/brain/regenerate-video-prompt    ← (requireAwsKeys)
+POST /api/image/generate                   ← Nova Canvas or SD 3.5 (requireAwsKeys)
+POST /api/image/enhance-prompt             ← (requireAwsKeys)
+POST /api/video/start                      ← Nova Reel async (requireAwsKeys)
+GET  /api/video/status/:jobId              ← Nova Reel poll
+POST /api/audio/generate                   ← AWS Polly (requireAwsKeys)
+POST /api/dashscope/brain                  ← (requireDashscopeKey)
+POST /api/dashscope/image/start            ← (requireDashscopeKey)
+POST /api/dashscope/video/start            ← (requireDashscopeKey)
+GET  /api/dashscope/task/:taskId           ← poll (no key guard, status only)
+
+GET  /api/user/profile                     ← auth required (Clerk JWT)
+PUT  /api/user/profile                     ← auth required
+GET  /api/user/keys                        ← get decrypted API keys from D1
+POST /api/user/keys                        ← save encrypted API keys to D1
+GET  /api/user/usage                       ← credit usage summary
+GET  /api/storyboards                      ← list user storyboards
+POST /api/storyboards                      ← save/upsert storyboard
+GET  /api/storyboards/:id                  ← get single storyboard
+DELETE /api/storyboards/:id               ← delete storyboard
+POST /api/storyboards/:id/scenes           ← upsert scene asset
 
 -----
 
@@ -199,10 +216,29 @@ Dashscope: X-Dashscope-Api-Key
 
 ## WORKER SECRETS (wrangler secret put)
 
-AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
-R2_ACCOUNT_ID, R2_BUCKET_NAME, R2_PUBLIC_URL
-DASHSCOPE_API_KEY
+# Internal use only (R2 storage, NOT for user generation routes)
+AWS_ACCESS_KEY_ID       ← R2 ops only — extractCredentials NO LONGER uses this for generation
+AWS_SECRET_ACCESS_KEY   ← R2 ops only
+R2_ACCESS_KEY_ID
+R2_SECRET_ACCESS_KEY
+R2_ACCOUNT_ID
+R2_BUCKET_NAME
+R2_PUBLIC_URL
+
+# Auth
+CLERK_SECRET_KEY        ← from clerk.dev dashboard
+CLERK_JWKS_URL          ← https://[app-slug].clerk.accounts.dev/.well-known/jwks.json
+
+# Optional server-side (not used as fallback since v3.3)
+DASHSCOPE_API_KEY       ← kept in env but NOT used as user fallback
+
+## AUTH — Clerk
+
+Use DEVELOPMENT keys (pk_test_) for .pages.dev domains.
+pk_live_ requires a custom domain — .pages.dev subdomain can't be created.
+
+Dev VITE_CLERK_PUBLISHABLE_KEY starts with pk_test_
+Set in .env.local AND Cloudflare Pages → Settings → Environment Variables
 
 -----
 
@@ -296,33 +332,52 @@ wrangler tail          ← live Worker logs
 
 1. TypeScript strict — run npx tsc –noEmit, fix ALL errors before deploy
 1. ALWAYS use buildCanonicalUri() — never url.pathname directly
+1. buildCanonicalUri: encodeURIComponent(decoded) ONLY — NO .replace(/%3A/gi, ':')
 1. NEVER send img_url to Dashscope t2i or t2v models
 1. NEVER use invalid model IDs — verify against list above
 1. NEVER hardcode API keys — use wrangler secrets or localStorage
 1. wan2.6-image uses messages[] format — not input.prompt
 1. Dashscope size: use * not x (768*1280 not 768x1280)
 1. Dashscope URLs expire 24h — always re-upload to R2
-1. Nova Reel: us-east-1 ONLY | SD 3.5: us-west-2 ONLY
-1. After every change: npm run build → 0 errors required
-11. video_prompt.full_prompt max 200 chars — starts with camera movement
-12. customVideoPrompt overrides videoPrompt.full_prompt when sending to Nova Reel / Wan2.1
-13. Video Prompt section default: collapsed (videoPromptExpanded state)
+10. Nova Reel: us-east-1 ONLY | SD 3.5: us-west-2 ONLY
+11. After every change: npm run build → 0 errors required
+12. video_prompt.full_prompt max 200 chars — starts with camera movement
+13. video.ts ARN path: encodeURIComponent(arn) WITHOUT .replace — colons must be %3A
+14. NEVER use env.AWS_ACCESS_KEY_ID as fallback in extractCredentials
+15. All generation routes must call requireAwsKeys(creds) or requireDashscopeKey(creds)
+16. localStorage per user: key = fuzzy_settings_{userId} NOT 'fuzzy_short_settings'
+17. getApiHeaders(userId?) — always pass userId from useUser() hook
 
 -----
 
 ## COMMON ERRORS & FIXES
 
-“signature does not match” / %3A in error message
-→ aws-signature.ts: buildCanonicalUri must decode %3A to :
+“signature does not match” / canonical URI mismatch
+→ aws-signature.ts: buildCanonicalUri must use encodeURIComponent(decoded) WITHOUT .replace(/%3A/gi, ‘:’)
+→ “:” MUST be “%3A” in canonical URI — the .replace was the old bug
+
+Nova Reel “UnknownOperationException”
+→ video.ts ARN path: use encodeURIComponent(arn) WITHOUT .replace(/%3A/gi, ‘:’)
+→ Literal colons in URL path break AWS routing to GetAsyncInvoke
 
 “Model not exist” (Dashscope)
 → Wrong model ID. Check valid list above. wanx-v1 does not exist.
+→ wanx2.1-t2i-plus removed — use qwen-image-2.0-pro instead
 
 “url error, please check url” (Dashscope image)
 → Remove img_url from t2i requests. Only i2v needs img_url.
 
 “InvalidParameter” from Dashscope wan2.6
-→ Use messages[] format: input: { messages: [{role:‘user’, content:[{text:prompt}]}] }
+→ Use messages[] format: input: { messages: [{role:’user’, content:[{text:prompt}]}] }
+
+“AWS credentials required” (401 from Worker)
+→ User must provide keys in Settings. Worker no longer falls back to env.AWS_ACCESS_KEY_ID.
+→ Generation routes call requireAwsKeys(creds) — returns 401 if no header supplied.
+
+“Clerk: Failed to load Clerk” / failed_to_load_clerk_js
+→ Publishable key domain doesn’t resolve. Use pk_test_ for .pages.dev deployments.
+→ pk_live_ requires a real custom domain — .pages.dev cannot host Clerk subdomains.
+→ CLERK_JWKS_URL must match key’s domain: https://[slug].clerk.accounts.dev/.well-known/jwks.json
 
 AWSCompromisedKeyQuarantineV3
 → AWS IAM Console → Users → Xklaa-pmpt → Permissions → Detach quarantine policy
