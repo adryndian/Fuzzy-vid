@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser, UserButton } from '@clerk/clerk-react'
 import type { AppSettings } from '../types/schema'
-import { DEFAULT_SETTINGS, loadSettings, saveSettings } from '../types/schema'
+import { DEFAULT_SETTINGS } from '../types/schema'
 import { useUserApi } from '../lib/userApi'
 
 type TestStatus = 'idle' | 'testing' | 'success' | 'failed'
@@ -18,7 +18,7 @@ const REGIONS = [
 export function Settings() {
   const navigate = useNavigate()
   const { user } = useUser()
-  const { saveApiKeys, getApiKeys } = useUserApi()
+  const { saveApiKeys, getApiKeys, updatePreferences } = useUserApi()
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [saved, setSaved] = useState(false)
   const [savedMsg, setSavedMsg] = useState('')
@@ -29,15 +29,42 @@ export function Settings() {
   const [awsMsg, setAwsMsg] = useState('')
 
   useEffect(() => {
-    const local = loadSettings()
-    setSettings(local)
-    // Try to load from D1 cloud, merge over local
-    getApiKeys().then((cloud: Partial<AppSettings>) => {
-      if (cloud && Object.keys(cloud).length > 0) {
-        setSettings(prev => ({ ...prev, ...cloud }))
-      }
-    }).catch(() => { /* offline — use local */ })
-  }, [])
+    if (!user?.id) return
+
+    const storageKey = `fuzzy_settings_${user.id}`
+
+    // One-time migration: remove old shared localStorage key
+    if (localStorage.getItem('fuzzy_short_settings') &&
+        !localStorage.getItem(`migrated_${user.id}`)) {
+      localStorage.removeItem('fuzzy_short_settings')
+      localStorage.setItem(`migrated_${user.id}`, '1')
+    }
+
+    // Load from D1 first, fallback to user-specific localStorage
+    getApiKeys()
+      .then((keys: Partial<AppSettings>) => {
+        if (keys && Object.keys(keys).length > 0) {
+          setSettings(prev => {
+            const merged = { ...prev, ...keys }
+            localStorage.setItem(storageKey, JSON.stringify(merged))
+            return merged
+          })
+        } else {
+          const saved = localStorage.getItem(storageKey)
+          if (saved) {
+            try { setSettings(JSON.parse(saved)) }
+            catch { localStorage.removeItem(storageKey) }
+          }
+        }
+      })
+      .catch(() => {
+        const saved = localStorage.getItem(storageKey)
+        if (saved) {
+          try { setSettings(JSON.parse(saved)) }
+          catch { localStorage.removeItem(storageKey) }
+        }
+      })
+  }, [user?.id])
 
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }))
@@ -45,11 +72,25 @@ export function Settings() {
   }
 
   const handleSave = async () => {
-    saveSettings(settings)
+    if (!user?.id) return
+    const storageKey = `fuzzy_settings_${user.id}`
     try {
-      await saveApiKeys(settings as unknown as Record<string, unknown>)
-      setSavedMsg('Saved to cloud')
-    } catch {
+      await saveApiKeys({
+        aws_access_key_id: settings.awsAccessKeyId || '',
+        aws_secret_access_key: settings.awsSecretAccessKey || '',
+        dashscope_api_key: settings.dashscopeApiKey || '',
+        elevenlabs_api_key: settings.elevenLabsApiKey || '',
+      })
+      await updatePreferences({
+        brain_region: settings.brainRegion,
+        image_region: settings.imageRegion,
+        audio_region: settings.audioRegion,
+      })
+      localStorage.setItem(storageKey, JSON.stringify(settings))
+      setSavedMsg('Saved to cloud ☁️')
+    } catch (e) {
+      console.error('Cloud save failed, using local:', e)
+      localStorage.setItem(storageKey, JSON.stringify(settings))
       setSavedMsg('Saved locally (offline mode)')
     }
     setSaved(true)

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import type { SceneAssets, SceneAssetsMap, GenerationStatus, AudioHistoryItem, VideoPromptData } from '../types/schema'
 import { defaultSceneAssets, saveVideoJob, loadVideoJob, clearVideoJob, redistributeDurations } from '../types/schema'
+import { useUser } from '@clerk/clerk-react'
 import { generateImage, generateAudio, checkVideoStatus, startVideoJob, enhancePrompt, rewriteVO, regenerateVideoPrompt, getApiHeaders, WORKER_URL } from '../lib/api'
 import { useUserApi } from '../lib/userApi'
 import { useHistoryStore } from '../store/historyStore'
@@ -64,6 +65,7 @@ export function Storyboard() {
   const updateAssetInStore = useStoryboardSessionStore((s) => s.updateAsset)
   const updateSession = useStoryboardSessionStore((s) => s.updateSession)
 
+  const { user } = useUser()
   const { saveSceneAsset } = useUserApi()
 
   // Local UI state (not persisted)
@@ -505,7 +507,7 @@ export function Storyboard() {
 
       try {
         const res = await fetch(`${WORKER_URL}/api/dashscope/task/${taskId}`, {
-          headers: getApiHeaders(),
+          headers: getApiHeaders(user?.id),
         })
         const data = await res.json() as { status: string; url?: string; message?: string }
 
@@ -576,7 +578,7 @@ export function Storyboard() {
         // Async Dashscope image generation
         const startRes = await fetch(`${WORKER_URL}/api/dashscope/image/start`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
+          headers: { 'Content-Type': 'application/json', ...getApiHeaders(user?.id) },
           body: JSON.stringify({
             prompt: finalPrompt,
             image_model: selectedImageModel.id,
@@ -636,7 +638,7 @@ export function Storyboard() {
         // Async Dashscope video generation
         const startRes = await fetch(`${WORKER_URL}/api/dashscope/video/start`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getApiHeaders() },
+          headers: { 'Content-Type': 'application/json', ...getApiHeaders(user?.id) },
           body: JSON.stringify({
             prompt: sceneAsset?.customVideoPrompt
               || sceneAsset?.videoPrompt?.full_prompt

@@ -18,10 +18,12 @@ export const api = {
 
 export const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
 
-export function getApiHeaders(): Record<string, string> {
+export function getApiHeaders(userId?: string): Record<string, string> {
   const headers: Record<string, string> = {}
   try {
-    const stored = localStorage.getItem('fuzzy_short_settings')
+    // Try user-specific key first, fallback to shared legacy key
+    const storageKey = userId ? `fuzzy_settings_${userId}` : 'fuzzy_short_settings'
+    const stored = localStorage.getItem(storageKey)
     if (stored) {
       const keys = JSON.parse(stored)
       if (keys.awsAccessKeyId)     headers['X-AWS-Access-Key-Id'] = keys.awsAccessKeyId
@@ -33,6 +35,14 @@ export function getApiHeaders(): Record<string, string> {
     }
   } catch { /* ignore */ }
   return headers
+}
+
+// Clear current user's in-memory session data on sign-out
+// Does NOT clear saved settings (user wants to keep their keys)
+export function clearUserSessionData(_userId: string) {
+  sessionStorage.removeItem('storyboard_result')
+  sessionStorage.removeItem('selected_image_model')
+  sessionStorage.removeItem('selected_video_model')
 }
 
 export async function generateImage(params: {

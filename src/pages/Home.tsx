@@ -10,6 +10,7 @@ import { useStoryboardSessionStore } from '../store/storyboardSessionStore'
 import { GenerationOverlay } from '../components/GenerationOverlay'
 import type { GenStep } from '../components/GenerationOverlay'
 import { useElapsedTimer } from '../hooks/useElapsedTimer'
+import { useUser } from '@clerk/clerk-react'
 import { useUserApi } from '../lib/userApi'
 
 type Platform = 'youtube_shorts' | 'reels' | 'tiktok'
@@ -98,6 +99,8 @@ export function Home() {
   const stepTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const taskIdRef = useRef<string>('')
 
+  const { user } = useUser()
+
   const addCostEntry = useCostStore((s) => s.addEntry)
   const addHistoryItem = useHistoryStore((s) => s.addItem)
   const historyCount = useHistoryStore((s) => s.items.length)
@@ -109,16 +112,26 @@ export function Home() {
   const elapsedMs = useElapsedTimer(loading)
 
   useEffect(() => {
-    const stored = localStorage.getItem('fuzzy_short_settings')
+    if (!user?.id) return
+    const storageKey = `fuzzy_settings_${user.id}`
+    const stored = localStorage.getItem(storageKey)
     if (!stored) {
       setError('Please set your API keys in Settings first')
     } else {
-      const keys = JSON.parse(stored)
-      if (!keys.geminiApiKey && !keys.awsAccessKeyId) {
-        setError('Please set your API keys in Settings first')
-      }
+      try {
+        const keys = JSON.parse(stored)
+        if (!keys.geminiApiKey && !keys.awsAccessKeyId && !keys.dashscopeApiKey) {
+          setError('Please set your API keys in Settings first')
+        } else {
+          setError('')
+          if (keys.language) setLanguage(keys.language)
+          if (keys.artStyle) setArtStyle(keys.artStyle)
+          if (keys.defaultImageModel) setImageModel(keys.defaultImageModel)
+          if (keys.defaultVideoModel) setVideoModel(keys.defaultVideoModel)
+        }
+      } catch { /* ignore */ }
     }
-  }, [])
+  }, [user?.id])
 
   const handleSubmit = async () => {
     if (!title.trim() || !story.trim()) { setError('Please fill in title and story'); return }
@@ -132,7 +145,8 @@ export function Home() {
 
     let apiHeaders: Record<string, string> = {}
     try {
-      const stored = localStorage.getItem('fuzzy_short_settings')
+      const storageKey = user?.id ? `fuzzy_settings_${user.id}` : 'fuzzy_short_settings'
+      const stored = localStorage.getItem(storageKey)
       if (stored) {
         const s = JSON.parse(stored)
         if (s.geminiApiKey) apiHeaders['X-Gemini-Key'] = s.geminiApiKey
