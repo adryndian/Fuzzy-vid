@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
-import { useAuth } from '@clerk/clerk-react'
+import { useAuth, useUser } from '@clerk/clerk-react'
+import { useEffect, useRef } from 'react'
 import { Home } from './pages/Home'
 import { Storyboard } from './pages/Storyboard'
 import { History } from './pages/History'
@@ -9,8 +10,40 @@ import { Dashboard } from './pages/Dashboard'
 import { Auth } from './pages/Auth'
 import { GenTaskBar } from './components/GenTaskBar'
 
+function clearSessionData() {
+  sessionStorage.removeItem('storyboard_result')
+  sessionStorage.removeItem('selected_image_model')
+  sessionStorage.removeItem('selected_video_model')
+  const keysToRemove: string[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key && (
+      key.startsWith('video_job_') ||
+      key === 'fuzzy_storyboard_sessions'
+    )) {
+      keysToRemove.push(key)
+    }
+  }
+  keysToRemove.forEach(k => localStorage.removeItem(k))
+}
+
 function AppContent() {
   const { isLoaded, isSignedIn } = useAuth()
+  const { user } = useUser()
+  const prevUserIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!isLoaded) return
+    const currentUserId = user?.id || null
+    // User switched accounts or signed out
+    if (prevUserIdRef.current !== null && prevUserIdRef.current !== currentUserId) {
+      clearSessionData()
+    }
+    if (!isSignedIn) {
+      clearSessionData()
+    }
+    prevUserIdRef.current = currentUserId
+  }, [isLoaded, isSignedIn, user?.id])
 
   if (!isLoaded) {
     return (

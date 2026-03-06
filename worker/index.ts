@@ -46,23 +46,48 @@ export interface Credentials {
   r2Bucket: string
 }
 
+// User must supply their own API keys for generation endpoints.
+// env secrets are ONLY for internal operations (R2, D1).
+export function requireAwsKeys(creds: Credentials): Response | null {
+  if (!creds.awsAccessKeyId || !creds.awsSecretAccessKey) {
+    return Response.json(
+      { error: 'AWS credentials required. Please add your API keys in Settings.' },
+      { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } }
+    )
+  }
+  return null
+}
+
+export function requireDashscopeKey(creds: Credentials): Response | null {
+  if (!creds.dashscopeApiKey) {
+    return Response.json(
+      { error: 'Dashscope API key required. Please add it in Settings.' },
+      { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } }
+    )
+  }
+  return null
+}
+
 export function extractCredentials(request: Request, env: Env): Credentials {
   const h = request.headers
   return {
-    geminiApiKey:        h.get('X-Gemini-Key')            || env.GEMINI_API_KEY          || '',
-    awsAccessKeyId:     h.get('X-AWS-Access-Key-Id')      || env.AWS_ACCESS_KEY_ID       || '',
-    awsSecretAccessKey: h.get('X-AWS-Secret-Access-Key')  || env.AWS_SECRET_ACCESS_KEY   || '',
+    // User-supplied keys — NO env fallback (each user uses their own)
+    geminiApiKey:        h.get('X-Gemini-Key')            || '',
+    awsAccessKeyId:     h.get('X-AWS-Access-Key-Id')      || '',
+    awsSecretAccessKey: h.get('X-AWS-Secret-Access-Key')  || '',
+    elevenLabsApiKey:   h.get('X-ElevenLabs-Key')         || '',
+    runwayApiKey:       h.get('X-Runway-Key')             || '',
+    dashscopeApiKey:    h.get('X-Dashscope-Api-Key')      || '',
+    // Region preferences from headers
     brainRegion:        h.get('X-Brain-Region')           || 'us-east-1',
     imageRegion:        h.get('X-Image-Region')           || 'us-east-1',
     audioRegion:        h.get('X-Audio-Region')           || 'us-west-2',
     videoRegion:        'us-east-1', // always fixed for Nova Reel
-    elevenLabsApiKey:   h.get('X-ElevenLabs-Key')         || env.ELEVENLABS_API_KEY      || '',
-    runwayApiKey:       h.get('X-Runway-Key')             || env.RUNWAY_API_KEY           || '',
-    dashscopeApiKey:    h.get('X-Dashscope-Api-Key')      || env.DASHSCOPE_API_KEY        || '',
-    r2AccountId:        h.get('X-R2-Account-Id')          || env.R2_ACCOUNT_ID            || '',
-    r2AccessKeyId:      h.get('X-R2-Access-Key-Id')       || env.R2_ACCESS_KEY_ID         || '',
-    r2SecretAccessKey:  h.get('X-R2-Secret-Access-Key')   || env.R2_SECRET_ACCESS_KEY     || '',
-    r2Bucket:           h.get('X-R2-Bucket')              || 'igome-story-storage',
+    // Internal R2 credentials — env only (not user-facing)
+    r2AccountId:        env.R2_ACCOUNT_ID            || '',
+    r2AccessKeyId:      env.R2_ACCESS_KEY_ID         || '',
+    r2SecretAccessKey:  env.R2_SECRET_ACCESS_KEY     || '',
+    r2Bucket:           'igome-story-storage',
   }
 }
 
@@ -159,15 +184,25 @@ export default {
       }
       // ── Brain routes ─────────────────────────────────────────────────────
       else if (path === '/api/brain/rewrite-vo') {
-        const { handleRewriteVO } = await import('./brain')
-        response = await handleRewriteVO(request, env, creds)
+        const denied = requireAwsKeys(creds)
+        if (denied) { response = denied }
+        else {
+          const { handleRewriteVO } = await import('./brain')
+          response = await handleRewriteVO(request, env, creds)
+        }
       }
       else if (path === '/api/brain/regenerate-video-prompt') {
-        const { handleRegenerateVideoPrompt } = await import('./brain')
-        response = await handleRegenerateVideoPrompt(request, env, creds)
+        const denied = requireAwsKeys(creds)
+        if (denied) { response = denied }
+        else {
+          const { handleRegenerateVideoPrompt } = await import('./brain')
+          response = await handleRegenerateVideoPrompt(request, env, creds)
+        }
       }
       else if (path === '/api/brain/generate' || path.startsWith('/api/brain/')) {
-        if (clerkUser && env.DB) {
+        const denied = requireAwsKeys(creds)
+        if (denied) { response = denied }
+        else if (clerkUser && env.DB) {
           const creditCheck = await deductCredits(env.DB, clerkUser.id, 'brain')
           if (!creditCheck.ok) {
             response = Response.json({ error: creditCheck.error || 'Insufficient credits' }, { status: 402 })
@@ -182,25 +217,37 @@ export default {
       }
       // ── Image routes ─────────────────────────────────────────────────────
       else if (path === '/api/image/enhance-prompt') {
-        if (clerkUser && env.DB) {
-          ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'enhance'))
+        const denied = requireAwsKeys(creds)
+        if (denied) { response = denied }
+        else {
+          if (clerkUser && env.DB) {
+            ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'enhance'))
+          }
+          const { handleEnhancePrompt } = await import('./image')
+          response = await handleEnhancePrompt(request, env, creds)
         }
-        const { handleEnhancePrompt } = await import('./image')
-        response = await handleEnhancePrompt(request, env, creds)
       }
       else if (path.startsWith('/api/image/')) {
-        const { handleImageRequest } = await import('./image')
-        response = await handleImageRequest(request, env, url, ctx, creds)
-        if (clerkUser && env.DB && response.ok) {
-          ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'image'))
+        const denied = requireAwsKeys(creds)
+        if (denied) { response = denied }
+        else {
+          const { handleImageRequest } = await import('./image')
+          response = await handleImageRequest(request, env, url, ctx, creds)
+          if (clerkUser && env.DB && response.ok) {
+            ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'image'))
+          }
         }
       }
       // ── Video routes ─────────────────────────────────────────────────────
       else if (path === '/api/video/start') {
-        const { handleVideoStart } = await import('./video')
-        response = await handleVideoStart(request, env, url, ctx, creds)
-        if (clerkUser && env.DB && response.ok) {
-          ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'video'))
+        const denied = requireAwsKeys(creds)
+        if (denied) { response = denied }
+        else {
+          const { handleVideoStart } = await import('./video')
+          response = await handleVideoStart(request, env, url, ctx, creds)
+          if (clerkUser && env.DB && response.ok) {
+            ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'video'))
+          }
         }
       }
       else if (path.startsWith('/api/video/status/')) {
@@ -214,7 +261,9 @@ export default {
       }
       // ── Dashscope routes ──────────────────────────────────────────────────
       else if (path === '/api/dashscope/brain') {
-        if (clerkUser && env.DB) {
+        const denied = requireDashscopeKey(creds)
+        if (denied) { response = denied }
+        else if (clerkUser && env.DB) {
           const creditCheck = await deductCredits(env.DB, clerkUser.id, 'brain')
           if (!creditCheck.ok) {
             response = Response.json({ error: creditCheck.error || 'Insufficient credits' }, { status: 402 })
@@ -228,17 +277,25 @@ export default {
         }
       }
       else if (path === '/api/dashscope/image/start') {
-        const { handleDashscopeImageStart } = await import('./dashscope')
-        response = await handleDashscopeImageStart(request, env, creds)
-        if (clerkUser && env.DB && response.ok) {
-          ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'image'))
+        const denied = requireDashscopeKey(creds)
+        if (denied) { response = denied }
+        else {
+          const { handleDashscopeImageStart } = await import('./dashscope')
+          response = await handleDashscopeImageStart(request, env, creds)
+          if (clerkUser && env.DB && response.ok) {
+            ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'image'))
+          }
         }
       }
       else if (path === '/api/dashscope/video/start') {
-        const { handleDashscopeVideoStart } = await import('./dashscope')
-        response = await handleDashscopeVideoStart(request, env, creds)
-        if (clerkUser && env.DB && response.ok) {
-          ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'video'))
+        const denied = requireDashscopeKey(creds)
+        if (denied) { response = denied }
+        else {
+          const { handleDashscopeVideoStart } = await import('./dashscope')
+          response = await handleDashscopeVideoStart(request, env, creds)
+          if (clerkUser && env.DB && response.ok) {
+            ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'video'))
+          }
         }
       }
       else if (path.startsWith('/api/dashscope/task/')) {
@@ -248,10 +305,14 @@ export default {
       }
       // ── Audio routes ──────────────────────────────────────────────────────
       else if (path.startsWith('/api/audio/')) {
-        const { handleAudioRequest } = await import('./audio')
-        response = await handleAudioRequest(request, env, url, ctx, creds)
-        if (clerkUser && env.DB && response.ok) {
-          ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'audio'))
+        const denied = requireAwsKeys(creds)
+        if (denied) { response = denied }
+        else {
+          const { handleAudioRequest } = await import('./audio')
+          response = await handleAudioRequest(request, env, url, ctx, creds)
+          if (clerkUser && env.DB && response.ok) {
+            ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'audio'))
+          }
         }
       }
       // ── Project routes ────────────────────────────────────────────────────

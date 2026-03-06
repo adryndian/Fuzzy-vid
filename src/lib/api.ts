@@ -60,7 +60,7 @@ export async function generateImage(params: {
   })
   if (!res.ok) {
     const err = await res.json() as Record<string, unknown>
-    throw new Error((err.message as string) || `Image generation failed: ${res.status}`)
+    throw new Error((err.error as string) || (err.message as string) || `Image generation failed: ${res.status}`)
   }
   return res.json()
 }
@@ -113,7 +113,7 @@ export async function startVideoJob(params: {
   })
   if (!res.ok) {
     const err = await res.json() as Record<string, unknown>
-    throw new Error((err.message as string) || `Failed to start video job`)
+    throw new Error((err.error as string) || (err.message as string) || `Failed to start video job`)
   }
   return res.json()
 }
@@ -203,7 +203,7 @@ export async function generateAudio(params: {
   })
   if (!res.ok) {
     const err = await res.json() as Record<string, unknown>
-    throw new Error((err.message as string) || `Audio generation failed: ${res.status}`)
+    throw new Error((err.error as string) || (err.message as string) || `Audio generation failed: ${res.status}`)
   }
   return res.json()
 }

@@ -68,6 +68,24 @@ export function Storyboard() {
   const { user } = useUser()
   const { saveSceneAsset } = useUserApi()
 
+  const [hasApiKeys, setHasApiKeys] = useState(true) // optimistic default
+
+  useEffect(() => {
+    if (!user?.id) return
+    const storageKey = `fuzzy_settings_${user.id}`
+    const saved = localStorage.getItem(storageKey)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        const hasAws = !!(parsed.awsAccessKeyId && parsed.awsSecretAccessKey)
+        const hasDashscope = !!parsed.dashscopeApiKey
+        setHasApiKeys(hasAws || hasDashscope)
+      } catch { setHasApiKeys(false) }
+    } else {
+      setHasApiKeys(false)
+    }
+  }, [user?.id])
+
   // Local UI state (not persisted)
   const [storyboard, setStoryboard] = useState<Record<string, unknown> | null>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -618,8 +636,12 @@ export function Storyboard() {
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
-      updateAsset(sceneNum, { imageStatus: 'error', imageError: msg })
-      setPageToast({ msg: `Image failed: ${msg}`, type: 'error' })
+      const isKeyError = msg.toLowerCase().includes('credentials') || msg.toLowerCase().includes('api key required')
+      updateAsset(sceneNum, {
+        imageStatus: 'error',
+        imageError: isKeyError ? '🔑 API key required — go to Settings to add your keys' : msg,
+      })
+      setPageToast({ msg: `Image failed: ${isKeyError ? 'API key required' : msg}`, type: 'error' })
     }
   }
 
@@ -699,8 +721,12 @@ export function Storyboard() {
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
-      updateAsset(sceneNum, { videoStatus: 'error', videoError: msg })
-      setPageToast({ msg: `Video failed: ${msg}`, type: 'error' })
+      const isKeyError = msg.toLowerCase().includes('credentials') || msg.toLowerCase().includes('api key required')
+      updateAsset(sceneNum, {
+        videoStatus: 'error',
+        videoError: isKeyError ? '🔑 API key required — go to Settings to add your keys' : msg,
+      })
+      setPageToast({ msg: `Video failed: ${isKeyError ? 'API key required' : msg}`, type: 'error' })
     }
   }
 
@@ -812,8 +838,12 @@ export function Storyboard() {
       }).catch(console.error)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
-      updateAsset(sceneNum, { audioStatus: 'error', audioError: msg })
-      setPageToast({ msg: `Audio failed: ${msg}`, type: 'error' })
+      const isKeyError = msg.toLowerCase().includes('credentials') || msg.toLowerCase().includes('api key required')
+      updateAsset(sceneNum, {
+        audioStatus: 'error',
+        audioError: isKeyError ? '🔑 API key required — go to Settings to add your keys' : msg,
+      })
+      setPageToast({ msg: `Audio failed: ${isKeyError ? 'API key required' : msg}`, type: 'error' })
     }
   }
 
@@ -1328,7 +1358,7 @@ export function Storyboard() {
                   </optgroup>
                 </select>
               </div>
-              {actionBtn('Generate Image', () => handleGenerateImage(scene), sceneAsset.imageStatus, false, '#ff6b35')}
+              {actionBtn('Generate Image', () => handleGenerateImage(scene), sceneAsset.imageStatus, !hasApiKeys, '#ff6b35')}
               <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
                 Est. {formatCost(estimateImageCost(imageModel))}
               </div>
@@ -1736,7 +1766,7 @@ export function Storyboard() {
                   `Generate Video (${sceneDurations[sceneNum] || 6}s)`,
                   () => handleGenerateVideo(scene),
                   sceneAsset.videoStatus,
-                  vidNeedsImage && !hasImage,
+                  !hasApiKeys || (vidNeedsImage && !hasImage),
                   '#007aff'
                 )
               })()}
@@ -1873,7 +1903,7 @@ export function Storyboard() {
                 'Generate Audio VO',
                 () => handleGenerateAudio(scene),
                 sceneAsset.audioStatus,
-                false,
+                !hasApiKeys,
                 '#af52de'
               )}
               <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
@@ -2072,6 +2102,36 @@ export function Storyboard() {
         <span style={{ fontSize: '18px' }}>🎬</span>
       </div>
       </div>
+
+      {/* API Key Warning */}
+      {!hasApiKeys && (
+        <div style={{
+          margin: '12px 16px 0',
+          padding: '12px 14px',
+          background: 'rgba(255,59,48,0.08)',
+          border: '0.5px solid rgba(255,59,48,0.3)',
+          borderRadius: '14px',
+          display: 'flex', alignItems: 'center', gap: '10px',
+        }}>
+          <span style={{ fontSize: '18px' }}>⚠️</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#ff3b30' }}>API Keys Required</div>
+            <div style={{ fontSize: '11px', color: 'rgba(60,60,67,0.6)', marginTop: '2px' }}>
+              Add your AWS or Dashscope keys in Settings to generate images and videos
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/settings')}
+            style={{
+              padding: '6px 12px', borderRadius: '10px',
+              background: 'rgba(255,59,48,0.1)',
+              border: '0.5px solid rgba(255,59,48,0.3)',
+              color: '#ff3b30', fontSize: '11px', fontWeight: 700,
+              cursor: 'pointer', flexShrink: 0,
+            }}
+          >Settings →</button>
+        </div>
+      )}
 
       {/* Interactive Cost Tracker */}
       {costEntries.length > 0 && (
