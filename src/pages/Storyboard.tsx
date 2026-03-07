@@ -13,6 +13,7 @@ import { estimateImageCost, estimateVideoCost, estimateAudioCost, formatCost } f
 import VeoPromptSection from '../components/VeoPromptSection'
 import { isVeoTone } from '../lib/veoSubtones'
 import { ALL_BRAIN_MODELS } from '../lib/providerModels'
+import { useTheme, tk } from '../lib/theme'
 
 const POLLY_VOICES_ID = ['Marlene', 'Andika'] as const
 const POLLY_VOICES_EN = ['Ruth', 'Danielle', 'Joanna', 'Kimberly', 'Salli', 'Kendra', 'Matthew', 'Joey', 'Stephen', 'Gregory'] as const
@@ -62,6 +63,8 @@ interface PreviewModal {
 
 export function Storyboard() {
   const navigate = useNavigate()
+  const { isDark } = useTheme()
+  const thm = tk(isDark)
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('id')
 
@@ -1014,7 +1017,7 @@ export function Storyboard() {
   const page: React.CSSProperties = {
     minHeight: '100vh',
     width: '100%',
-    background: 'linear-gradient(145deg, #f2f2f7 0%, #e5e5ea 50%, #f2f2f7 100%)',
+    background: thm.pageBg,
     fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
     paddingBottom: '0px',
   }
@@ -2221,10 +2224,10 @@ export function Storyboard() {
       {/* Header */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 100,
-        background: 'rgba(242,242,247,0.92)',
+        background: thm.headerBg,
         backdropFilter: 'blur(30px)',
         WebkitBackdropFilter: 'blur(30px)',
-        borderBottom: '0.5px solid rgba(0,0,0,0.1)',
+        borderBottom: thm.navBorder,
         padding: isDesktop ? '10px 24px' : '10px 11px',
       }}>
         {/* Row 1: Back + Title + Save + Minimize */}
@@ -2590,34 +2593,6 @@ export function Storyboard() {
           </div>
         )}
 
-        {/* Total Duration Control */}
-        <div style={{
-          background: 'rgba(255,255,255,0.7)',
-          border: '0.5px solid rgba(255,255,255,0.9)',
-          borderRadius: '16px',
-          padding: '10px 12px',
-          marginBottom: '10px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-            <span style={{ color: 'rgba(60,60,67,0.6)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
-              Target Total Duration
-            </span>
-            <span style={{ color: '#007aff', fontSize: '10px', fontWeight: 700 }}>
-              {totalDuration}s · {Object.values(sceneDurations).reduce((a, b) => a + b, 0)}s allocated
-            </span>
-          </div>
-          <input
-            type="range" min={15} max={120} step={5}
-            value={totalDuration}
-            onChange={e => handleTotalDurationChange(Number(e.target.value))}
-            style={{ width: '100%', accentColor: '#007aff', height: '3px' }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
-            <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>15s</span>
-            <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>120s</span>
-          </div>
-        </div>
         </div>
 
         {/* Scenes — responsive 2-col on desktop, single active scene on mobile */}

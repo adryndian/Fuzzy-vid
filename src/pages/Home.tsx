@@ -14,6 +14,7 @@ import { useUser } from '@clerk/clerk-react'
 import { useUserApi } from '../lib/userApi'
 import { getModelsByProvider, hasRequiredKey, getModelById } from '../lib/providerModels'
 import { WORKER_URL } from '../lib/api'
+import { useTheme, tk } from '../lib/theme'
 
 type Platform = 'youtube_shorts' | 'reels' | 'tiktok'
 type Language = 'id' | 'en'
@@ -93,9 +94,12 @@ const dropdownStyle: React.CSSProperties = {
   backgroundPosition: 'right 12px center',
   fontFamily: 'inherit',
 }
+// Note: dropdownStyle is used directly without dark override (select element handles it via OS)
 
 export function Home() {
   const navigate = useNavigate()
+  const { isDark } = useTheme()
+  const t = tk(isDark)
   const [title, setTitle] = useState('')
   const [story, setStory] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -378,11 +382,11 @@ export function Home() {
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
-    background: 'rgba(118,118,128,0.1)',
-    border: '1px solid rgba(118,118,128,0.2)',
+    background: t.inputBg,
+    border: t.inputBorder,
     borderRadius: '14px',
     padding: '10px 12px',
-    color: '#1d1d1f',
+    color: t.textPrimary,
     fontSize: '14px',
     outline: 'none',
     fontFamily: 'inherit',
@@ -391,7 +395,7 @@ export function Home() {
 
   const labelStyle: React.CSSProperties = {
     fontSize: '12px',
-    color: 'rgba(60,60,67,0.6)',
+    color: t.labelColor,
     textTransform: 'uppercase' as const,
     letterSpacing: '0.06em',
     fontWeight: 600,
@@ -431,7 +435,7 @@ export function Home() {
     <div style={{
       minHeight: '100vh',
       width: '100%',
-      background: 'linear-gradient(145deg, #f2f2f7 0%, #e5e5ea 50%, #f2f2f7 100%)',
+      background: t.pageBg,
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -452,13 +456,13 @@ export function Home() {
       {/* Compact Header */}
       <div style={{ textAlign: 'center', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
         <span style={{ fontSize: '24px' }}>🎬</span>
-        <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#1d1d1f', letterSpacing: '-0.02em', margin: 0 }}>
+        <h1 style={{ fontSize: '22px', fontWeight: 800, color: t.textPrimary, letterSpacing: '-0.02em', margin: 0 }}>
           Fuzzy <span style={{ color: '#ff6b35' }}>Short</span>
         </h1>
       </div>
 
       {/* Main Glass Card */}
-      <div style={{ ...card, width: '100%', maxWidth: '440px', padding: '20px 17px', position: 'relative' }}>
+      <div style={{ ...card, background: t.cardBg, border: t.cardBorder, boxShadow: t.cardShadow, width: '100%', maxWidth: '440px', padding: '20px 17px', position: 'relative' }}>
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,1), transparent)' }} />
 
         {/* Story Title */}
@@ -580,17 +584,22 @@ export function Home() {
 
                 {sel && (
                   <div style={{
-                    marginTop: '6px', padding: '5px 10px',
-                    background: `${meta.color}0a`,
-                    border: `0.5px solid ${meta.color}25`,
-                    borderRadius: '8px',
-                    display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap',
+                    marginTop: '6px', padding: '8px 12px',
+                    background: `linear-gradient(135deg, ${meta.color}18 0%, ${meta.color}08 100%)`,
+                    border: `1px solid ${meta.color}35`,
+                    borderRadius: '12px',
+                    display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap',
+                    boxShadow: `0 2px 8px ${meta.color}15`,
                   }}>
-                    <span style={{ fontSize: '11px', color: meta.color, fontWeight: 600 }}>{meta.emoji} {sel.providerLabel}</span>
-                    <span style={{ color: 'rgba(60,60,67,0.25)', fontSize: '11px' }}>·</span>
-                    <span style={{ fontSize: '11px', color: 'rgba(60,60,67,0.5)' }}>Speed {sel.speedLabel}</span>
-                    <span style={{ color: 'rgba(60,60,67,0.25)', fontSize: '11px' }}>·</span>
-                    <span style={{ fontSize: '11px', color: 'rgba(60,60,67,0.45)' }}>{sel.bestFor.slice(0, 3).join(', ')}</span>
+                    <span style={{
+                      padding: '2px 7px', borderRadius: '6px',
+                      background: `${meta.color}20`,
+                      color: meta.color, fontSize: '11px', fontWeight: 700,
+                    }}>{meta.emoji} {sel.providerLabel}</span>
+                    <span style={{ fontSize: '11px', color: t.textSecondary }}>Speed {sel.speedLabel}</span>
+                    <span style={{ color: t.textTertiary, fontSize: '11px' }}>·</span>
+                    <span style={{ fontSize: '11px', color: t.textSecondary }}>{sel.bestFor.slice(0, 3).join(', ')}</span>
+                    {sel.free && <span style={{ marginLeft: 'auto', fontSize: '10px', fontWeight: 700, color: '#34c759', background: 'rgba(52,199,89,0.12)', padding: '1px 6px', borderRadius: '6px' }}>FREE</span>}
                   </div>
                 )}
               </>

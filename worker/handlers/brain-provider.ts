@@ -105,12 +105,20 @@ export async function handleProviderBrain(
     // Storyboard generation mode: parse the AI JSON and return it directly
     // (same format as /api/brain/generate — frontend expects scenes at top level)
     if (body.story && !body.system_prompt) {
-      // Strip reasoning model think blocks, markdown fences, then parse
+      // Strip reasoning blocks (various formats), markdown fences, then extract JSON
       const clean = content
         .replace(/<think>[\s\S]*?<\/think>/gi, '')
-        .replace(/```json|```/g, '')
+        .replace(/\[thinking\][\s\S]*?\[\/thinking\]/gi, '')
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*/g, '')
         .trim()
-      const storyboardData = JSON.parse(clean)
+      // Find outermost JSON object — handles models that add preamble/postamble
+      const firstBrace = clean.indexOf('{')
+      const lastBrace = clean.lastIndexOf('}')
+      if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+        throw new Error(`No JSON object found in response. Got: ${clean.slice(0, 200)}`)
+      }
+      const storyboardData = JSON.parse(clean.slice(firstBrace, lastBrace + 1))
       return Response.json(storyboardData, { headers: corsHeaders })
     }
 

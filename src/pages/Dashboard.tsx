@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UserButton } from '@clerk/clerk-react'
 import { useUserApi } from '../lib/userApi'
+import { useHistoryStore } from '../store/historyStore'
+import { useTheme, tk } from '../lib/theme'
+import { timeAgo } from '../lib/costEstimate'
 
 interface StoryboardRow {
   id: string
@@ -45,35 +48,47 @@ const TONE_BADGES: Record<string, { emoji: string; color: string }> = {
 
 export function Dashboard() {
   const navigate = useNavigate()
+  const { isDark } = useTheme()
+  const t = tk(isDark)
   const { listStoryboards, deleteStoryboard, getUsage } = useUserApi()
+  const localHistory = useHistoryStore(s => s.items)
+  const removeLocalItem = useHistoryStore(s => s.removeItem)
+
   const [storyboards, setStoryboards] = useState<StoryboardRow[]>([])
   const [usage, setUsage] = useState<UsageData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [cloudLoading, setCloudLoading] = useState(true)
+  const [cloudError, setCloudError] = useState('')
 
   useEffect(() => {
-    Promise.all([listStoryboards(), getUsage()])
-      .then(([boards, usageData]) => {
-        if (Array.isArray(boards)) setStoryboards(boards)
-        setUsage(usageData as UsageData)
-      })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
+    listStoryboards()
+      .then(boards => { if (Array.isArray(boards)) setStoryboards(boards) })
+      .catch(e => setCloudError(e.message))
+      .finally(() => setCloudLoading(false))
+    getUsage()
+      .then(data => setUsage(data as UsageData))
+      .catch(() => { /* ignore usage errors */ })
   }, [])
 
   const handleDelete = async (id: string) => {
     setStoryboards(prev => prev.filter(s => s.id !== id))
     deleteStoryboard(id).catch(() => {
-      // restore on error
       listStoryboards().then(boards => Array.isArray(boards) && setStoryboards(boards))
     })
+  }
+
+  const handleViewLocal = (id: string) => {
+    const item = useHistoryStore.getState().getItem(id)
+    if (item) {
+      sessionStorage.setItem('storyboard_result', item.storyboard_data)
+      navigate('/storyboard')
+    }
   }
 
   const s = {
     page: {
       minHeight: '100vh',
       width: '100%',
-      background: 'linear-gradient(145deg, #f2f2f7 0%, #e5e5ea 50%, #f2f2f7 100%)',
+      background: t.pageBg,
       fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
       paddingBottom: '90px',
     } as React.CSSProperties,
@@ -81,22 +96,22 @@ export function Dashboard() {
       position: 'sticky' as const,
       top: 0,
       zIndex: 100,
-      background: 'rgba(242,242,247,0.85)',
+      background: t.headerBg,
       backdropFilter: 'blur(30px)',
       WebkitBackdropFilter: 'blur(30px)',
-      borderBottom: '0.5px solid rgba(0,0,0,0.1)',
+      borderBottom: t.navBorder,
       padding: '14px 16px',
       display: 'flex',
       alignItems: 'center',
       gap: '12px',
     } as React.CSSProperties,
     card: {
-      background: 'rgba(255,255,255,0.75)',
+      background: t.cardBg,
       backdropFilter: 'blur(40px) saturate(200%)',
       WebkitBackdropFilter: 'blur(40px) saturate(200%)',
-      border: '0.5px solid rgba(255,255,255,0.9)',
+      border: t.cardBorder,
       borderRadius: '22px',
-      boxShadow: '0 2px 24px rgba(0,0,0,0.07), 0 0 0 0.5px rgba(255,255,255,0.6) inset',
+      boxShadow: t.cardShadow,
       padding: '16px',
       marginBottom: '10px',
     } as React.CSSProperties,
@@ -121,7 +136,7 @@ export function Dashboard() {
           }}>
           ← Home
         </button>
-        <span style={{ color: '#1d1d1f', fontSize: '17px', fontWeight: 700, flex: 1 }}>
+        <span style={{ color: t.textPrimary, fontSize: '17px', fontWeight: 700, flex: 1 }}>
           My Projects
         </span>
         {usage && (
@@ -183,111 +198,104 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* Loading */}
-        {loading && (
-          <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(60,60,67,0.5)', fontSize: '14px' }}>
-            Loading projects...
+        {/* ── Cloud Projects ── */}
+        {cloudLoading ? (
+          <p style={{ color: t.textSecondary, fontSize: '13px', textAlign: 'center', padding: '20px 0' }}>
+            Loading cloud projects...
+          </p>
+        ) : cloudError ? (
+          <div style={{ ...s.card, background: 'rgba(255,59,48,0.07)', border: '0.5px solid rgba(255,59,48,0.2)', marginBottom: '6px' }}>
+            <p style={{ color: '#ff3b30', fontSize: '12px', margin: 0 }}>
+              ☁️ Cloud sync unavailable — showing local history only.
+            </p>
           </div>
+        ) : storyboards.length === 0 ? null : (
+          <>
+            <p style={{ fontSize: '11px', color: t.textSecondary, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '8px' }}>
+              ☁️ Cloud Projects
+            </p>
+            {storyboards.map(board => (
+              <div key={board.id} style={{ ...s.card, cursor: 'pointer' }}
+                onClick={() => navigate(`/storyboard?id=${board.id}`)}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: t.textPrimary, wordBreak: 'break-word' }}>
+                        {board.title}
+                      </span>
+                      <span style={{ fontSize: '11px' }}>{LANG_FLAGS[board.language] || ''}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                      {board.tone && TONE_BADGES[board.tone] && (
+                        <span style={{ padding: '2px 7px', borderRadius: '8px', fontSize: '10px', background: `${TONE_BADGES[board.tone].color}15`, color: TONE_BADGES[board.tone].color, border: `0.5px solid ${TONE_BADGES[board.tone].color}30`, fontWeight: 600 }}>
+                          {TONE_BADGES[board.tone].emoji} {board.tone.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                      <span style={{ background: 'rgba(0,122,255,0.1)', color: '#007aff', borderRadius: '6px', padding: '2px 7px', fontSize: '11px', fontWeight: 600 }}>
+                        {PLATFORM_LABELS[board.platform] || board.platform}
+                      </span>
+                      <span style={{ background: t.sectionBg, color: t.textSecondary, borderRadius: '6px', padding: '2px 7px', fontSize: '11px' }}>
+                        {board.total_scenes} scenes
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '11px', color: t.textTertiary, margin: 0 }}>
+                      {new Date(board.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); handleDelete(board.id) }}
+                    style={{ background: 'rgba(255,59,48,0.1)', border: 'none', borderRadius: '8px', color: '#ff3b30', padding: '6px 10px', fontSize: '12px', cursor: 'pointer', flexShrink: 0 }}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </>
         )}
 
-        {/* Error */}
-        {error && (
-          <div style={{ ...s.card, background: 'rgba(255,59,48,0.08)', border: '0.5px solid rgba(255,59,48,0.2)' }}>
-            <p style={{ color: '#ff3b30', fontSize: '14px', margin: 0 }}>{error}</p>
-          </div>
+        {/* ── Local History ── */}
+        {localHistory.length > 0 && (
+          <>
+            <p style={{ fontSize: '11px', color: t.textSecondary, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: storyboards.length > 0 ? '16px' : '0', marginBottom: '8px' }}>
+              💾 Local History
+            </p>
+            {localHistory.map(item => (
+              <div key={item.id} style={{ ...s.card }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: t.textPrimary, marginBottom: '6px' }}>{item.title}</div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                      <span style={{ background: 'rgba(255,107,53,0.12)', color: '#ff6b35', borderRadius: '6px', padding: '2px 7px', fontSize: '11px', fontWeight: 600 }}>
+                        {PLATFORM_LABELS[item.platform] || item.platform}
+                      </span>
+                      <span style={{ background: t.sectionBg, color: t.textSecondary, borderRadius: '6px', padding: '2px 7px', fontSize: '11px' }}>
+                        {item.scenes_count} scenes
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '11px', color: t.textTertiary, margin: 0 }}>{timeAgo(item.created_at)}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                    <button onClick={() => handleViewLocal(item.id)}
+                      style={{ background: 'rgba(0,122,255,0.1)', border: 'none', borderRadius: '8px', color: '#007aff', padding: '6px 10px', fontSize: '12px', cursor: 'pointer' }}>
+                      View
+                    </button>
+                    <button onClick={() => removeLocalItem(item.id)}
+                      style={{ background: 'rgba(255,59,48,0.1)', border: 'none', borderRadius: '8px', color: '#ff3b30', padding: '6px 10px', fontSize: '12px', cursor: 'pointer' }}>
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
         )}
 
         {/* Empty state */}
-        {!loading && !error && storyboards.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'rgba(60,60,67,0.4)', fontSize: '15px' }}>
+        {!cloudLoading && storyboards.length === 0 && localHistory.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: t.textSecondary, fontSize: '15px' }}>
             <div style={{ fontSize: '40px', marginBottom: '12px' }}>🎬</div>
             No projects yet. Create your first storyboard!
           </div>
         )}
-
-        {/* Storyboard cards */}
-        {storyboards.map(board => (
-          <div
-            key={board.id}
-            style={{
-              ...s.card,
-              cursor: 'pointer',
-              transition: 'transform 0.1s, box-shadow 0.1s',
-            }}
-            onClick={() => navigate(`/storyboard?id=${board.id}`)}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#1d1d1f', wordBreak: 'break-word' }}>
-                    {board.title}
-                  </span>
-                  <span style={{ fontSize: '11px' }}>{LANG_FLAGS[board.language] || ''}</span>
-                </div>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                  {board.tone && TONE_BADGES[board.tone] && (
-                    <span style={{
-                      padding: '2px 7px', borderRadius: '8px', fontSize: '10px',
-                      background: `${TONE_BADGES[board.tone].color}15`,
-                      color: TONE_BADGES[board.tone].color,
-                      border: `0.5px solid ${TONE_BADGES[board.tone].color}30`,
-                      fontWeight: 600,
-                    }}>
-                      {TONE_BADGES[board.tone].emoji} {board.tone.replace(/_/g, ' ')}
-                    </span>
-                  )}
-                  <span style={{
-                    background: 'rgba(0,122,255,0.1)',
-                    color: '#007aff',
-                    borderRadius: '6px',
-                    padding: '2px 7px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                  }}>
-                    {PLATFORM_LABELS[board.platform] || board.platform}
-                  </span>
-                  <span style={{
-                    background: 'rgba(118,118,128,0.1)',
-                    color: 'rgba(60,60,67,0.6)',
-                    borderRadius: '6px',
-                    padding: '2px 7px',
-                    fontSize: '11px',
-                  }}>
-                    {board.total_scenes} scenes
-                  </span>
-                  {board.status !== 'draft' && (
-                    <span style={{
-                      background: 'rgba(52,199,89,0.1)',
-                      color: '#34c759',
-                      borderRadius: '6px',
-                      padding: '2px 7px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                    }}>
-                      {board.status}
-                    </span>
-                  )}
-                </div>
-                <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', margin: 0 }}>
-                  {new Date(board.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </p>
-              </div>
-              <button
-                onClick={e => { e.stopPropagation(); handleDelete(board.id) }}
-                style={{
-                  background: 'rgba(255,59,48,0.1)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#ff3b30',
-                  padding: '6px 10px',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}>
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   )

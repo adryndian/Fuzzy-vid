@@ -5,6 +5,7 @@ import type { AppSettings } from '../types/schema'
 import { DEFAULT_SETTINGS } from '../types/schema'
 import { useUserApi } from '../lib/userApi'
 import { WORKER_URL } from '../lib/api'
+import { useTheme, tk } from '../lib/theme'
 
 type TestStatus = 'idle' | 'testing' | 'success' | 'failed'
 
@@ -16,6 +17,8 @@ const REGIONS = [
 
 export function Settings() {
   const navigate = useNavigate()
+  const { isDark, toggle: toggleDark } = useTheme()
+  const thm = tk(isDark)
   const { user } = useUser()
   const { saveApiKeys, getApiKeys, updatePreferences } = useUserApi()
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
@@ -124,7 +127,7 @@ export function Settings() {
     page: {
       minHeight: '100vh',
       width: '100%',
-      background: 'linear-gradient(145deg, #f2f2f7 0%, #e5e5ea 100%)',
+      background: thm.pageBg,
       fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
       paddingBottom: '90px',
     } as React.CSSProperties,
@@ -133,10 +136,10 @@ export function Settings() {
       position: 'sticky' as const,
       top: 0,
       zIndex: 100,
-      background: 'rgba(242,242,247,0.85)',
+      background: thm.headerBg,
       backdropFilter: 'blur(30px)',
       WebkitBackdropFilter: 'blur(30px)',
-      borderBottom: '0.5px solid rgba(0,0,0,0.1)',
+      borderBottom: thm.navBorder,
       padding: '14px 16px',
       display: 'flex',
       alignItems: 'center',
@@ -144,8 +147,8 @@ export function Settings() {
     } as React.CSSProperties,
 
     backBtn: {
-      background: 'rgba(255,255,255,0.85)',
-      border: '0.5px solid rgba(0,0,0,0.12)',
+      background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.85)',
+      border: isDark ? '0.5px solid rgba(255,255,255,0.15)' : '0.5px solid rgba(0,0,0,0.12)',
       borderRadius: '12px',
       color: '#007aff',
       padding: '8px 14px',
@@ -159,12 +162,12 @@ export function Settings() {
     } as React.CSSProperties,
 
     card: {
-      background: 'rgba(255,255,255,0.75)',
+      background: thm.cardBg,
       backdropFilter: 'blur(30px)',
       WebkitBackdropFilter: 'blur(30px)',
-      border: '0.5px solid rgba(255,255,255,0.9)',
+      border: thm.cardBorder,
       borderRadius: '20px',
-      boxShadow: '0 2px 16px rgba(0,0,0,0.06)',
+      boxShadow: thm.cardShadow,
       padding: '20px',
       marginBottom: '14px',
       position: 'relative' as const,
@@ -173,7 +176,7 @@ export function Settings() {
 
     label: {
       fontSize: '11px',
-      color: 'rgba(60,60,67,0.6)',
+      color: thm.labelColor,
       textTransform: 'uppercase' as const,
       letterSpacing: '0.06em',
       display: 'block',
@@ -183,11 +186,11 @@ export function Settings() {
 
     input: {
       width: '100%',
-      background: 'rgba(118,118,128,0.1)',
+      background: thm.inputBg,
       border: '1px solid transparent',
       borderRadius: '12px',
       padding: '11px 14px',
-      color: '#1d1d1f',
+      color: thm.textPrimary,
       fontSize: '13px',
       outline: 'none',
       fontFamily: 'inherit',
@@ -197,11 +200,11 @@ export function Settings() {
 
     select: {
       width: '100%',
-      background: 'rgba(118,118,128,0.1)',
+      background: thm.inputBg,
       border: '1px solid transparent',
       borderRadius: '12px',
       padding: '11px 14px',
-      color: '#1d1d1f',
+      color: thm.textPrimary,
       fontSize: '13px',
       outline: 'none',
       fontFamily: 'inherit',
@@ -461,18 +464,18 @@ export function Settings() {
   // ─── Render ────────────────────────────────────────────────
   return (
     <div style={s.page}>
-      <style>{`select option { background: #f2f2f7; color: #1d1d1f; }`}</style>
+      <style>{`select option { background: ${isDark ? '#2c2c2e' : '#f2f2f7'}; color: ${isDark ? '#f2f2f7' : '#1d1d1f'}; }`}</style>
 
       {/* Sticky Header */}
       <div style={s.header}>
         <button onClick={() => navigate(-1)} style={s.backBtn}>
           ← Back
         </button>
-        <span style={{ color: '#1d1d1f', fontSize: '17px', fontWeight: 700, flex: 1 }}>
+        <span style={{ color: thm.textPrimary, fontSize: '17px', fontWeight: 700, flex: 1 }}>
           Settings
         </span>
         {user && (
-          <span style={{ fontSize: '12px', color: 'rgba(60,60,67,0.5)', marginRight: '8px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: '12px', color: thm.textSecondary, marginRight: '8px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {user.primaryEmailAddress?.emailAddress}
           </span>
         )}
@@ -485,7 +488,7 @@ export function Settings() {
         <div style={s.card}>
           <div style={s.sectionTitle}>
             <span style={{ fontSize: '20px' }}>✨</span>
-            <span style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 700 }}>Google Gemini</span>
+            <span style={{ color: thm.textPrimary, fontSize: '15px', fontWeight: 700 }}>Google Gemini</span>
           </div>
 
           <SecretInput
@@ -499,7 +502,7 @@ export function Settings() {
             <StatusMsg status={geminiStatus} msg={geminiMsg} />
           </div>
 
-          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', margin: 0 }}>
+          <p style={{ fontSize: '11px', color: thm.textTertiary, margin: 0 }}>
             Get key → aistudio.google.com/apikey
           </p>
         </div>
@@ -508,7 +511,7 @@ export function Settings() {
         <div style={s.card}>
           <div style={s.sectionTitle}>
             <span style={{ fontSize: '20px' }}>☁️</span>
-            <span style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 700 }}>AWS Bedrock</span>
+            <span style={{ color: thm.textPrimary, fontSize: '15px', fontWeight: 700 }}>AWS Bedrock</span>
           </div>
 
           <SecretInput
@@ -524,13 +527,13 @@ export function Settings() {
 
           {/* Region per service */}
           <div style={{
-            background: 'rgba(118,118,128,0.08)',
-            border: '0.5px solid rgba(0,0,0,0.06)',
+            background: thm.sectionBg,
+            border: thm.navBorder,
             borderRadius: '14px',
             padding: '14px',
             marginBottom: '14px',
           }}>
-            <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.5)', marginBottom: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <p style={{ fontSize: '11px', color: thm.textSecondary, marginBottom: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Region per Service
             </p>
             <RegionSelect label="🧠 Brain Region" fieldKey="brainRegion" />
@@ -544,7 +547,7 @@ export function Settings() {
             <StatusMsg status={awsStatus} msg={awsMsg} />
           </div>
 
-          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', margin: 0 }}>
+          <p style={{ fontSize: '11px', color: thm.textTertiary, margin: 0 }}>
             IAM user needs AmazonBedrockFullAccess permission
           </p>
         </div>
@@ -553,7 +556,7 @@ export function Settings() {
         <div style={s.card}>
           <div style={s.sectionTitle}>
             <span style={{ fontSize: '20px' }}>🎬</span>
-            <span style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 700 }}>Optional APIs</span>
+            <span style={{ color: thm.textPrimary, fontSize: '15px', fontWeight: 700 }}>Optional APIs</span>
           </div>
 
           <SecretInput
@@ -571,11 +574,11 @@ export function Settings() {
             fieldKey="dashscopeApiKey"
             placeholder="sk-..."
           />
-          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', marginTop: 4, marginBottom: '14px' }}>
+          <p style={{ fontSize: '11px', color: thm.textTertiary, marginTop: 4, marginBottom: '14px' }}>
             Alibaba Cloud Model Studio • Singapore Region — Enables Qwen brain + Wanx image + Wan2.1 video models
           </p>
 
-          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', marginTop: '4px', margin: 0 }}>
+          <p style={{ fontSize: '11px', color: thm.textTertiary, marginTop: '4px', margin: 0 }}>
             App works without these — AWS services used as fallback
           </p>
         </div>
@@ -590,8 +593,8 @@ export function Settings() {
               fontSize: '16px',
             }}>⚡</div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: '14px', color: '#1d1d1f' }}>Groq</div>
-              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.5)' }}>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: thm.textPrimary }}>Groq</div>
+              <div style={{ fontSize: '10px', color: thm.textSecondary }}>
                 Free • Fastest inference • console.groq.com
               </div>
             </div>
@@ -609,7 +612,7 @@ export function Settings() {
             <TestButton label="Test Groq" status={groqStatus} onClick={testGroq} />
             <StatusMsg status={groqStatus} msg={groqMsg} />
           </div>
-          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', margin: 0 }}>
+          <p style={{ fontSize: '11px', color: thm.textTertiary, margin: 0 }}>
             Free tier: 30 req/min · Fastest inference
           </p>
         </div>
@@ -624,8 +627,8 @@ export function Settings() {
               fontSize: '16px',
             }}>🔀</div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: '14px', color: '#1d1d1f' }}>OpenRouter</div>
-              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.5)' }}>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: thm.textPrimary }}>OpenRouter</div>
+              <div style={{ fontSize: '10px', color: thm.textSecondary }}>
                 Free models • DeepSeek, Gemma, Llama • openrouter.ai
               </div>
             </div>
@@ -643,7 +646,7 @@ export function Settings() {
             <TestButton label="Test OpenRouter" status={openrouterStatus} onClick={testOpenRouter} />
             <StatusMsg status={openrouterStatus} msg={openrouterMsg} />
           </div>
-          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', margin: 0 }}>
+          <p style={{ fontSize: '11px', color: thm.textTertiary, margin: 0 }}>
             Free models available · DeepSeek, Gemma, Llama
           </p>
         </div>
@@ -658,8 +661,8 @@ export function Settings() {
               fontSize: '16px',
             }}>🌐</div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: '14px', color: '#1d1d1f' }}>GLM-4-Flash</div>
-              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.5)' }}>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: thm.textPrimary }}>GLM-4-Flash</div>
+              <div style={{ fontSize: '10px', color: thm.textSecondary }}>
                 Free unlimited • ZhipuAI • open.bigmodel.cn
               </div>
             </div>
@@ -677,7 +680,7 @@ export function Settings() {
             <TestButton label="Test GLM" status={glmStatus} onClick={testGLM} />
             <StatusMsg status={glmStatus} msg={glmMsg} />
           </div>
-          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', margin: 0 }}>
+          <p style={{ fontSize: '11px', color: thm.textTertiary, margin: 0 }}>
             GLM-4-Flash: unlimited free tier
           </p>
         </div>
@@ -685,7 +688,7 @@ export function Settings() {
         {/* ── Security Note ── */}
         <div style={{
           ...s.card,
-          background: 'rgba(0,122,255,0.06)',
+          background: isDark ? 'rgba(0,122,255,0.1)' : 'rgba(0,122,255,0.06)',
           border: '0.5px solid rgba(0,122,255,0.2)',
         }}>
           <div style={{ display: 'flex', gap: '10px' }}>
@@ -694,7 +697,7 @@ export function Settings() {
               <p style={{ color: '#007aff', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
                 Security Note
               </p>
-              <p style={{ color: 'rgba(60,60,67,0.5)', fontSize: '12px', lineHeight: '1.6', margin: 0 }}>
+              <p style={{ color: thm.textSecondary, fontSize: '12px', lineHeight: '1.6', margin: 0 }}>
                 Keys are stored only in your browser's localStorage. They are sent directly from your browser to the API — never stored on any server.
               </p>
             </div>

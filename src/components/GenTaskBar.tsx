@@ -27,9 +27,9 @@ export function GenTaskBar() {
         onClick={() => setCollapsed(false)}
         style={{
           position: 'fixed',
-          bottom: '20px',
-          right: '20px',
-          zIndex: 200,
+          bottom: '80px',
+          right: '16px',
+          zIndex: 199,
           background: 'rgba(15,20,35,0.92)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
@@ -67,14 +67,15 @@ export function GenTaskBar() {
   return (
     <div style={{
       position: 'fixed',
-      bottom: 0,
+      bottom: '65px',
       left: 0,
       right: 0,
-      zIndex: 200,
-      background: 'rgba(10,15,30,0.95)',
+      zIndex: 199,
+      background: 'rgba(10,15,30,0.97)',
       backdropFilter: 'blur(20px)',
       WebkitBackdropFilter: 'blur(20px)',
-      borderTop: '1px solid rgba(255,255,255,0.1)',
+      borderTop: '1px solid rgba(255,255,255,0.12)',
+      borderRadius: '14px 14px 0 0',
       padding: '8px 12px',
       display: 'flex',
       alignItems: 'center',

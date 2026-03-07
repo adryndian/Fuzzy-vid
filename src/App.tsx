@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAuth, useUser } from '@clerk/clerk-react'
 import { useEffect, useRef } from 'react'
+import { ThemeProvider } from './lib/theme'
 import { Home } from './pages/Home'
 import { Storyboard } from './pages/Storyboard'
 import { History } from './pages/History'
@@ -99,5 +100,9 @@ function AppContent() {
 }
 
 export function App() {
-  return <AppContent />
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  )
 }
