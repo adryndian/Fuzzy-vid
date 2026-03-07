@@ -12,26 +12,30 @@ import { useStoryboardSessionStore } from '../store/storyboardSessionStore'
 import { estimateImageCost, estimateVideoCost, estimateAudioCost, formatCost } from '../lib/costEstimate'
 import VeoPromptSection from '../components/VeoPromptSection'
 import { isVeoTone } from '../lib/veoSubtones'
+import { ALL_BRAIN_MODELS } from '../lib/providerModels'
 
 const POLLY_VOICES_ID = ['Marlene', 'Andika'] as const
 const POLLY_VOICES_EN = ['Ruth', 'Danielle', 'Joanna', 'Kimberly', 'Salli', 'Kendra', 'Matthew', 'Joey', 'Stephen', 'Gregory'] as const
 const ELEVENLABS_VOICES = ['Bella', 'Adam', 'Rachel', 'Antoni', 'Josh', 'Arnold', 'Sam', 'Elli', 'Domi'] as const
 
-const IMAGE_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen'; desc: string; provider: 'bedrock' | 'dashscope'; badge?: string }[] = [
+const IMAGE_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen' | 'GLM'; desc: string; provider: 'bedrock' | 'dashscope' | 'glm'; badge?: string }[] = [
   { id: 'nova_canvas',        label: 'Nova Canvas',        tag: 'AWS',  desc: 'Fast & consistent', provider: 'bedrock' },
   { id: 'sd35',               label: 'SD 3.5 Large',       tag: 'AWS',  desc: 'Best quality',       provider: 'bedrock' },
   { id: 'qwen-image-2.0-pro', label: 'Qwen Image 2.0 Pro', tag: 'Qwen', desc: 'Best quality',       provider: 'dashscope', badge: '⭐' },
   { id: 'qwen-image-2.0',     label: 'Qwen Image 2.0',     tag: 'Qwen', desc: 'Balanced',            provider: 'dashscope', badge: '✨' },
   { id: 'wan2.6-image',       label: 'Wan 2.6 Image',      tag: 'Qwen', desc: 'Latest Wan model',    provider: 'dashscope', badge: '🆕' },
   { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo',     tag: 'Qwen', desc: 'Fast (legacy)',       provider: 'dashscope', badge: '⚡' },
+  { id: 'cogview-4',          label: 'CogView-4',           tag: 'GLM',  desc: 'Best quality',        provider: 'glm',       badge: '⭐' },
+  { id: 'cogview-4-flash',    label: 'CogView-4 Flash',     tag: 'GLM',  desc: 'Fast & free',         provider: 'glm',       badge: '⚡' },
 ]
 
-const VIDEO_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen'; desc: string; provider: 'bedrock' | 'dashscope'; badge?: string }[] = [
+const VIDEO_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen' | 'GLM'; desc: string; provider: 'bedrock' | 'dashscope' | 'glm'; badge?: string }[] = [
   { id: 'nova_reel',         label: 'Nova Reel',         tag: 'AWS',  desc: 'Up to 6s',            provider: 'bedrock' },
   { id: 'wan2.1-i2v-plus',  label: 'Wan2.1 I2V Plus',  tag: 'Qwen', desc: 'Image→Video best',    provider: 'dashscope', badge: '⭐' },
   { id: 'wan2.1-i2v-turbo', label: 'Wan2.1 I2V Turbo', tag: 'Qwen', desc: 'Image→Video fast',    provider: 'dashscope', badge: '⚡' },
   { id: 'wan2.1-t2v-plus',  label: 'Wan2.1 T2V Plus',  tag: 'Qwen', desc: 'Text→Video best',     provider: 'dashscope', badge: '📝⭐' },
   { id: 'wan2.1-t2v-turbo', label: 'Wan2.1 T2V Turbo', tag: 'Qwen', desc: 'Text→Video fast',     provider: 'dashscope', badge: '📝⚡' },
+  { id: 'cogvideox-2',      label: 'CogVideoX-2',       tag: 'GLM',  desc: 'I2V/T2V 5-10s',      provider: 'glm',       badge: '🎬' },
 ]
 
 const dropdownStyle: React.CSSProperties = {
@@ -81,7 +85,8 @@ export function Storyboard() {
         const parsed = JSON.parse(saved)
         const hasAws = !!(parsed.awsAccessKeyId && parsed.awsSecretAccessKey)
         const hasDashscope = !!parsed.dashscopeApiKey
-        setHasApiKeys(hasAws || hasDashscope)
+        const hasGlm = !!parsed.glmApiKey
+        setHasApiKeys(hasAws || hasDashscope || hasGlm)
       } catch { setHasApiKeys(false) }
     } else {
       setHasApiKeys(false)
@@ -185,11 +190,15 @@ export function Storyboard() {
   const [costExpanded, setCostExpanded] = useState(false)
   const [generatingAllVeo, setGeneratingAllVeo] = useState(false)
   const [costFilter, setCostFilter] = useState<string | null>(null)
+  // Brain model used for Veo prompt generation — can differ from storyboard brain_model
+  const [veoBrainModel, setVeoBrainModel] = useState<string>('gemini-2.0-flash')
 
   // Video polling refs
   const videoPollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({})
   // Dashscope polling refs (image + video async tasks)
   const dashscopePollingRefs = useRef<Record<string, ReturnType<typeof setInterval>>>({})
+  // GLM polling refs (video async tasks)
+  const glmPollingRefs = useRef<Record<string, ReturnType<typeof setInterval>>>({})
   // Ref for activeSessionId to avoid stale closures in polling callbacks
   const activeSessionIdRef = useRef<string | null>(null)
 
@@ -247,6 +256,7 @@ export function Storyboard() {
     return () => {
       Object.values(videoPollingRefs.current).forEach(clearInterval)
       Object.values(dashscopePollingRefs.current).forEach(clearInterval)
+      Object.values(glmPollingRefs.current).forEach(clearInterval)
     }
   }, [])
 
@@ -341,6 +351,7 @@ export function Storyboard() {
         return
       }
       setStoryboard(data)
+      if (data.brain_model) setVeoBrainModel(data.brain_model as string)
       if (data.selected_video_model) setDefaultVideoModel(data.selected_video_model as string)
       // Initialize scene durations evenly across 60s default
       const scenes = (data.scenes as Record<string, unknown>[]) || []
@@ -388,7 +399,7 @@ export function Storyboard() {
   const handleGenerateAllVeo = async () => {
     if (!storyboard || generatingAllVeo) return
     const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
-    const brainModel = (storyboard.brain_model as string) || 'gemini-2.0-flash'
+    const brainModel = veoBrainModel
     const headers = { 'Content-Type': 'application/json', ...getApiHeaders(user?.id) }
 
     setGeneratingAllVeo(true)
@@ -619,6 +630,50 @@ export function Storyboard() {
     dashscopePollingRefs.current[key] = interval
   }, [updateAsset, saveSceneAsset]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const startGlmPolling = useCallback((sceneNum: number, taskId: string) => {
+    const key = `video_${sceneNum}_${taskId}`
+    if (glmPollingRefs.current[key]) clearInterval(glmPollingRefs.current[key])
+    let pollCount = 0
+    const maxPolls = 90 // 90 × 8s = 12 min
+
+    const interval = setInterval(async () => {
+      pollCount++
+      if (pollCount > maxPolls) {
+        clearInterval(interval)
+        delete glmPollingRefs.current[key]
+        updateAsset(sceneNum, { videoStatus: 'error', videoError: 'CogVideoX timed out after 12 min' })
+        return
+      }
+      try {
+        const res = await fetch(`${WORKER_URL}/api/glm/video/status/${taskId}`, {
+          headers: getApiHeaders(user?.id),
+        })
+        const data = await res.json() as { status: string; url?: string; message?: string }
+
+        if (data.status === 'done' && data.url) {
+          clearInterval(interval)
+          delete glmPollingRefs.current[key]
+          updateAsset(sceneNum, { videoStatus: 'done', videoUrl: data.url })
+          toast.success(`Scene ${sceneNum} video ready (CogVideoX)!`)
+          saveSceneAsset({
+            storyboard_id: (storyboard as Record<string, unknown>)?.project_id as string || activeSessionIdRef.current || 'storyboard',
+            scene_number: sceneNum,
+            video_url: data.url,
+            video_model: 'cogvideox-2',
+          }).catch(console.error)
+        } else if (data.status === 'error') {
+          clearInterval(interval)
+          delete glmPollingRefs.current[key]
+          updateAsset(sceneNum, { videoStatus: 'error', videoError: data.message || 'CogVideoX error' })
+        }
+      } catch {
+        // Network error — keep polling
+      }
+    }, 8000)
+
+    glmPollingRefs.current[key] = interval
+  }, [updateAsset, saveSceneAsset]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleGenerateImage = async (scene: Record<string, unknown>) => {
     const sceneNum = scene.scene_number as number
     const prompt = editedPrompts[sceneNum] ?? (scene.image_prompt as string)
@@ -643,7 +698,31 @@ export function Storyboard() {
 
       const selectedImageModel = IMAGE_MODELS.find(m => m.id === imageModel) || IMAGE_MODELS[0]
 
-      if (selectedImageModel.provider === 'dashscope') {
+      if (selectedImageModel.provider === 'glm') {
+        // Synchronous GLM CogView image generation
+        const res = await fetch(`${WORKER_URL}/api/glm/image/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getApiHeaders(user?.id) },
+          body: JSON.stringify({
+            prompt: finalPrompt,
+            image_model: selectedImageModel.id,
+            aspect_ratio: aspectRatio,
+            scene_number: sceneNum,
+            project_id: (data.project_id as string) || 'storyboard',
+          }),
+        })
+        const result = await res.json() as { image_url?: string; error?: string }
+        if (!res.ok || !result.image_url) throw new Error(result.error || 'CogView image failed')
+        updateAsset(sceneNum, { imageStatus: 'done', imageUrl: result.image_url })
+        toast.success(`Scene ${sceneNum} image ready (CogView)!`)
+        saveSceneAsset({
+          storyboard_id: (data.project_id as string) || activeSessionId || 'storyboard',
+          scene_number: sceneNum,
+          image_url: result.image_url,
+          image_model: imageModel,
+          enhanced_prompt: finalPrompt,
+        }).catch(console.error)
+      } else if (selectedImageModel.provider === 'dashscope') {
         // Async Dashscope image generation
         const startRes = await fetch(`${WORKER_URL}/api/dashscope/image/start`, {
           method: 'POST',
@@ -707,7 +786,33 @@ export function Storyboard() {
       const aspectRatio = (data.aspect_ratio as string) || '9_16'
       const selectedVideoModel = VIDEO_MODELS.find(m => m.id === (videoModel[sceneNum] || defaultVideoModel)) || VIDEO_MODELS[0]
 
-      if (selectedVideoModel.provider === 'dashscope') {
+      if (selectedVideoModel.provider === 'glm') {
+        // Async GLM CogVideoX-2 video generation
+        const videoPrompt = sceneAsset?.customVideoPrompt
+          || sceneAsset?.videoPrompt?.full_prompt
+          || editedPrompts[sceneNum]
+          || (scene.image_prompt as string)
+        const startRes = await fetch(`${WORKER_URL}/api/glm/video/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getApiHeaders(user?.id) },
+          body: JSON.stringify({
+            prompt: videoPrompt,
+            image_url: sceneAsset?.imageUrl || '',
+            video_model: selectedVideoModel.id,
+            aspect_ratio: aspectRatio,
+            duration_seconds: durationSeconds,
+            scene_number: sceneNum,
+            project_id: projectId,
+          }),
+        })
+        const startData = await startRes.json() as { task_id?: string; error?: string }
+        if (!startRes.ok || !startData.task_id) {
+          throw new Error(startData.error || 'Failed to start CogVideoX task')
+        }
+        updateAsset(sceneNum, { videoStatus: 'generating', videoJobId: startData.task_id })
+        toast(`Scene ${sceneNum} video started (CogVideoX) · polling every 8s`, { icon: '🎬', duration: 4000 })
+        startGlmPolling(sceneNum, startData.task_id)
+      } else if (selectedVideoModel.provider === 'dashscope') {
         // Async Dashscope video generation
         const startRes = await fetch(`${WORKER_URL}/api/dashscope/video/start`, {
           method: 'POST',
@@ -1365,6 +1470,11 @@ export function Storyboard() {
                       <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
                     ))}
                   </optgroup>
+                  <optgroup label="GLM CogView">
+                    {IMAGE_MODELS.filter(m => m.provider === 'glm').map(m => (
+                      <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
               {actionBtn('Generate Image', () => handleGenerateImage(scene), sceneAsset.imageStatus, !hasApiKeys, '#ff6b35')}
@@ -1398,7 +1508,7 @@ export function Storyboard() {
                 imagePrompt={editedPrompts[sceneNum] || (scene.image_prompt as string) || ''}
                 tone={(storyboard.tone as string) || 'narrative_storytelling'}
                 platform={(storyboard.platform as string) || 'TikTok'}
-                brainModel={(storyboard.brain_model as string) || 'gemini-2.0-flash'}
+                brainModel={veoBrainModel}
                 apiHeaders={getApiHeaders(user?.id)}
                 onUpdate={(vp) => {
                   updateAsset(sceneNum, { veoPrompt: vp })
@@ -1587,7 +1697,8 @@ export function Storyboard() {
             {(() => {
               const curVidModelId = videoModel[sceneNum] || defaultVideoModel
               const curVidModel = VIDEO_MODELS.find(m => m.id === curVidModelId) || VIDEO_MODELS[0]
-              const isT2V = curVidModel.provider === 'dashscope' && curVidModelId.includes('t2v')
+              const isT2V = (curVidModel.provider === 'dashscope' && curVidModelId.includes('t2v'))
+                || curVidModel.provider === 'glm'
               const canGenVideo = hasImage || isT2V
               return (
             <div style={{
@@ -1736,6 +1847,11 @@ export function Storyboard() {
                       <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
                     ))}
                   </optgroup>
+                  <optgroup label="GLM CogVideoX">
+                    {VIDEO_MODELS.filter(m => m.provider === 'glm').map(m => (
+                      <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
 
@@ -1783,6 +1899,15 @@ export function Storyboard() {
                         />
                         <span style={{ color: 'rgba(60,60,67,0.6)', fontSize: '10px' }}>Prompt Extend</span>
                       </label>
+                    </div>
+                  )
+                }
+                if (curVidModel.provider === 'glm') {
+                  return (
+                    <div style={{ marginBottom: '7px' }}>
+                      <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>
+                        CogVideoX-2 · 5s or 10s · Image optional (I2V/T2V)
+                      </span>
                     </div>
                   )
                 }
@@ -2191,6 +2316,21 @@ export function Storyboard() {
             >
               {generatingAllVeo ? '⏳ Generating...' : '🎬 Gen All Veo'}
             </button>
+            {/* Brain model selector for Veo prompt generation */}
+            <select
+              value={veoBrainModel}
+              onChange={e => setVeoBrainModel(e.target.value)}
+              style={{
+                ...dropdownStyle,
+                fontSize: '10px', padding: '4px 22px 4px 7px',
+                borderRadius: '8px', maxWidth: '130px',
+              }}
+              title="Brain model for Veo prompt generation"
+            >
+              {ALL_BRAIN_MODELS.map(m => (
+                <option key={m.id} value={m.id}>{m.providerEmoji} {m.label}</option>
+              ))}
+            </select>
             <button
               onClick={() => {
                 const scenes = (storyboard.scenes as Record<string, unknown>[]) || []

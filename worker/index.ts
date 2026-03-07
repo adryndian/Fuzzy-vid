@@ -78,6 +78,16 @@ export function requireDashscopeKey(creds: Credentials): Response | null {
   return null
 }
 
+export function requireGlmKey(creds: Credentials): Response | null {
+  if (!creds.glmApiKey) {
+    return Response.json(
+      { error: 'GLM API key required. Please add it in Settings.' },
+      { status: 401, headers: { 'Access-Control-Allow-Origin': '*' } }
+    )
+  }
+  return null
+}
+
 export function extractCredentials(request: Request, env: Env): Credentials {
   const h = request.headers
   return {
@@ -142,7 +152,7 @@ export default {
     // Optional auth for generation routes (for credit deduction)
     if (!clerkUser && (path.startsWith('/api/brain/') || path.startsWith('/api/image/') ||
         path.startsWith('/api/video/') || path.startsWith('/api/audio/') ||
-        path.startsWith('/api/dashscope/'))) {
+        path.startsWith('/api/dashscope/') || path.startsWith('/api/glm/'))) {
       clerkUser = await verifyClerkJWT(request, env)
     }
 
@@ -329,6 +339,34 @@ export default {
         const taskId = path.replace('/api/dashscope/task/', '')
         const { handleDashscopeTaskStatus } = await import('./dashscope')
         response = await handleDashscopeTaskStatus(request, env, taskId, creds)
+      }
+      // ── GLM routes ────────────────────────────────────────────────────────
+      else if (path === '/api/glm/image/generate') {
+        const denied = requireGlmKey(creds)
+        if (denied) { response = denied }
+        else {
+          const { handleGlmImageGenerate } = await import('./glm')
+          response = await handleGlmImageGenerate(request, env, creds)
+          if (clerkUser && env.DB && response.ok) {
+            ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'image'))
+          }
+        }
+      }
+      else if (path === '/api/glm/video/start') {
+        const denied = requireGlmKey(creds)
+        if (denied) { response = denied }
+        else {
+          const { handleGlmVideoStart } = await import('./glm')
+          response = await handleGlmVideoStart(request, env, creds)
+          if (clerkUser && env.DB && response.ok) {
+            ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'video'))
+          }
+        }
+      }
+      else if (path.startsWith('/api/glm/video/status/')) {
+        const taskId = path.replace('/api/glm/video/status/', '')
+        const { handleGlmVideoStatus } = await import('./glm')
+        response = await handleGlmVideoStatus(request, env, taskId, creds)
       }
       // ── Audio routes ──────────────────────────────────────────────────────
       else if (path.startsWith('/api/audio/')) {
