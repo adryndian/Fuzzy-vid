@@ -21,9 +21,15 @@ export const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
 export function getApiHeaders(userId?: string): Record<string, string> {
   const headers: Record<string, string> = {}
   try {
-    // Try user-specific key first, fallback to shared legacy key
-    const storageKey = userId ? `fuzzy_settings_${userId}` : 'fuzzy_short_settings'
-    const stored = localStorage.getItem(storageKey)
+    // 1. Try user-specific key
+    let stored = userId ? localStorage.getItem(`fuzzy_settings_${userId}`) : null
+    // 2. Fallback: scan for any fuzzy_settings_* key (covers api.ts helpers that don't receive userId)
+    if (!stored) {
+      const anyKey = Object.keys(localStorage).find(k => k.startsWith('fuzzy_settings_'))
+      if (anyKey) stored = localStorage.getItem(anyKey)
+    }
+    // 3. Last resort: legacy shared key
+    if (!stored) stored = localStorage.getItem('fuzzy_short_settings')
     if (stored) {
       const keys = JSON.parse(stored)
       if (keys.awsAccessKeyId)     headers['X-AWS-Access-Key-Id'] = keys.awsAccessKeyId
