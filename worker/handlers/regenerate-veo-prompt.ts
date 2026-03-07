@@ -3,6 +3,7 @@
 import type { Env } from '../index'
 import { getProviderForModel, getProviderApiKey, callProvider } from '../lib/providers'
 import type { Tone, Language } from '../lib/brain-system-prompt'
+import { VEO_SUBTONES, type VeoSubTone, getDefaultSubTone } from '../lib/veo-subtones'
 
 const cors = { 'Access-Control-Allow-Origin': '*' }
 
@@ -21,19 +22,28 @@ export async function handleRegenerateVeoPrompt(
     sub_tone?: string
   }
 
-  const systemPrompt = `You are a Google Veo 3.1 video prompt specialist.
-Generate an optimized Veo 3.1 prompt for a single scene.
-Respond ONLY with valid JSON, no markdown.
+  const subToneId = (body.sub_tone || getDefaultSubTone(body.tone)) as VeoSubTone
+  const subToneDef = VEO_SUBTONES[subToneId]
 
-JSON schema:
+  const systemPrompt = `You are a Google Veo 3.1 video prompt specialist.
+Sub-tone: ${subToneDef?.label || 'Documentary'}
+Camera style: ${subToneDef?.cameraStyle || 'Locked or handheld'}
+Lighting: ${subToneDef?.lightingStyle || 'Natural'}
+Human presence: ${subToneDef?.humanPresence || 'Required'}
+Physics to include: ${subToneDef?.physicsElements.join(', ') || 'natural physics'}
+Target duration: ${subToneDef?.durationRange[0]}-${subToneDef?.durationRange[1]} seconds
+
+Generate Veo 3.1 prompt for the scene.
+Respond ONLY with valid JSON:
 {
+  "sub_tone": "${subToneId}",
   "camera_locked": boolean,
   "camera_instruction": "string",
   "starting_frame": "string",
-  "temporal_action": "After X second(s), [what happens]",
-  "physics_detail": "string",
-  "human_element": "string",
-  "full_veo_prompt": "string — max 300 chars, complete Veo 3.1 ready prompt"
+  "temporal_action": "After X second(s), [exact action]",
+  "physics_detail": "string — specific and visual",
+  "human_element": "string — specific body part or action",
+  "full_veo_prompt": "string — complete ready-to-paste prompt, max 300 chars"
 }`
 
   const userPrompt = `Scene ${body.scene_number}

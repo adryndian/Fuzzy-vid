@@ -10,6 +10,8 @@ import { useHistoryStore } from '../store/historyStore'
 import { useCostStore } from '../store/costStore'
 import { useStoryboardSessionStore } from '../store/storyboardSessionStore'
 import { estimateImageCost, estimateVideoCost, estimateAudioCost, formatCost } from '../lib/costEstimate'
+import VeoPromptSection from '../components/VeoPromptSection'
+import { isVeoTone } from '../lib/veoSubtones'
 
 const POLLY_VOICES_ID = ['Marlene', 'Andika'] as const
 const POLLY_VOICES_EN = ['Ruth', 'Danielle', 'Joanna', 'Kimberly', 'Salli', 'Kendra', 'Matthew', 'Joey', 'Stephen', 'Gregory'] as const
@@ -353,6 +355,10 @@ export function Storyboard() {
             videoPrompt: brainVideoPrompt,
             customVideoPrompt: brainVideoPrompt.full_prompt,
           })
+        }
+        const brainVeoPrompt = scene.veo_prompt as Record<string, unknown> | undefined
+        if (brainVeoPrompt && sid) {
+          updateAssetInStore(sid, sceneNum, { veoPrompt: brainVeoPrompt as SceneAssets['veoPrompt'] })
         }
       })
     } catch { navigate('/') }
@@ -1380,8 +1386,27 @@ export function Storyboard() {
               )}
             </div>
 
-            {/* VIDEO PROMPT SECTION */}
-            {(() => {
+            {/* VIDEO PROMPT SECTION — Veo 3.1 for Veo-compatible tones, standard otherwise */}
+            {isVeoTone((storyboard.tone as string) || 'narrative_storytelling') ? (
+              <VeoPromptSection
+                sceneNumber={sceneNum}
+                veoPrompt={storedAssets[sceneNum]?.veoPrompt || null}
+                voScript={(scene.vo_script as string) || ''}
+                imagePrompt={editedPrompts[sceneNum] || (scene.image_prompt as string) || ''}
+                tone={(storyboard.tone as string) || 'narrative_storytelling'}
+                platform={(storyboard.platform as string) || 'TikTok'}
+                brainModel="gemini-2.0-flash"
+                onUpdate={(vp) => {
+                  updateAsset(sceneNum, { veoPrompt: vp })
+                  saveSceneAsset({
+                    storyboard_id: activeSessionId || 'storyboard',
+                    scene_number: sceneNum,
+                    video_prompt: JSON.stringify(vp),
+                  }).catch(console.error)
+                }}
+              />
+            ) : (
+            (() => {
               const videoPrompt = storedAssets[sceneNum]?.videoPrompt
               const customVideoPromptVal = storedAssets[sceneNum]?.customVideoPrompt || ''
               const hasVideoPrompt = !!videoPrompt
@@ -1551,7 +1576,8 @@ export function Storyboard() {
                   )}
                 </div>
               )
-            })()}
+            })()
+            )}
 
             {/* VIDEO SECTION */}
             {(() => {
@@ -2099,6 +2125,40 @@ export function Storyboard() {
         >
           {isAlreadySaved ? '✓ Saved' : 'Save'}
         </button>
+        {isVeoTone((storyboard.tone as string) || '') && (
+          <button
+            onClick={() => {
+              const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
+              const allPrompts = scenes.map((s: Record<string, unknown>) => {
+                const sNum = s.scene_number as number
+                const veo = storedAssets[sNum]?.veoPrompt
+                return [
+                  `=== SCENE ${sNum} ===`,
+                  `VO: "${s.vo_script as string}"`,
+                  ``,
+                  `VEO 3.1 PROMPT:`,
+                  veo?.full_veo_prompt || '(not generated yet)',
+                  ``,
+                ].join('\n')
+              }).join('\n')
+              const blob = new Blob([allPrompts], { type: 'text/plain' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `veo-prompts-${((storyboard.title as string) || 'storyboard').replace(/\s/g, '-')}.txt`
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+            style={{
+              padding: '6px 12px', borderRadius: '10px',
+              background: 'rgba(255,107,53,0.1)',
+              border: '0.5px solid rgba(255,107,53,0.3)',
+              color: '#ff6b35', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            🎬 Export Veo
+          </button>
+        )}
         <span style={{ fontSize: '18px' }}>🎬</span>
       </div>
       </div>

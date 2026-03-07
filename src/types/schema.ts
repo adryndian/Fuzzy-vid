@@ -61,6 +61,16 @@ export interface SceneAssets {
   videoError?: string
   videoPrompt?: VideoPromptData
   customVideoPrompt?: string
+  veoPrompt?: {
+    sub_tone?: string
+    camera_locked?: boolean
+    camera_instruction?: string
+    starting_frame?: string
+    temporal_action?: string
+    physics_detail?: string
+    human_element?: string
+    full_veo_prompt: string
+  } | null
   audioUrl?: string
   audioStatus: GenerationStatus
   audioError?: string
