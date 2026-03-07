@@ -1,6 +1,6 @@
 # Fuzzy Short — Gemini CLI Project Instructions
 
-# Version 3.3 — Updated March 2026
+# Version 3.7 — Updated March 2026
 
 # READ THIS COMPLETELY before starting any task
 
@@ -22,7 +22,9 @@ Repo: ~/Fuzzy-vid
 Frontend:  React + TypeScript + Vite → Cloudflare Pages
 Backend:   Cloudflare Worker (TypeScript)
 Storage:   Cloudflare R2 → bucket: igome-story-storage
-Brain AI:  AWS Bedrock (Claude Sonnet, Llama 4) + Dashscope SG (Qwen)
+Brain AI:  AWS Bedrock (Claude Sonnet, Llama 4) + Dashscope SG (Qwen) +
+           Google Gemini (2.0/2.5) + Groq (Llama/Mixtral/Gemma) +
+           OpenRouter (DeepSeek/Gemma/Llama free) + ZhipuAI GLM-4-Flash
 Image AI:  AWS Bedrock (Nova Canvas, SD 3.5) + Dashscope (Wanx)
 Video AI:  AWS Bedrock Nova Reel (async) + Dashscope Wan2.1 (async)
 Audio:     AWS Polly
@@ -33,23 +35,29 @@ Audio:     AWS Polly
 
 src/
 pages/
-Home.tsx         ← input form, brain/image/video model selectors
-Storyboard.tsx   ← per-scene cards, generate image/video/audio
-Settings.tsx     ← API keys, preferences
+Home.tsx           ← input form, grouped provider chip brain selector, image/video selectors
+Storyboard.tsx     ← per-scene cards, generate image/video/audio
+Settings.tsx       ← API keys (6 providers), test buttons, preferences
+Dashboard.tsx      ← storyboard list, credits, tone badges
 lib/
-api.ts           ← all fetch calls to Worker
+api.ts             ← all fetch calls to Worker, exports WORKER_URL
+providerModels.ts  ← 28 brain models × 6 providers, getModelsByProvider/getModelById/hasRequiredKey
 types/
-schema.ts        ← types, VideoJob, SceneAssets, helpers
+schema.ts          ← types, VideoJob, SceneAssets, helpers
 
 worker/
 index.ts           ← route handler, credentials extraction
-brain.ts           ← storyboard generation (Bedrock)
+brain.ts           ← storyboard generation (Bedrock), buildBrainPrompts()
 image.ts           ← Nova Canvas + SD 3.5 (Bedrock)
 video.ts           ← Nova Reel async polling (Bedrock)
 audio.ts           ← AWS Polly
 dashscope.ts       ← ALL Qwen/Wanx/Wan2.1 (Dashscope Singapore)
+handlers/
+brain-provider.ts  ← /api/brain/provider — Groq, OpenRouter, GLM, Gemini routing
 lib/
-aws-signature.ts ← HMAC signing — see CRITICAL RULE below
+aws-signature.ts   ← HMAC signing — see CRITICAL RULE below
+providers.ts       ← provider registry (mirrors src/lib/providerModels.ts)
+veo/               ← Veo 3.1 prompt engine (8 sub-tones, VeoPromptSection)
 
 -----
 
@@ -96,10 +104,10 @@ console.log(b('https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.nova
 
 ## VALID MODEL IDs (verified — do not guess or use others)
 
-### AWS Bedrock — Brain
+### AWS Bedrock — Brain (route: /api/brain/generate)
 
-us.anthropic.claude-sonnet-4-6
-us.anthropic.claude-haiku-4-5-20251001
+us.anthropic.claude-sonnet-4-6           ← primary brain, best quality
+us.anthropic.claude-haiku-4-5-20251001   ← fast/cheap tasks
 us.meta.llama4-maverick-17b-instruct-v1:0
 
 ### AWS Bedrock — Image
@@ -113,9 +121,13 @@ sd35        → stability.sd3-5-large-v1:0 → us-west-2 ONLY
 
 nova_reel → amazon.nova-reel-v1:0 → us-east-1 ONLY, async 2-6s
 
-### Dashscope Singapore — Brain
+### Dashscope Singapore — Brain (route: /api/dashscope/brain)
 
-qwen3-max, qwen-plus, qwen-flash, qwen-turbo, qwq-plus
+qwen3-max    ← best quality + reasoning
+qwen-plus    ← balanced, recommended
+qwen-flash   ← fast
+qwq-plus     ← deep reasoning
+(qwen-turbo  ← cheapest)
 
 ### Dashscope Singapore — Image (ALL async)
 
@@ -130,6 +142,37 @@ wanx2.1-t2i-turbo  ← fast (legacy), standard format: input: { prompt }
 
 wan2.1-i2v-plus, wan2.1-i2v-turbo  ← image→video
 wan2.1-t2v-plus, wan2.1-t2v-turbo  ← text→video
+
+### Google Gemini (route: /api/brain/provider, header: X-Gemini-Key)
+
+gemini-2.0-flash           ← default brain model (FREE, fast, env fallback)
+gemini-2.0-flash-lite      ← faster/cheaper
+gemini-1.5-flash           ← reliable JSON output
+gemini-2.5-pro-exp-03-25   ← best reasoning (slow)
+
+Note: Gemini falls back to env GEMINI_API_KEY if no X-Gemini-Key header. Always unlocked.
+
+### Groq (route: /api/brain/provider, header: X-Groq-Api-Key)
+
+llama-3.3-70b-versatile    ← best brain quality on Groq (FREE)
+llama-3.1-8b-instant       ← ultra-fast rewrite tasks (FREE)
+gemma2-9b-it               ← Google Gemma via Groq (FREE)
+mixtral-8x7b-32768         ← multilingual, large context (FREE)
+Rate limit: 30 req/min free tier
+
+### OpenRouter (route: /api/brain/provider, header: X-Openrouter-Api-Key)
+
+google/gemma-3-27b-it:free           ← best JSON output (FREE)
+meta-llama/llama-3.3-70b-instruct:free ← large + capable (FREE)
+deepseek/deepseek-r1:free            ← deep reasoning (FREE, slow)
+deepseek/deepseek-v3-0324:free       ← creative + brain (FREE)
+google/gemini-2.0-flash-exp:free     ← Gemini via OpenRouter (FREE)
+
+### ZhipuAI GLM (route: /api/brain/provider, header: X-Glm-Api-Key)
+
+glm-4-flash        ← unlimited free, multilingual (FREE)
+glm-4-flash-250414 ← newer version, good JSON (FREE)
+glm-z1-flash       ← reasoning variant (FREE)
 
 -----
 
@@ -181,17 +224,18 @@ Size format uses * separator (NOT x):
 
 GET  /api/health
 POST /api/brain/generate                   ← AWS Bedrock brain (requireAwsKeys)
-POST /api/brain/rewrite-vo                 ← (requireAwsKeys)
-POST /api/brain/regenerate-video-prompt    ← (requireAwsKeys)
+POST /api/brain/provider                   ← Groq/OpenRouter/GLM/Gemini brain (v3.7)
+POST /api/brain/rewrite-vo                 ← rewrite VO for duration (requireAwsKeys)
+POST /api/brain/regenerate-video-prompt    ← regen video_prompt (requireAwsKeys)
 POST /api/image/generate                   ← Nova Canvas or SD 3.5 (requireAwsKeys)
-POST /api/image/enhance-prompt             ← (requireAwsKeys)
+POST /api/image/enhance-prompt             ← enhance prompt via Claude (requireAwsKeys)
 POST /api/video/start                      ← Nova Reel async (requireAwsKeys)
 GET  /api/video/status/:jobId              ← Nova Reel poll
 POST /api/audio/generate                   ← AWS Polly (requireAwsKeys)
-POST /api/dashscope/brain                  ← (requireDashscopeKey)
-POST /api/dashscope/image/start            ← (requireDashscopeKey)
-POST /api/dashscope/video/start            ← (requireDashscopeKey)
-GET  /api/dashscope/task/:taskId           ← poll (no key guard, status only)
+POST /api/dashscope/brain                  ← Qwen brain (requireDashscopeKey)
+POST /api/dashscope/image/start            ← Wanx image async (requireDashscopeKey)
+POST /api/dashscope/video/start            ← Wan2.1 video async (requireDashscopeKey)
+GET  /api/dashscope/task/:taskId           ← poll image/video (no key guard)
 
 GET  /api/user/profile                     ← auth required (Clerk JWT)
 PUT  /api/user/profile                     ← auth required
@@ -204,13 +248,29 @@ GET  /api/storyboards/:id                  ← get single storyboard
 DELETE /api/storyboards/:id               ← delete storyboard
 POST /api/storyboards/:id/scenes           ← upsert scene asset
 
+/api/brain/provider routing (worker/handlers/brain-provider.ts):
+  X-Groq-Api-Key       → Groq completion API
+  X-Openrouter-Api-Key → OpenRouter completion API
+  X-Glm-Api-Key        → ZhipuAI GLM API
+  X-Gemini-Key         → Google Gemini API (falls back to env GEMINI_API_KEY)
+
 -----
 
-## REQUEST HEADERS (from localStorage settings)
+## REQUEST HEADERS (from localStorage fuzzy_settings_{userId})
 
-AWS:       X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key
-X-Brain-Region (us-east-1), X-Image-Region (us-east-1 or us-west-2)
-Dashscope: X-Dashscope-Api-Key
+AWS Bedrock:
+  X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key
+  X-Brain-Region (us-east-1), X-Image-Region (us-east-1 or us-west-2)
+
+Dashscope:  X-Dashscope-Api-Key
+Gemini:     X-Gemini-Key
+Groq:       X-Groq-Api-Key
+OpenRouter: X-Openrouter-Api-Key
+GLM:        X-Glm-Api-Key
+
+All keys stored as: settings.{provider}ApiKey in AppSettings
+  awsAccessKeyId, awsSecretAccessKey, dashscopeApiKey, geminiApiKey,
+  groqApiKey, openrouterApiKey, glmApiKey
 
 -----
 
@@ -330,15 +390,15 @@ wrangler tail          ← live Worker logs
 
 ## CODING RULES
 
-1. TypeScript strict — run npx tsc –noEmit, fix ALL errors before deploy
-1. ALWAYS use buildCanonicalUri() — never url.pathname directly
-1. buildCanonicalUri: encodeURIComponent(decoded) ONLY — NO .replace(/%3A/gi, ':')
-1. NEVER send img_url to Dashscope t2i or t2v models
-1. NEVER use invalid model IDs — verify against list above
-1. NEVER hardcode API keys — use wrangler secrets or localStorage
-1. wan2.6-image uses messages[] format — not input.prompt
-1. Dashscope size: use * not x (768*1280 not 768x1280)
-1. Dashscope URLs expire 24h — always re-upload to R2
+1. TypeScript strict — run npx tsc --noEmit, fix ALL errors before deploy
+2. ALWAYS use buildCanonicalUri() — never url.pathname directly
+3. buildCanonicalUri: encodeURIComponent(decoded) ONLY — NO .replace(/%3A/gi, ':')
+4. NEVER send img_url to Dashscope t2i or t2v models
+5. NEVER use invalid model IDs — verify against list above
+6. NEVER hardcode API keys — use wrangler secrets or localStorage
+7. wan2.6-image uses messages[] format — not input.prompt
+8. Dashscope size: use * not x (768*1280 not 768x1280)
+9. Dashscope URLs expire 24h — always re-upload to R2
 10. Nova Reel: us-east-1 ONLY | SD 3.5: us-west-2 ONLY
 11. After every change: npm run build → 0 errors required
 12. video_prompt.full_prompt max 200 chars — starts with camera movement
@@ -347,6 +407,11 @@ wrangler tail          ← live Worker logs
 15. All generation routes must call requireAwsKeys(creds) or requireDashscopeKey(creds)
 16. localStorage per user: key = fuzzy_settings_{userId} NOT 'fuzzy_short_settings'
 17. getApiHeaders(userId?) — always pass userId from useUser() hook
+18. WORKER_URL is exported from src/lib/api.ts — import it, never hardcode
+19. brainModel state is string (not union) since v3.7 — default 'gemini-2.0-flash'
+20. Brain routing: aws→/api/brain/generate, dashscope→/api/dashscope/brain, else→/api/brain/provider
+21. hasRequiredKey(model, userSettings) from providerModels.ts — use for chip UI gating
+22. Gemini provider is always "unlocked" in chip UI (env fallback exists)
 
 -----
 
@@ -382,6 +447,143 @@ Nova Reel “UnknownOperationException”
 AWSCompromisedKeyQuarantineV3
 → AWS IAM Console → Users → Xklaa-pmpt → Permissions → Detach quarantine policy
 → Create new key. Never share keys in chat/screenshots.
+
+-----
+
+## BRAIN MODEL SELECTOR (v3.7)
+
+Home.tsx uses a grouped provider chip UI instead of a <select> dropdown.
+
+Key constants (module-level, outside component):
+  PROVIDER_ORDER = ['aws', 'dashscope', 'gemini', 'groq', 'openrouter', 'glm']
+  PROVIDER_META: Record<string, { emoji, color, label }> — per provider display info
+  MODEL_GROUPS = getModelsByProvider()  — computed once from providerModels.ts
+
+Component state:
+  brainModel: string (default 'gemini-2.0-flash')
+  userSettings: Record<string, string> — loaded from localStorage in useEffect
+
+Chip behavior:
+  - Model locked (greyed + 🔒) if hasRequiredKey(model, userSettings) returns false
+  - Gemini: always unlocked (pid === 'gemini' bypasses key check)
+  - Provider shows "No key" red badge if no key for any model in group
+  - Selected chip: border + background tinted with provider color
+  - FREE badge on free models when not selected
+  - Info bar below shows: emoji, providerLabel, speedLabel, bestFor[]
+
+handleSubmit routing:
+  getModelById(brainModel) → selectedModelDef
+  modelProvider = selectedModelDef?.provider || 'gemini'
+  aws      → WORKER_URL + /api/brain/generate
+  dashscope → WORKER_URL + /api/dashscope/brain
+  all else → WORKER_URL + /api/brain/provider
+
+Validation in handleSubmit (returns early with error if key missing):
+  aws        → requires X-AWS-Access-Key-Id
+  dashscope  → requires X-Dashscope-Api-Key
+  groq       → requires X-Groq-Api-Key
+  openrouter → requires X-Openrouter-Api-Key
+  glm        → requires X-Glm-Api-Key
+  gemini     → no validation (env fallback)
+
+-----
+
+## TONE SYSTEM (v3.7)
+
+8 content tones selectable in Home.tsx:
+
+| ID                     | Emoji | Description                          |
+|------------------------|-------|--------------------------------------|
+| narrative_storytelling | 📖    | Story arc with emotional beats       |
+| documentary_viral      | 📰    | Journalistic + Veo 3.1 optimized     |
+| natural_genz           | ✌️    | Casual, relatable, authentic         |
+| informative            | 💡    | Factual, clear, structured           |
+| product_ads            | 🛍️    | Benefit-focused with CTA             |
+| educational            | 🎓    | Step-by-step explanation             |
+| entertainment          | 🎉    | Fun, energetic, surprising           |
+| motivational           | 💪    | Empowering and uplifting             |
+
+VEO_TONES (Veo 3.1 prompt engine active for these):
+  documentary_viral, natural_genz, informative, narrative_storytelling
+
+Tone colors for Dashboard badges:
+  documentary_viral #ff3b30 | natural_genz #007aff | informative #5856d6
+  narrative_storytelling #ff6b35 | product_ads #34c759 | educational #af52de
+  entertainment #ffcc00 | motivational #ff9500
+
+-----
+
+## SETTINGS PAGE (v3.7)
+
+SecretInput component:
+  - Shows green border (rgba(52,199,89,0.4)) when field has value
+  - Shows ✓ checkmark at right: 38px when value non-empty
+  - Eye toggle button stays at right: 12px
+  - paddingRight: value ? '60px' : '44px'
+
+WORKER_URL:
+  - Imported from src/lib/api.ts (NOT defined locally)
+
+Test button sections (each provider has TestButton + StatusMsg + rate info):
+  Groq:       testGroq() — model: llama-3.1-8b-instant — "30 req/min free tier"
+  OpenRouter: testOpenRouter() — model: google/gemma-3-27b-it:free — "Free models available"
+  GLM:        testGLM() — model: glm-4-flash — "unlimited free tier"
+
+Test call pattern (all 3):
+  POST /api/brain/provider
+  Header: X-{Provider}-Api-Key: settings.{provider}ApiKey
+  Body: { brain_model, system_prompt: 'You are helpful.', user_prompt: 'Reply with: {"ok":true}', max_tokens: 20 }
+  Success: res.ok && data.content → status='success'
+
+-----
+
+## DASHBOARD PAGE (v3.7)
+
+StoryboardRow interface: added tone?: string
+
+Tone badge rendered before platform badge in card:
+  Condition: board.tone && TONE_BADGES[board.tone]
+  Style: colored border + tinted background using TONE_BADGES[tone].color + 15/30 alpha
+  Format: "{emoji} {tone.replace(/_/g, ' ')}"
+
+TONE_BADGES constant defined at module level (same 8 tones as Home.tsx)
+
+-----
+
+## CHANGELOG
+
+### v3.7 (2026-03-07) — Multi-Provider Brain + Settings + Dashboard
+
+Files changed:
+  src/pages/Home.tsx     — grouped chip brain selector, 6-provider routing, userSettings state
+  src/pages/Settings.tsx — SecretInput ✓ indicator, Groq/OR/GLM test buttons, WORKER_URL import
+  src/pages/Dashboard.tsx — tone? field, TONE_BADGES, tone pill in card
+  CLAUDE.md              — v3.7 section appended
+  GEMINI.md              — updated to v3.7 (this file)
+
+Worker deployed: 2026-03-07 → Current Version ID: 0b9131de-4dab-4873-a8b8-79a46f9294bc
+
+### v3.6 (2026-03) — Veo 3.1 Prompt Engine
+
+worker/veo/ added: 8 sub-tones, VeoPromptSection, all prompts exported
+Brain system prompt rebuilt with Veo 3.1 compatible video_prompt generation
+
+### v3.5 (2026-03) — Brain System Prompt Rebuild
+
+tone system introduced, brain.ts rebuilt with all 8 tones
+worker/handlers/brain-provider.ts added for multi-provider routing
+
+### v3.4 (2026-03) — Multi-Provider Foundation
+
+src/lib/providerModels.ts added (28 models, 6 providers)
+worker/lib/providers.ts added (mirrors frontend registry)
+Groq, OpenRouter, GLM, Gemini all wired to /api/brain/provider
+
+### v3.3 (2026-03) — Security Fix
+
+Block Worker key fallback — env.AWS_ACCESS_KEY_ID no longer used in extractCredentials
+Clear session on user change
+API key warnings added to UI
 
 -----
 
