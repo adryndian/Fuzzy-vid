@@ -131,20 +131,29 @@ export async function handleDashscopeImageStart(
   const size = getWanxSize(body.aspect_ratio)
   const isWan26 = (body.image_model || '') === 'wan2.6-image'
 
+  const model = body.image_model || 'qwen-image-2.0-pro'
+  const isQwenImage = model === 'qwen-image-2.0-pro' || model === 'qwen-image-2.0'
+
   const inputPayload = isWan26
     ? { messages: [{ role: 'user', content: [{ text: body.prompt }] }] }
     : { prompt: body.prompt }
 
+  // qwen-image models do NOT support prompt_extend or watermark parameters
+  // (prompt_extend expects a URL string in qwen-image API, not boolean → causes "url error")
+  const parameters: Record<string, unknown> = {
+    size,
+    n: 1,
+    negative_prompt: body.negative_prompt || 'blurry, low quality, distorted, watermark, text, ugly, deformed',
+  }
+  if (!isQwenImage) {
+    parameters.prompt_extend = true
+    parameters.watermark = false
+  }
+
   const payload = JSON.stringify({
-    model: body.image_model || 'qwen-image-2.0-pro',
+    model,
     input: inputPayload,
-    parameters: {
-      size,
-      n: 1,
-      negative_prompt: body.negative_prompt || 'blurry, low quality, distorted, watermark, text, ugly, deformed',
-      prompt_extend: true,
-      watermark: false,
-    },
+    parameters,
   })
 
   const res = await fetch(endpoint, {

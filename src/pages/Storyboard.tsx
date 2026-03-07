@@ -27,7 +27,7 @@ const IMAGE_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen' | 'GLM'; de
   { id: 'wan2.6-image',       label: 'Wan 2.6 Image',      tag: 'Qwen', desc: 'Latest Wan model',    provider: 'dashscope', badge: '🆕' },
   { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo',     tag: 'Qwen', desc: 'Fast (legacy)',       provider: 'dashscope', badge: '⚡' },
   { id: 'cogview-4',          label: 'CogView-4',           tag: 'GLM',  desc: 'Best quality',        provider: 'glm',       badge: '⭐' },
-  { id: 'cogview-4-flash',    label: 'CogView-4 Flash',     tag: 'GLM',  desc: 'Fast & free',         provider: 'glm',       badge: '⚡' },
+  { id: 'cogview-3-flash',    label: 'CogView-4 Flash',     tag: 'GLM',  desc: 'Fast & free',         provider: 'glm',       badge: '⚡' },
 ]
 
 const VIDEO_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen' | 'GLM'; desc: string; provider: 'bedrock' | 'dashscope' | 'glm'; badge?: string }[] = [
@@ -39,21 +39,6 @@ const VIDEO_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen' | 'GLM'; de
   { id: 'cogvideox-2',       label: 'CogVideoX-2',         tag: 'GLM',  desc: 'I2V/T2V 5-10s',      provider: 'glm',       badge: '🎬' },
 ]
 
-const dropdownStyle: React.CSSProperties = {
-  background: 'rgba(118,118,128,0.1)',
-  border: '0.5px solid rgba(0,0,0,0.08)',
-  borderRadius: '10px',
-  padding: '5px 24px 5px 8px',
-  color: '#1d1d1f',
-  fontSize: '11px',
-  outline: 'none',
-  cursor: 'pointer',
-  appearance: 'none',
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%233c3c43' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: 'right 7px center',
-  fontFamily: 'inherit',
-}
 
 interface PreviewModal {
   type: 'image' | 'video'
@@ -1022,13 +1007,31 @@ export function Storyboard() {
     paddingBottom: '0px',
   }
 
+  const dropdownStyle: React.CSSProperties = {
+    background: thm.inputBg,
+    border: isDark ? '0.5px solid rgba(255,255,255,0.1)' : '0.5px solid rgba(0,0,0,0.08)',
+    borderRadius: '10px',
+    padding: '5px 24px 5px 8px',
+    color: thm.textPrimary,
+    fontSize: '11px',
+    outline: 'none',
+    cursor: 'pointer',
+    appearance: 'none',
+    backgroundImage: isDark
+      ? "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23ebebf5' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")"
+      : "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%233c3c43' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 7px center',
+    fontFamily: 'inherit',
+  }
+
   const glassCard: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.78)',
+    background: thm.cardBg,
     backdropFilter: 'blur(40px) saturate(180%)',
     WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-    border: '0.5px solid rgba(255,255,255,0.95)',
+    border: thm.cardBorder,
     borderRadius: '22px',
-    boxShadow: '0 2px 24px rgba(0,0,0,0.07), 0 0 0 0.5px rgba(255,255,255,0.6) inset',
+    boxShadow: thm.cardShadow,
     marginBottom: '11px',
     overflow: 'hidden',
   }
@@ -1088,9 +1091,9 @@ export function Storyboard() {
   const smallIconBtn: React.CSSProperties = {
     padding: '4px 9px',
     borderRadius: '8px',
-    border: '0.5px solid rgba(0,0,0,0.1)',
-    background: 'rgba(255,255,255,0.9)',
-    color: '#1d1d1f',
+    border: thm.cardBorder,
+    background: thm.cardBg,
+    color: thm.textPrimary,
     fontSize: '11px',
     fontWeight: 500,
     cursor: 'pointer',
@@ -1131,7 +1134,7 @@ export function Storyboard() {
           cursor: 'pointer',
           borderLeft: isActive ? '3px solid #007aff' : '3px solid transparent',
           background: isActive ? 'rgba(0,122,255,0.06)' : 'transparent',
-          borderBottom: '0.5px solid rgba(0,0,0,0.05)',
+          borderBottom: thm.navBorder,
           transition: 'all 0.15s',
         }}
       >
@@ -1149,15 +1152,15 @@ export function Storyboard() {
           )}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ color: '#1d1d1f', fontSize: '13px', fontWeight: 600 }}>Scene {sceneNum}</div>
-          <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+          <div style={{ color: thm.textPrimary, fontSize: '13px', fontWeight: 600 }}>Scene {sceneNum}</div>
+          <div style={{ color: thm.textSecondary, fontSize: '10px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
             {(scene.scene_type as string || '').replace(/_/g, ' ')}
           </div>
           <div style={{ display: 'flex', gap: '3px', marginTop: '3px', alignItems: 'center' }}>
             <span style={{ fontSize: '11px', opacity: hasImage ? 1 : 0.2 }}>🖼️</span>
             <span style={{ fontSize: '11px', opacity: hasVideo ? 1 : 0.2 }}>🎬</span>
             <span style={{ fontSize: '11px', opacity: hasAudio ? 1 : 0.2 }}>🎵</span>
-            <span style={{ color: 'rgba(60,60,67,0.4)', fontSize: '10px', marginLeft: '4px' }}>{sceneDurations[sceneNum] || 6}s</span>
+            <span style={{ color: thm.textTertiary, fontSize: '10px', marginLeft: '4px' }}>{sceneDurations[sceneNum] || 6}s</span>
           </div>
         </div>
       </div>
@@ -1186,7 +1189,7 @@ export function Storyboard() {
         {/* Scene Header */}
         <div style={{
           padding: '10px 11px 7px',
-          borderBottom: isCollapsed ? 'none' : '0.5px solid rgba(0,0,0,0.06)',
+          borderBottom: isCollapsed ? 'none' : thm.navBorder,
           display: 'flex', alignItems: 'center', gap: '8px',
         }}>
           <div style={{
@@ -1548,7 +1551,7 @@ export function Storyboard() {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ fontSize: '12px' }}>🎥</span>
-                      <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Video Prompt</span>
+                      <span style={{ color: thm.textPrimary, fontSize: '12px', fontWeight: 600 }}>Video Prompt</span>
                       {hasVideoPrompt ? (
                         <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'rgba(52,199,89,0.12)', color: '#34c759', fontSize: '10px', fontWeight: 600 }}>✓ Ready</span>
                       ) : (
@@ -1638,11 +1641,11 @@ export function Storyboard() {
                               placeholder={videoPrompt?.full_prompt || 'Camera movement, subject action, atmosphere...'}
                               style={{
                                 width: '100%',
-                                background: 'rgba(118,118,128,0.07)',
+                                background: thm.inputBg,
                                 border: '0.5px solid rgba(0,122,255,0.2)',
                                 borderRadius: '10px',
                                 padding: '7px 9px',
-                                color: '#1d1d1f', fontSize: '12px', lineHeight: '1.5',
+                                color: thm.textPrimary, fontSize: '12px', lineHeight: '1.5',
                                 resize: 'vertical', outline: 'none',
                                 fontFamily: 'inherit', boxSizing: 'border-box',
                               }}
@@ -1651,10 +1654,10 @@ export function Storyboard() {
                         </>
                       ) : (
                         <pre style={{
-                          background: 'rgba(0,0,0,0.04)',
-                          border: '0.5px solid rgba(0,0,0,0.08)',
+                          background: thm.sectionBg,
+                          border: thm.navBorder,
                           borderRadius: '10px', padding: '9px',
-                          fontSize: '10px', color: '#1d1d1f', lineHeight: '1.6',
+                          fontSize: '10px', color: thm.textPrimary, lineHeight: '1.6',
                           overflow: 'auto', margin: 0,
                           fontFamily: 'ui-monospace, SFMono-Regular, monospace',
                         }}>
@@ -1715,7 +1718,7 @@ export function Storyboard() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <span style={{ fontSize: '13px' }}>🎬</span>
-                  <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Video</span>
+                  <span style={{ color: thm.textPrimary, fontSize: '12px', fontWeight: 600 }}>Video</span>
                 </div>
                 {!canGenVideo
                   ? <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '10px' }}>Generate image first</span>
@@ -1945,7 +1948,7 @@ export function Storyboard() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <span style={{ fontSize: '13px' }}>🎵</span>
-                  <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Audio VO</span>
+                  <span style={{ color: thm.textPrimary, fontSize: '12px', fontWeight: 600 }}>Audio VO</span>
                 </div>
                 {statusBadge(sceneAsset.audioStatus, 'Audio')}
               </div>
@@ -1970,7 +1973,7 @@ export function Storyboard() {
                       Copy
                     </button>
                   </div>
-                  <p style={{ color: '#1d1d1f', fontSize: '12px', lineHeight: '1.5', fontStyle: 'italic', margin: 0 }}>
+                  <p style={{ color: thm.textPrimary, fontSize: '12px', lineHeight: '1.5', fontStyle: 'italic', margin: 0 }}>
                     "{customVO[sceneNum] || narration}"
                   </p>
                 </div>
@@ -1988,7 +1991,7 @@ export function Storyboard() {
                       borderRadius: '10px',
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>
+                        <span style={{ color: thm.textSecondary, fontSize: '10px' }}>
                           {idx === 0 ? '▶ Latest' : `Take ${sceneAsset.audioHistory.length - idx}`}
                           {' · '}{item.engine === 'elevenlabs' ? 'ElevenLabs' : 'Polly'}
                           {' · '}{item.voice}
@@ -2239,8 +2242,8 @@ export function Storyboard() {
         }}>
           <button onClick={() => navigate('/')} style={{
             flexShrink: 0,
-            background: 'rgba(255,255,255,0.85)',
-            border: '0.5px solid rgba(0,0,0,0.12)',
+            background: thm.cardBg,
+            border: thm.cardBorder,
             borderRadius: '12px', color: '#007aff',
             padding: '6px 12px', cursor: 'pointer',
             fontSize: '13px', fontWeight: 600,
@@ -2252,12 +2255,12 @@ export function Storyboard() {
           {/* Title block — flex:1 so it takes all available space */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
-              color: '#1d1d1f', fontSize: '15px', fontWeight: 700,
+              color: thm.textPrimary, fontSize: '15px', fontWeight: 700,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {(storyboard.title as string) || 'Storyboard'}
             </div>
-            <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ color: thm.textSecondary, fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span>{scenes.length} scenes</span>
               {sessionTotal > 0 && (
                 <span style={{ color: '#ff6b35', fontWeight: 600 }}>· {formatCost(sessionTotal)}</span>
@@ -2457,10 +2460,10 @@ export function Storyboard() {
       {/* Interactive Cost Tracker */}
       {costEntries.length > 0 && (
         <div style={{
-          background: 'rgba(255,255,255,0.7)',
+          background: thm.cardBg,
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
-          borderBottom: '0.5px solid rgba(0,0,0,0.08)',
+          borderBottom: thm.navBorder,
         }}>
           <div
             onClick={() => setCostExpanded(!costExpanded)}
@@ -2524,7 +2527,7 @@ export function Storyboard() {
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
                   padding: '4px 0',
-                  borderBottom: '0.5px solid rgba(0,0,0,0.05)',
+                  borderBottom: thm.navBorder,
                   fontSize: '11px',
                 }}>
                   <span style={{ color: 'rgba(60,60,67,0.35)', fontSize: '10px', minWidth: '50px' }}>
@@ -2541,7 +2544,7 @@ export function Storyboard() {
                   <span style={{ color: 'rgba(60,60,67,0.5)', flex: 1 }}>
                     {entry.model}
                   </span>
-                  <span style={{ color: '#1d1d1f', fontWeight: 600 }}>
+                  <span style={{ color: thm.textPrimary, fontWeight: 600 }}>
                     {formatCost(entry.cost)}
                   </span>
                 </div>
@@ -2572,7 +2575,7 @@ export function Storyboard() {
         {/* Production Notes */}
         {productionNotes && (
           <div style={{ ...glassCard, padding: '11px', marginBottom: '14px' }}>
-            <p style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: '7px', margin: '0 0 7px' }}>
+            <p style={{ color: thm.textSecondary, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: '7px', margin: '0 0 7px' }}>
               Production Notes
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
@@ -2581,7 +2584,7 @@ export function Storyboard() {
                   padding: '2px 8px', borderRadius: '20px',
                   background: 'rgba(118,118,128,0.1)',
                   border: 'none',
-                  color: '#1d1d1f', fontSize: '11px',
+                  color: thm.textPrimary, fontSize: '11px',
                 }}>{c}</span>
               ))}
             </div>
@@ -2604,7 +2607,7 @@ export function Storyboard() {
             overflow: 'hidden',
           }}>
             {/* LEFT: Scene thumbnail list */}
-            <div style={{ overflowY: 'auto', borderRight: '0.5px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.4)' }}>
+            <div style={{ overflowY: 'auto', borderRight: thm.navBorder, background: thm.sectionBg }}>
               {scenes.map(scene => renderSceneThumbnail(scene))}
             </div>
             {/* RIGHT: Active scene detail */}
@@ -2613,13 +2616,60 @@ export function Storyboard() {
             </div>
           </div>
         ) : (
-          <div style={{ paddingBottom: '80px' }}>
+          <div style={{ paddingBottom: '130px' }}>
             {scenes.filter(s => (s.scene_number as number) === activeScene).map(s => renderSceneCard(s))}
           </div>
         )}
       </div>
 
-      <style>{`select option { background: #f2f2f7; color: #1d1d1f; }`}</style>
+      {/* Scene Navigation Bar — mobile only */}
+      {!isDesktop && scenes.length > 1 && (
+        <div style={{
+          position: 'fixed', bottom: '65px', left: 0, right: 0,
+          zIndex: 98,
+          background: thm.headerBg,
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderTop: thm.navBorder,
+          padding: '8px 16px',
+          display: 'flex', alignItems: 'center', gap: '10px',
+        }}>
+          <button
+            onClick={() => setActiveScene(prev => Math.max(1, prev - 1))}
+            disabled={activeScene <= 1}
+            style={{
+              flex: 1, padding: '8px', borderRadius: '12px',
+              border: thm.cardBorder,
+              background: activeScene <= 1 ? thm.pillInactive : 'rgba(0,122,255,0.1)',
+              color: activeScene <= 1 ? thm.textTertiary : '#007aff',
+              fontSize: '13px', fontWeight: 600,
+              cursor: activeScene <= 1 ? 'default' : 'pointer',
+              opacity: activeScene <= 1 ? 0.5 : 1,
+            }}
+          >← Prev</button>
+          <span style={{
+            color: thm.textSecondary, fontSize: '12px', fontWeight: 700,
+            minWidth: '56px', textAlign: 'center',
+          }}>
+            {activeScene} / {scenes.length}
+          </span>
+          <button
+            onClick={() => setActiveScene(prev => Math.min(scenes.length, prev + 1))}
+            disabled={activeScene >= scenes.length}
+            style={{
+              flex: 1, padding: '8px', borderRadius: '12px',
+              border: thm.cardBorder,
+              background: activeScene >= scenes.length ? thm.pillInactive : 'rgba(0,122,255,0.1)',
+              color: activeScene >= scenes.length ? thm.textTertiary : '#007aff',
+              fontSize: '13px', fontWeight: 600,
+              cursor: activeScene >= scenes.length ? 'default' : 'pointer',
+              opacity: activeScene >= scenes.length ? 0.5 : 1,
+            }}
+          >Next →</button>
+        </div>
+      )}
+
+      <style>{`select option { background: ${isDark ? '#2c2c2e' : '#f2f2f7'}; color: ${isDark ? '#f2f2f7' : '#1d1d1f'}; }`}</style>
     </div>
   )
 }
