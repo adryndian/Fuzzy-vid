@@ -1016,7 +1016,7 @@ export function Storyboard() {
     width: '100%',
     background: 'linear-gradient(145deg, #f2f2f7 0%, #e5e5ea 50%, #f2f2f7 100%)',
     fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
-    paddingBottom: '60px',
+    paddingBottom: '0px',
   }
 
   const glassCard: React.CSSProperties = {
@@ -2295,6 +2295,60 @@ export function Storyboard() {
           </button>
         </div>
 
+        {/* Mobile scene filmstrip */}
+        {!isDesktop && scenes.length > 0 && (
+          <div style={{ marginTop: '6px' }}>
+            <style>{`.filmstrip::-webkit-scrollbar{display:none}`}</style>
+            <div className="filmstrip" style={{
+              display: 'flex', gap: '6px',
+              overflowX: 'auto', scrollbarWidth: 'none',
+              paddingBottom: '2px',
+            }}>
+              {scenes.map(scene => {
+                const sNum = scene.scene_number as number
+                const sa = storedAssets[sNum] || defaultSceneAssets()
+                const thumbImg = sa.imageStatus === 'done' && sa.imageUrl
+                const isAct = activeScene === sNum
+                return (
+                  <button
+                    key={sNum}
+                    onClick={() => setActiveScene(sNum)}
+                    style={{
+                      flexShrink: 0,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
+                      padding: '3px',
+                      background: isAct ? 'rgba(0,122,255,0.1)' : 'transparent',
+                      border: `1.5px solid ${isAct ? '#007aff' : 'transparent'}`,
+                      borderRadius: '9px',
+                      cursor: 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >
+                    <div style={{
+                      width: '44px', height: '44px', borderRadius: '6px',
+                      overflow: 'hidden', background: 'rgba(118,118,128,0.12)',
+                      flexShrink: 0,
+                    }}>
+                      {thumbImg ? (
+                        <img src={sa.imageUrl!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isAct ? '#007aff' : '#ff6b35', fontSize: '15px', fontWeight: 700 }}>
+                          {sNum}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '1px' }}>
+                      <span style={{ fontSize: '7px', opacity: sa.imageStatus === 'done' ? 1 : 0.2 }}>🖼</span>
+                      <span style={{ fontSize: '7px', opacity: sa.videoStatus === 'done' ? 1 : 0.2 }}>🎬</span>
+                      <span style={{ fontSize: '7px', opacity: sa.audioStatus === 'done' ? 1 : 0.2 }}>🎵</span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Row 2: Veo action buttons (only shown for Veo-compatible tones) */}
         {isVeoTone((storyboard.tone as string) || '') && (
           <div style={{
@@ -2566,7 +2620,7 @@ export function Storyboard() {
         </div>
         </div>
 
-        {/* Scenes — responsive 2-col on desktop */}
+        {/* Scenes — responsive 2-col on desktop, single active scene on mobile */}
         {isDesktop ? (
           <div style={{
             display: 'grid',
@@ -2584,14 +2638,9 @@ export function Storyboard() {
             </div>
           </div>
         ) : (
-          scenes.map(scene => renderSceneCard(scene))
-        )}
-
-        {/* Footer */}
-        {!isDesktop && (
-          <p style={{ textAlign: 'center', color: 'rgba(60,60,67,0.3)', fontSize: '11px', marginTop: '17px' }}>
-            {scenes.length} scenes · Fuzzy Short
-          </p>
+          <div style={{ paddingBottom: '80px' }}>
+            {scenes.filter(s => (s.scene_number as number) === activeScene).map(s => renderSceneCard(s))}
+          </div>
         )}
       </div>
 

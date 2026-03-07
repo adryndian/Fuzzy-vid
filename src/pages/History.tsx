@@ -56,7 +56,7 @@ export function History() {
     <div style={{
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1527 40%, #0a1020 100%)',
-      padding: '40px 16px 60px',
+      padding: '40px 16px 90px',
       fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
     }}>
       <div style={{ maxWidth: '580px', margin: '0 auto' }}>

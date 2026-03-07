@@ -126,7 +126,7 @@ export function Settings() {
       width: '100%',
       background: 'linear-gradient(145deg, #f2f2f7 0%, #e5e5ea 100%)',
       fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
-      paddingBottom: '40px',
+      paddingBottom: '90px',
     } as React.CSSProperties,
 
     header: {

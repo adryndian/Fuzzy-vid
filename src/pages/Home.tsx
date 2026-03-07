@@ -98,6 +98,7 @@ export function Home() {
   const navigate = useNavigate()
   const [title, setTitle] = useState('')
   const [story, setStory] = useState('')
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [platform, setPlatform] = useState<Platform>('youtube_shorts')
   const [brainModel, setBrainModel] = useState<string>('gemini-2.0-flash')
   const [userSettings, setUserSettings] = useState<Record<string, string>>({})
@@ -435,7 +436,7 @@ export function Home() {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'flex-start',
-      padding: '42px 11px 28px',
+      padding: '16px 11px 90px',
       fontFamily: '-apple-system, BlinkMacSystemFont, Inter, sans-serif',
     }}>
       <style>{`
@@ -445,40 +446,15 @@ export function Home() {
           background: rgba(255,255,255,0.9) !important;
         }
         select option { background: #f2f2f7; color: #1d1d1f; }
+        .adv-section { overflow: hidden; transition: max-height 0.3s ease; }
       `}</style>
 
-      {/* Top-right nav buttons */}
-      <div style={{ position: 'fixed', top: '16px', right: '16px', zIndex: 50, display: 'flex', gap: '8px' }}>
-        <button onClick={() => navigate('/history')} style={navBtnStyle}>
-          🕐
-          {historyCount > 0 && (
-            <span style={{
-              position: 'absolute', top: '-4px', right: '-4px',
-              background: '#ff3b30', color: 'white',
-              fontSize: '9px', fontWeight: 800,
-              width: '18px', height: '18px',
-              borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 2px 8px rgba(255,59,48,0.5)',
-            }}>
-              {historyCount > 99 ? '99' : historyCount}
-            </span>
-          )}
-        </button>
-        <button onClick={() => navigate('/settings')} style={navBtnStyle}>
-          ⚙️
-        </button>
-      </div>
-
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '22px' }}>
-        <div style={{ fontSize: '40px', marginBottom: '6px' }}>🎬</div>
-        <h1 style={{ fontSize: '34px', fontWeight: 800, color: '#1d1d1f', letterSpacing: '-0.02em', margin: 0 }}>
+      {/* Compact Header */}
+      <div style={{ textAlign: 'center', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+        <span style={{ fontSize: '24px' }}>🎬</span>
+        <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#1d1d1f', letterSpacing: '-0.02em', margin: 0 }}>
           Fuzzy <span style={{ color: '#ff6b35' }}>Short</span>
         </h1>
-        <p style={{ color: 'rgba(60,60,67,0.6)', fontSize: '13px', marginTop: '5px' }}>
-          AI-powered short video production
-        </p>
       </div>
 
       {/* Main Glass Card */}
@@ -621,6 +597,30 @@ export function Home() {
             )
           })()}
         </div>
+
+        {/* Advanced Settings Toggle */}
+        <button
+          onClick={() => setShowAdvanced(v => !v)}
+          style={{
+            width: '100%',
+            padding: '9px 12px',
+            background: showAdvanced ? 'rgba(0,122,255,0.07)' : 'rgba(118,118,128,0.07)',
+            border: `0.5px solid ${showAdvanced ? 'rgba(0,122,255,0.2)' : 'rgba(118,118,128,0.18)'}`,
+            borderRadius: '12px',
+            cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: '10px',
+            color: showAdvanced ? '#007aff' : 'rgba(60,60,67,0.6)',
+            fontSize: '12px',
+            fontWeight: 600,
+          }}
+        >
+          <span>⚙️ Language · Style · Ratio · Models</span>
+          <span style={{ fontSize: '10px' }}>{showAdvanced ? '▲ hide' : '▼ show'}</span>
+        </button>
+
+        {/* Collapsible Advanced Section */}
+        {showAdvanced && (<>
 
         {/* Language */}
         <div style={{ marginBottom: '14px' }}>
@@ -834,6 +834,8 @@ export function Home() {
           </select>
         </div>
 
+        </>)}
+
         {/* Total Duration */}
         <div style={{ marginBottom: '17px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '7px' }}>
@@ -908,8 +910,8 @@ export function Home() {
       </div>
 
       {/* Footer */}
-      <p style={{ color: 'rgba(60,60,67,0.3)', fontSize: '11px', marginTop: '17px' }}>
-        iOS 26 Liquid Glass Edition
+      <p style={{ color: 'rgba(60,60,67,0.25)', fontSize: '10px', marginTop: '12px' }}>
+        Fuzzy Short · AI Video
       </p>
 
       {/* Generation Overlay */}

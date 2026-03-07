@@ -9,6 +9,7 @@ import { Settings } from './pages/Settings'
 import { Dashboard } from './pages/Dashboard'
 import { Auth } from './pages/Auth'
 import { GenTaskBar } from './components/GenTaskBar'
+import { BottomNav } from './components/BottomNav'
 
 function clearSessionData() {
   sessionStorage.removeItem('storyboard_result')
@@ -92,6 +93,7 @@ function AppContent() {
         <Route path="/auth" element={<Auth />} />
       </Routes>
       <GenTaskBar />
+      <BottomNav />
     </BrowserRouter>
   )
 }
