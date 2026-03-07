@@ -2118,8 +2118,8 @@ export function Storyboard() {
         }}>
           ← Back
         </button>
-        <div style={{ flex: 1 }}>
-          <div style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 700 }}>
+        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {storyboard.title as string}
           </div>
           <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px' }}>
@@ -2131,6 +2131,7 @@ export function Storyboard() {
           onClick={handleMinimize}
           title="Minimize to queue — continue generating in background"
           style={{
+            flexShrink: 0,
             padding: '6px 12px', borderRadius: '10px',
             border: '0.5px solid rgba(0,122,255,0.25)',
             background: 'rgba(0,122,255,0.1)',
@@ -2145,6 +2146,7 @@ export function Storyboard() {
           onClick={handleSave}
           disabled={isAlreadySaved}
           style={{
+            flexShrink: 0,
             padding: '6px 12px', borderRadius: '10px',
             border: `0.5px solid ${isAlreadySaved ? 'rgba(52,199,89,0.3)' : 'rgba(255,107,53,0.3)'}`,
             background: isAlreadySaved ? 'rgba(52,199,89,0.1)' : 'rgba(255,107,53,0.1)',
@@ -2160,6 +2162,7 @@ export function Storyboard() {
             onClick={handleGenerateAllVeo}
             disabled={generatingAllVeo}
             style={{
+              flexShrink: 0,
               padding: '6px 12px', borderRadius: '10px',
               background: generatingAllVeo ? 'rgba(118,118,128,0.08)' : 'rgba(255,107,53,0.1)',
               border: `0.5px solid ${generatingAllVeo ? 'rgba(118,118,128,0.2)' : 'rgba(255,107,53,0.3)'}`,
@@ -2196,6 +2199,7 @@ export function Storyboard() {
               URL.revokeObjectURL(url)
             }}
             style={{
+              flexShrink: 0,
               padding: '6px 12px', borderRadius: '10px',
               background: 'rgba(255,107,53,0.1)',
               border: '0.5px solid rgba(255,107,53,0.3)',
@@ -2205,7 +2209,7 @@ export function Storyboard() {
             🎬 Export Veo
           </button>
         )}
-        <span style={{ fontSize: '18px' }}>🎬</span>
+        <span style={{ fontSize: '18px', flexShrink: 0 }}>🎬</span>
       </div>
       </div>
 
