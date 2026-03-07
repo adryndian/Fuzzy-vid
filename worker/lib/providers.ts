@@ -56,12 +56,20 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
         bestFor: ['rewrite', 'vo'],
       },
       {
-        id: 'mixtral-8x7b-32768',
-        label: 'Mixtral 8x7B',
-        contextWindow: 32768,
+        id: 'qwen-qwq-32b',
+        label: 'QwQ 32B 🧠⚡',
+        contextWindow: 131072,
+        free: true,
+        speed: 'fast',
+        bestFor: ['reasoning', 'complex', 'brain'],
+      },
+      {
+        id: 'deepseek-r1-distill-llama-70b',
+        label: 'DeepSeek R1 Distill 70B 🧠',
+        contextWindow: 131072,
         free: true,
         speed: 'medium',
-        bestFor: ['brain', 'multilingual'],
+        bestFor: ['reasoning', 'brain', 'json'],
       },
     ],
   },
@@ -109,12 +117,12 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
         bestFor: ['brain', 'creative'],
       },
       {
-        id: 'mistralai/mistral-7b-instruct:free',
-        label: 'Mistral 7B 🆓',
-        contextWindow: 32768,
+        id: 'mistralai/mistral-small-3.1-24b-instruct:free',
+        label: 'Mistral Small 3.1 24B 🆓',
+        contextWindow: 96000,
         free: true,
         speed: 'fast',
-        bestFor: ['rewrite', 'short_tasks'],
+        bestFor: ['brain', 'multilingual'],
       },
       {
         id: 'google/gemini-2.0-flash-exp:free',
@@ -123,6 +131,22 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
         free: true,
         speed: 'fast',
         bestFor: ['brain', 'multilingual', 'json'],
+      },
+      {
+        id: 'meta-llama/llama-4-scout:free',
+        label: 'Llama 4 Scout 🆕🆓',
+        contextWindow: 131072,
+        free: true,
+        speed: 'fast',
+        bestFor: ['brain', 'creative', 'json'],
+      },
+      {
+        id: 'meta-llama/llama-4-maverick:free',
+        label: 'Llama 4 Maverick 🆕🆓',
+        contextWindow: 131072,
+        free: true,
+        speed: 'medium',
+        bestFor: ['brain', 'complex', 'json'],
       },
     ],
   },
@@ -227,7 +251,12 @@ export function getProviderForModel(modelId: string): ProviderConfig | null {
   }
 
   // Auto-detect by model ID patterns
-  if (modelId.startsWith('llama') || modelId.startsWith('gemma2') || modelId.startsWith('mixtral')) {
+  if (
+    modelId.startsWith('llama') ||
+    modelId.startsWith('gemma2') ||
+    modelId.startsWith('qwen-qwq') ||
+    modelId.startsWith('deepseek-r1-distill')
+  ) {
     return PROVIDERS.groq
   }
   if (modelId.includes('/') || modelId.endsWith(':free')) {

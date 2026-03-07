@@ -124,7 +124,9 @@ export async function handleImageRequest(
       const isSd35 = image_model === 'sd35'
       const region = isSd35 ? 'us-west-2' : (creds.imageRegion || 'us-east-1')
       const modelId = isSd35 ? 'stability.sd3-5-large-v1:0' : 'amazon.nova-canvas-v1:0'
-      const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`
+      // AWS SigV4 requires ':' encoded as '%3A' in the URL path (CLAUDE.md rule)
+      const encodedModelId = modelId.replace(/:/g, '%3A')
+      const endpoint = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodedModelId}/invoke`
       const dims = getDimensions(aspect_ratio)
 
       const sd35AspectMap: Record<string, string> = {
