@@ -79,8 +79,14 @@ function buildCanonicalUri(rawUrl: string): string {
 In signRequest: ALWAYS call buildCanonicalUri(url) NOT new URL(url).pathname
 
 Verify before deploying:
-buildCanonicalUri(‘…/model/amazon.nova-canvas-v1%3A0/invoke’)
-→ MUST output: /model/amazon.nova-canvas-v1%3A0/invoke  ("%3A" percent-encoded, NOT literal colon)
+buildCanonicalUri(‘…/model/amazon.nova-canvas-v1:0/invoke’)
+→ MUST output: /model/amazon.nova-canvas-v1%3A0/invoke  (literal colon in URL → "%3A" in canonical)
+
+CRITICAL URL ENCODING RULE (proven by signature error):
+- Use LITERAL colon in fetch URL: amazon.nova-canvas-v1:0
+- buildCanonicalUri encodes it to %3A in the canonical string
+- NEVER pre-encode ‘:’ as ‘%3A’ in the fetch URL — AWS receives ‘%3A’ and re-encodes the ‘%’
+  to ‘%25’, producing ‘%253A’ in its canonical string → signature mismatch
 
 -----
 
@@ -91,11 +97,12 @@ buildCanonicalUri(‘…/model/amazon.nova-canvas-v1%3A0/invoke’)
 us.anthropic.claude-sonnet-4-6          ← primary brain model
 us.anthropic.claude-haiku-4-5-20251001  ← fast/cheap tasks
 us.meta.llama4-maverick-17b-instruct-v1:0
+us.meta.llama4-scout-17b-instruct-v1:0
 
-### AWS Bedrock — Image (use %3A in fetch URL AND in canonical URI)
+### AWS Bedrock — Image (literal colon in fetch URL, %3A in canonical URI only)
 
-amazon.nova-canvas-v1:0     → us-east-1 → fetch URL: nova-canvas-v1%3A0
-stability.sd3-5-large-v1:0  → us-west-2 ONLY → fetch URL: sd3-5-large-v1%3A0
+amazon.nova-canvas-v1:0     → us-east-1 → fetch URL uses literal colon
+stability.sd3-5-large-v1:0  → us-west-2 ONLY → fetch URL uses literal colon
 
 REMOVED (deprecated/invalid):
 amazon.titan-image-generator-v2:0 ← DO NOT USE, removed from app
