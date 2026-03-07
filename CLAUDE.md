@@ -430,3 +430,66 @@ Fix: This is normal in v2.x — check ~/.claude/settings.json has env.CLAUDE_COD
 Error: AWSCompromisedKeyQuarantineV3
 Fix: Go to AWS IAM → Users → Xklaa-pmpt → Permissions → Detach quarantine policy
 Then create new key. Never share keys in chat or screenshots.
+
+-----
+
+## v3.7 — Multi-Provider Brain Selector + Settings + Dashboard Tone Badges
+
+### New Brain Providers (total 6)
+
+All non-AWS/Dashscope models route to: POST /api/brain/provider
+Header pattern: X-{Provider}-Api-Key (e.g. X-Groq-Api-Key, X-Glm-Api-Key)
+
+| Provider   | Header              | Key field        | Fallback |
+|------------|---------------------|------------------|----------|
+| gemini     | X-Gemini-Key        | geminiApiKey     | env GEMINI_API_KEY |
+| aws        | X-AWS-Access-Key-Id | awsAccessKeyId   | none (required) |
+| dashscope  | X-Dashscope-Api-Key | dashscopeApiKey  | none (required) |
+| groq       | X-Groq-Api-Key      | groqApiKey       | none (required) |
+| openrouter | X-Openrouter-Api-Key| openrouterApiKey | none (required) |
+| glm        | X-Glm-Api-Key       | glmApiKey        | none (required) |
+
+### Brain Model Selector (Home.tsx)
+
+- Replaced `<select>` dropdown with grouped provider chip buttons
+- PROVIDER_ORDER = ['aws', 'dashscope', 'gemini', 'groq', 'openrouter', 'glm']
+- PROVIDER_META: emoji, color, label per provider
+- MODEL_GROUPS = getModelsByProvider() (from providerModels.ts — module-level constant)
+- Chips greyed + 🔒 if provider key missing; FREE badge if model.free
+- "No key" badge on provider header if no key for that provider
+- Selected model info bar: providerEmoji, providerLabel, speedLabel, bestFor
+- Gemini always unlocked (env fallback)
+- brainModel state type: string (was BrainModel union) — default: 'gemini-2.0-flash'
+- userSettings state loaded from localStorage fuzzy_settings_{userId}
+
+### Tone System (8 tones)
+
+narrative_storytelling, documentary_viral, natural_genz, informative,
+product_ads, educational, entertainment, motivational
+
+VEO_TONES (Veo 3.1 optimized): documentary_viral, natural_genz, informative, narrative_storytelling
+
+### Settings.tsx Changes (v3.7)
+
+- SecretInput: green border + ✓ checkmark when field has value
+- WORKER_URL: imported from src/lib/api.ts (removed local const)
+- Test buttons added for Groq, OpenRouter, GLM sections
+- Rate limit info: Groq (30 req/min), OpenRouter (free models), GLM (unlimited free)
+- testGroq/testOpenRouter/testGLM call POST /api/brain/provider with minimal prompt
+
+### Dashboard.tsx Changes (v3.7)
+
+- StoryboardRow interface: added tone?: string
+- TONE_BADGES: emoji + color per tone (8 entries)
+- Tone pill shown in card before platform badge (only if tone present + in TONE_BADGES)
+
+### New Files (v3.5–v3.7)
+
+src/lib/providerModels.ts    — 28 models, 6 providers, getModelsByProvider/getModelById/hasRequiredKey
+worker/lib/providers.ts       — provider registry for Worker (mirrors frontend)
+worker/handlers/brain-provider.ts — handles /api/brain/provider for Groq/OpenRouter/GLM/Gemini
+worker/veo/                   — Veo 3.1 prompt engine (8 sub-tones, VeoPromptSection)
+
+### Scenes Slider
+
+Label now shows estimate: `{scenes} (~{scenes * 7}s total)`

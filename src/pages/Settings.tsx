@@ -4,10 +4,9 @@ import { useUser, UserButton } from '@clerk/clerk-react'
 import type { AppSettings } from '../types/schema'
 import { DEFAULT_SETTINGS } from '../types/schema'
 import { useUserApi } from '../lib/userApi'
+import { WORKER_URL } from '../lib/api'
 
 type TestStatus = 'idle' | 'testing' | 'success' | 'failed'
-
-const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
 
 const REGIONS = [
   { value: 'us-east-1', label: 'us-east-1 (N. Virginia)' },
@@ -25,8 +24,14 @@ export function Settings() {
   const [showKey, setShowKey] = useState<Record<string, boolean>>({})
   const [geminiStatus, setGeminiStatus] = useState<TestStatus>('idle')
   const [awsStatus, setAwsStatus] = useState<TestStatus>('idle')
+  const [groqStatus, setGroqStatus] = useState<TestStatus>('idle')
+  const [openrouterStatus, setOpenrouterStatus] = useState<TestStatus>('idle')
+  const [glmStatus, setGlmStatus] = useState<TestStatus>('idle')
   const [geminiMsg, setGeminiMsg] = useState('')
   const [awsMsg, setAwsMsg] = useState('')
+  const [groqMsg, setGroqMsg] = useState('')
+  const [openrouterMsg, setOpenrouterMsg] = useState('')
+  const [glmMsg, setGlmMsg] = useState('')
 
   useEffect(() => {
     if (!user?.id) return
@@ -215,30 +220,44 @@ export function Settings() {
   // ─── Reusable Components ───────────────────────────────────
   const SecretInput = ({
     label, fieldKey, placeholder,
-  }: { label: string; fieldKey: keyof AppSettings; placeholder?: string }) => (
-    <div style={{ marginBottom: '14px' }}>
-      <label style={s.label}>{label}</label>
-      <div style={{ position: 'relative' }}>
-        <input
-          type={showKey[fieldKey] ? 'text' : 'password'}
-          value={settings[fieldKey] as string}
-          onChange={e => update(fieldKey, e.target.value as AppSettings[typeof fieldKey])}
-          placeholder={placeholder || ''}
-          style={{ ...s.input, paddingRight: '44px' }}
-        />
-        <button
-          onClick={() => toggleShow(fieldKey)}
-          style={{
-            position: 'absolute', right: '12px', top: '50%',
-            transform: 'translateY(-50%)', background: 'none',
-            border: 'none', color: 'rgba(60,60,67,0.4)',
-            cursor: 'pointer', fontSize: '15px', padding: '2px',
-          }}>
-          {showKey[fieldKey] ? '🙈' : '👁️'}
-        </button>
+  }: { label: string; fieldKey: keyof AppSettings; placeholder?: string }) => {
+    const val = settings[fieldKey] as string
+    return (
+      <div style={{ marginBottom: '14px' }}>
+        <label style={s.label}>{label}</label>
+        <div style={{ position: 'relative' }}>
+          <input
+            type={showKey[fieldKey] ? 'text' : 'password'}
+            value={val}
+            onChange={e => update(fieldKey, e.target.value as AppSettings[typeof fieldKey])}
+            placeholder={placeholder || ''}
+            style={{
+              ...s.input,
+              paddingRight: val ? '60px' : '44px',
+              borderColor: val ? 'rgba(52,199,89,0.4)' : 'transparent',
+            }}
+          />
+          {val && (
+            <span style={{
+              position: 'absolute', right: '38px', top: '50%',
+              transform: 'translateY(-50%)', color: '#34c759', fontSize: '14px',
+              pointerEvents: 'none',
+            }}>✓</span>
+          )}
+          <button
+            onClick={() => toggleShow(fieldKey)}
+            style={{
+              position: 'absolute', right: '12px', top: '50%',
+              transform: 'translateY(-50%)', background: 'none',
+              border: 'none', color: 'rgba(60,60,67,0.4)',
+              cursor: 'pointer', fontSize: '15px', padding: '2px',
+            }}>
+            {showKey[fieldKey] ? '🙈' : '👁️'}
+          </button>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   const RegionSelect = ({
     label, fieldKey, locked = false,
@@ -381,6 +400,66 @@ export function Settings() {
       setAwsStatus('failed')
       setAwsMsg('❌ Network error — check Worker deployment')
     }
+  }
+
+  const testGroq = async () => {
+    if (!settings.groqApiKey) {
+      setGroqStatus('failed'); setGroqMsg('❌ Please enter Groq API Key'); return
+    }
+    setGroqStatus('testing'); setGroqMsg('Testing connection...')
+    try {
+      const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Groq-Api-Key': settings.groqApiKey },
+        body: JSON.stringify({ brain_model: 'llama-3.1-8b-instant', system_prompt: 'You are helpful.', user_prompt: 'Reply with: {"ok":true}', max_tokens: 20 }),
+      })
+      const data = await res.json() as { content?: string; error?: string }
+      if (res.ok && data.content) {
+        setGroqStatus('success'); setGroqMsg('✅ Groq connected!')
+      } else {
+        setGroqStatus('failed'); setGroqMsg(`❌ ${data.error || `HTTP ${res.status}`}`)
+      }
+    } catch { setGroqStatus('failed'); setGroqMsg('❌ Network error') }
+  }
+
+  const testOpenRouter = async () => {
+    if (!settings.openrouterApiKey) {
+      setOpenrouterStatus('failed'); setOpenrouterMsg('❌ Please enter OpenRouter API Key'); return
+    }
+    setOpenrouterStatus('testing'); setOpenrouterMsg('Testing connection...')
+    try {
+      const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Openrouter-Api-Key': settings.openrouterApiKey },
+        body: JSON.stringify({ brain_model: 'google/gemma-3-27b-it:free', system_prompt: 'You are helpful.', user_prompt: 'Reply with: {"ok":true}', max_tokens: 20 }),
+      })
+      const data = await res.json() as { content?: string; error?: string }
+      if (res.ok && data.content) {
+        setOpenrouterStatus('success'); setOpenrouterMsg('✅ OpenRouter connected!')
+      } else {
+        setOpenrouterStatus('failed'); setOpenrouterMsg(`❌ ${data.error || `HTTP ${res.status}`}`)
+      }
+    } catch { setOpenrouterStatus('failed'); setOpenrouterMsg('❌ Network error') }
+  }
+
+  const testGLM = async () => {
+    if (!settings.glmApiKey) {
+      setGlmStatus('failed'); setGlmMsg('❌ Please enter GLM API Key'); return
+    }
+    setGlmStatus('testing'); setGlmMsg('Testing connection...')
+    try {
+      const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Glm-Api-Key': settings.glmApiKey },
+        body: JSON.stringify({ brain_model: 'glm-4-flash', system_prompt: 'You are helpful.', user_prompt: 'Reply with: {"ok":true}', max_tokens: 20 }),
+      })
+      const data = await res.json() as { content?: string; error?: string }
+      if (res.ok && data.content) {
+        setGlmStatus('success'); setGlmMsg('✅ GLM connected!')
+      } else {
+        setGlmStatus('failed'); setGlmMsg(`❌ ${data.error || `HTTP ${res.status}`}`)
+      }
+    } catch { setGlmStatus('failed'); setGlmMsg('❌ Network error') }
   }
 
   // ─── Render ────────────────────────────────────────────────
@@ -530,6 +609,13 @@ export function Settings() {
             fieldKey="groqApiKey"
             placeholder="gsk_xxxxxxxxxxxxxxxxxxxx"
           />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <TestButton label="Test Groq" status={groqStatus} onClick={testGroq} />
+            <StatusMsg status={groqStatus} msg={groqMsg} />
+          </div>
+          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', margin: 0 }}>
+            Free tier: 30 req/min · Fastest inference
+          </p>
         </div>
 
         {/* ── OpenRouter ── */}
@@ -557,6 +643,13 @@ export function Settings() {
             fieldKey="openrouterApiKey"
             placeholder="sk-or-xxxxxxxxxxxxxxxxxxxx"
           />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <TestButton label="Test OpenRouter" status={openrouterStatus} onClick={testOpenRouter} />
+            <StatusMsg status={openrouterStatus} msg={openrouterMsg} />
+          </div>
+          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', margin: 0 }}>
+            Free models available · DeepSeek, Gemma, Llama
+          </p>
         </div>
 
         {/* ── GLM / ZhipuAI ── */}
@@ -584,6 +677,13 @@ export function Settings() {
             fieldKey="glmApiKey"
             placeholder="xxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxx"
           />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <TestButton label="Test GLM" status={glmStatus} onClick={testGLM} />
+            <StatusMsg status={glmStatus} msg={glmMsg} />
+          </div>
+          <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', margin: 0 }}>
+            GLM-4-Flash: unlimited free tier
+          </p>
         </div>
 
         {/* ── Security Note ── */}

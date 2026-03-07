@@ -12,21 +12,22 @@ import type { GenStep } from '../components/GenerationOverlay'
 import { useElapsedTimer } from '../hooks/useElapsedTimer'
 import { useUser } from '@clerk/clerk-react'
 import { useUserApi } from '../lib/userApi'
+import { getModelsByProvider, hasRequiredKey, getModelById } from '../lib/providerModels'
+import { WORKER_URL } from '../lib/api'
 
 type Platform = 'youtube_shorts' | 'reels' | 'tiktok'
-type BrainModel = 'gemini' | 'llama4_maverick' | 'claude_sonnet' | 'qwen3_max' | 'qwen_plus' | 'qwen_flash' | 'qwen_turbo' | 'qwq_plus'
 type Language = 'id' | 'en'
 
-const BRAIN_MODELS: { id: BrainModel; label: string; tag: 'AWS' | 'Qwen'; provider: 'bedrock' | 'dashscope'; badge?: string }[] = [
-  { id: 'claude_sonnet',   label: 'Claude Sonnet 4.6', tag: 'AWS',  provider: 'bedrock' },
-  { id: 'llama4_maverick', label: 'Llama 4 Maverick',  tag: 'AWS',  provider: 'bedrock' },
-  { id: 'gemini',          label: 'Gemini (legacy)',   tag: 'AWS',  provider: 'bedrock' },
-  { id: 'qwen3_max',  label: 'Qwen3 Max',   tag: 'Qwen', provider: 'dashscope', badge: '⭐' },
-  { id: 'qwen_plus',  label: 'Qwen Plus',   tag: 'Qwen', provider: 'dashscope', badge: '⚡' },
-  { id: 'qwen_flash', label: 'Qwen Flash',  tag: 'Qwen', provider: 'dashscope', badge: '🚀' },
-  { id: 'qwen_turbo', label: 'Qwen Turbo',  tag: 'Qwen', provider: 'dashscope', badge: '💰' },
-  { id: 'qwq_plus',   label: 'QwQ Plus',    tag: 'Qwen', provider: 'dashscope', badge: '🧠' },
-]
+const PROVIDER_ORDER = ['aws', 'dashscope', 'gemini', 'groq', 'openrouter', 'glm']
+const PROVIDER_META: Record<string, { emoji: string; color: string; label: string }> = {
+  aws:        { emoji: '☁️',  color: '#ff9900', label: 'AWS Bedrock' },
+  dashscope:  { emoji: '🧠',  color: '#ff8c00', label: 'Dashscope' },
+  gemini:     { emoji: '✨',  color: '#4285f4', label: 'Google Gemini' },
+  groq:       { emoji: '⚡',  color: '#f97316', label: 'Groq' },
+  openrouter: { emoji: '🔀',  color: '#8b5cf6', label: 'OpenRouter' },
+  glm:        { emoji: '🌐',  color: '#06b6d4', label: 'ZhipuAI GLM' },
+}
+const MODEL_GROUPS = getModelsByProvider()
 type ArtStyle = 'cinematic_realistic' | 'anime_stylized' | 'comic_book' | '3d_render' | 'oil_painting' | 'pixel_art'
 
 const IMAGE_MODELS = [
@@ -95,7 +96,8 @@ export function Home() {
   const [title, setTitle] = useState('')
   const [story, setStory] = useState('')
   const [platform, setPlatform] = useState<Platform>('youtube_shorts')
-  const [brainModel, setBrainModel] = useState<BrainModel>('gemini')
+  const [brainModel, setBrainModel] = useState<string>('gemini-2.0-flash')
+  const [userSettings, setUserSettings] = useState<Record<string, string>>({})
   const [language, setLanguage] = useState<Language>('id')
   const [artStyle, setArtStyle] = useState<ArtStyle>('cinematic_realistic')
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9_16')
@@ -133,7 +135,10 @@ export function Home() {
     } else {
       try {
         const keys = JSON.parse(stored)
-        if (!keys.geminiApiKey && !keys.awsAccessKeyId && !keys.dashscopeApiKey) {
+        setUserSettings(keys)
+        const hasAnyKey = keys.geminiApiKey || keys.awsAccessKeyId || keys.dashscopeApiKey ||
+          keys.groqApiKey || keys.openrouterApiKey || keys.glmApiKey
+        if (!hasAnyKey) {
           setError('Please set your API keys in Settings first')
         } else {
           setError('')
@@ -171,25 +176,39 @@ export function Home() {
         if (s.elevenLabsApiKey) apiHeaders['X-ElevenLabs-Key'] = s.elevenLabsApiKey
         if (s.runwayApiKey) apiHeaders['X-Runway-Key'] = s.runwayApiKey
         if (s.dashscopeApiKey) apiHeaders['X-Dashscope-Api-Key'] = s.dashscopeApiKey
+        if (s.groqApiKey) apiHeaders['X-Groq-Api-Key'] = s.groqApiKey
+        if (s.openrouterApiKey) apiHeaders['X-Openrouter-Api-Key'] = s.openrouterApiKey
+        if (s.glmApiKey) apiHeaders['X-Glm-Api-Key'] = s.glmApiKey
       }
     } catch { /* ignore */ }
 
-    const selectedBrainModel = BRAIN_MODELS.find(m => m.id === brainModel)
-    const isDashscopeBrain = selectedBrainModel?.provider === 'dashscope'
+    const selectedModelDef = getModelById(brainModel)
+    const modelProvider = selectedModelDef?.provider || 'gemini'
 
-    if (!isDashscopeBrain && !apiHeaders['X-Gemini-Key'] && !apiHeaders['X-AWS-Access-Key-Id']) {
-      setError('Please add your API keys in Settings first')
-      setLoading(false)
-      setCurrentStep(-1)
-      updateTask(taskId, { status: 'error', error: 'Missing API keys' })
-      return
+    if (modelProvider === 'aws' && !apiHeaders['X-AWS-Access-Key-Id']) {
+      setError('Please add your AWS credentials in Settings first')
+      setLoading(false); setCurrentStep(-1)
+      updateTask(taskId, { status: 'error', error: 'Missing AWS keys' }); return
     }
-    if (isDashscopeBrain && !apiHeaders['X-Dashscope-Api-Key']) {
+    if (modelProvider === 'dashscope' && !apiHeaders['X-Dashscope-Api-Key']) {
       setError('Please add your Dashscope API key in Settings first')
-      setLoading(false)
-      setCurrentStep(-1)
-      updateTask(taskId, { status: 'error', error: 'Missing Dashscope key' })
-      return
+      setLoading(false); setCurrentStep(-1)
+      updateTask(taskId, { status: 'error', error: 'Missing Dashscope key' }); return
+    }
+    if (modelProvider === 'groq' && !apiHeaders['X-Groq-Api-Key']) {
+      setError('Please add your Groq API key in Settings first')
+      setLoading(false); setCurrentStep(-1)
+      updateTask(taskId, { status: 'error', error: 'Missing Groq key' }); return
+    }
+    if (modelProvider === 'openrouter' && !apiHeaders['X-Openrouter-Api-Key']) {
+      setError('Please add your OpenRouter API key in Settings first')
+      setLoading(false); setCurrentStep(-1)
+      updateTask(taskId, { status: 'error', error: 'Missing OpenRouter key' }); return
+    }
+    if (modelProvider === 'glm' && !apiHeaders['X-Glm-Api-Key']) {
+      setError('Please add your GLM API key in Settings first')
+      setLoading(false); setCurrentStep(-1)
+      updateTask(taskId, { status: 'error', error: 'Missing GLM key' }); return
     }
 
     stepTimerRef.current = setTimeout(() => {
@@ -207,9 +226,11 @@ export function Home() {
         Math.round(totalDuration / scenes)
       )
 
-      const brainEndpoint = isDashscopeBrain
-        ? 'https://fuzzy-vid-worker.officialdian21.workers.dev/api/dashscope/brain'
-        : 'https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/generate'
+      const brainEndpoint = modelProvider === 'aws'
+        ? `${WORKER_URL}/api/brain/generate`
+        : modelProvider === 'dashscope'
+          ? `${WORKER_URL}/api/dashscope/brain`
+          : `${WORKER_URL}/api/brain/provider`
 
       const res = await fetch(brainEndpoint, {
         method: 'POST',
@@ -499,36 +520,79 @@ export function Home() {
         {/* AI Brain */}
         <div style={{ marginBottom: '14px' }}>
           <span style={labelStyle}>AI Brain</span>
-          <select
-            value={brainModel}
-            onChange={e => setBrainModel(e.target.value as BrainModel)}
-            style={dropdownStyle}
-          >
-            <optgroup label="── AWS Bedrock ──">
-              {BRAIN_MODELS.filter(m => m.provider === 'bedrock').map(m => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="── Qwen Dashscope ──">
-              {BRAIN_MODELS.filter(m => m.provider === 'dashscope').map(m => (
-                <option key={m.id} value={m.id}>{m.badge} {m.label}</option>
-              ))}
-            </optgroup>
-          </select>
-          {BRAIN_MODELS.find(m => m.id === brainModel)?.tag === 'Qwen' && (
-            <div style={{
-              marginTop: '5px',
-              padding: '4px 8px',
-              background: 'rgba(255,140,0,0.1)',
-              border: '0.5px solid rgba(255,140,0,0.25)',
-              borderRadius: '8px',
-              fontSize: '10px',
-              color: '#ff8c00',
-              fontWeight: 600,
-            }}>
-              Qwen model — requires Dashscope API key in Settings
-            </div>
-          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {PROVIDER_ORDER.map(pid => {
+              const models = MODEL_GROUPS[pid]
+              if (!models || models.length === 0) return null
+              const meta = PROVIDER_META[pid]
+              const providerHasKey = pid === 'gemini' || models.some(m => hasRequiredKey(m, userSettings))
+              return (
+                <div key={pid}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '5px' }}>
+                    <span style={{ fontSize: '11px' }}>{meta.emoji}</span>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: meta.color }}>{meta.label}</span>
+                    {!providerHasKey && (
+                      <span style={{
+                        fontSize: '9px', padding: '0 5px', borderRadius: '6px',
+                        background: 'rgba(255,59,48,0.1)', color: '#ff3b30', fontWeight: 600,
+                      }}>No key</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                    {models.map(m => {
+                      const hasKey = pid === 'gemini' || hasRequiredKey(m, userSettings)
+                      const selected = brainModel === m.id
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() => { if (hasKey) setBrainModel(m.id) }}
+                          style={{
+                            padding: '5px 9px', borderRadius: '10px',
+                            border: selected ? `1.5px solid ${meta.color}` : '0.5px solid rgba(0,0,0,0.08)',
+                            background: selected ? `${meta.color}22` : hasKey ? 'rgba(255,255,255,0.8)' : 'rgba(118,118,128,0.05)',
+                            color: selected ? meta.color : hasKey ? '#1d1d1f' : 'rgba(60,60,67,0.3)',
+                            fontSize: '11px', fontWeight: selected ? 700 : 400,
+                            cursor: hasKey ? 'pointer' : 'not-allowed',
+                            transition: 'all 0.15s',
+                            display: 'flex', alignItems: 'center', gap: '3px',
+                          }}
+                        >
+                          {!hasKey && <span style={{ fontSize: '9px' }}>🔒</span>}
+                          <span>{m.label}</span>
+                          {m.free && !selected && (
+                            <span style={{
+                              fontSize: '8px', padding: '0 3px', borderRadius: '4px',
+                              background: 'rgba(52,199,89,0.15)', color: '#34c759', fontWeight: 700,
+                            }}>FREE</span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          {(() => {
+            const sel = getModelById(brainModel)
+            if (!sel) return null
+            return (
+              <div style={{
+                marginTop: '8px', padding: '7px 10px',
+                background: 'rgba(118,118,128,0.06)',
+                border: '0.5px solid rgba(118,118,128,0.12)',
+                borderRadius: '10px',
+                display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap',
+              }}>
+                <span>{sel.providerEmoji}</span>
+                <span style={{ fontSize: '11px', color: sel.providerColor, fontWeight: 600 }}>{sel.providerLabel}</span>
+                <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '10px' }}>·</span>
+                <span style={{ fontSize: '11px', color: 'rgba(60,60,67,0.5)' }}>Speed: {sel.speedLabel}</span>
+                <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '10px' }}>·</span>
+                <span style={{ fontSize: '11px', color: 'rgba(60,60,67,0.5)' }}>{sel.bestFor.join(', ')}</span>
+              </div>
+            )
+          })()}
         </div>
 
         {/* Language */}
@@ -762,9 +826,12 @@ export function Home() {
 
         {/* Scenes */}
         <div style={{ marginBottom: '17px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '7px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '7px', alignItems: 'center' }}>
             <span style={labelStyle}>Scenes</span>
-            <span style={{ color: '#ff6b35', fontSize: '13px', fontWeight: 700 }}>{scenes}</span>
+            <span style={{ color: '#ff6b35', fontSize: '13px', fontWeight: 700 }}>
+              {scenes}
+              <span style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginLeft: '6px', fontWeight: 400 }}>(~{scenes * 7}s total)</span>
+            </span>
           </div>
           <input
             type="range" min={3} max={15} value={scenes}

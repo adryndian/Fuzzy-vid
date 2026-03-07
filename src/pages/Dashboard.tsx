@@ -10,6 +10,7 @@ interface StoryboardRow {
   language: string
   art_style: string
   total_scenes: number
+  tone?: string
   status: string
   updated_at: string
 }
@@ -29,6 +30,17 @@ const PLATFORM_LABELS: Record<string, string> = {
 const LANG_FLAGS: Record<string, string> = {
   id: '🇮🇩',
   en: '🇺🇸',
+}
+
+const TONE_BADGES: Record<string, { emoji: string; color: string }> = {
+  documentary_viral:      { emoji: '📰', color: '#ff3b30' },
+  natural_genz:           { emoji: '✌️', color: '#007aff' },
+  informative:            { emoji: '💡', color: '#5856d6' },
+  narrative_storytelling: { emoji: '📖', color: '#ff6b35' },
+  product_ads:            { emoji: '🛍️', color: '#34c759' },
+  educational:            { emoji: '🎓', color: '#af52de' },
+  entertainment:          { emoji: '🎉', color: '#ffcc00' },
+  motivational:           { emoji: '💪', color: '#ff9500' },
 }
 
 export function Dashboard() {
@@ -212,6 +224,17 @@ export function Dashboard() {
                   <span style={{ fontSize: '11px' }}>{LANG_FLAGS[board.language] || ''}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                  {board.tone && TONE_BADGES[board.tone] && (
+                    <span style={{
+                      padding: '2px 7px', borderRadius: '8px', fontSize: '10px',
+                      background: `${TONE_BADGES[board.tone].color}15`,
+                      color: TONE_BADGES[board.tone].color,
+                      border: `0.5px solid ${TONE_BADGES[board.tone].color}30`,
+                      fontWeight: 600,
+                    }}>
+                      {TONE_BADGES[board.tone].emoji} {board.tone.replace(/_/g, ' ')}
+                    </span>
+                  )}
                   <span style={{
                     background: 'rgba(0,122,255,0.1)',
                     color: '#007aff',
