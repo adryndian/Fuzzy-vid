@@ -32,6 +32,10 @@ export function getApiHeaders(userId?: string): Record<string, string> {
       if (keys.audioRegion)        headers['X-Audio-Region'] = keys.audioRegion
       if (keys.elevenLabsApiKey)   headers['X-ElevenLabs-Key'] = keys.elevenLabsApiKey
       if (keys.dashscopeApiKey)    headers['X-Dashscope-Api-Key'] = keys.dashscopeApiKey
+      if (keys.groqApiKey)         headers['X-Groq-Api-Key'] = keys.groqApiKey
+      if (keys.openrouterApiKey)   headers['X-Openrouter-Api-Key'] = keys.openrouterApiKey
+      if (keys.glmApiKey)          headers['X-Glm-Api-Key'] = keys.glmApiKey
+      if (keys.geminiApiKey)       headers['X-Gemini-Api-Key'] = keys.geminiApiKey
     }
   } catch { /* ignore */ }
   return headers
@@ -183,6 +187,40 @@ export async function regenerateVideoPrompt(params: {
   })
   if (!res.ok) throw new Error('Video prompt regeneration failed')
   return res.json()
+}
+
+export async function callProviderBrain(
+  systemPrompt: string,
+  userPrompt: string,
+  brainModel: string,
+  userId?: string
+): Promise<string> {
+  const storageKey = userId ? `fuzzy_settings_${userId}` : 'fuzzy_short_settings'
+  const settings = JSON.parse(localStorage.getItem(storageKey) || '{}')
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (settings.groqApiKey)        headers['X-Groq-Api-Key'] = settings.groqApiKey
+  if (settings.openrouterApiKey)  headers['X-Openrouter-Api-Key'] = settings.openrouterApiKey
+  if (settings.glmApiKey)         headers['X-Glm-Api-Key'] = settings.glmApiKey
+  if (settings.geminiApiKey)      headers['X-Gemini-Api-Key'] = settings.geminiApiKey
+
+  const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      brain_model: brainModel,
+      system_prompt: systemPrompt,
+      user_prompt: userPrompt,
+      max_tokens: 4096,
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json() as { error: string }
+    throw new Error(err.error || `Provider brain failed: ${res.status}`)
+  }
+
+  const data = await res.json() as { content: string }
+  return data.content
 }
 
 export async function generateAudio(params: {

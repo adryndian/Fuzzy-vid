@@ -1,0 +1,316 @@
+// worker/lib/providers.ts
+// Universal OpenAI-compatible provider handler
+
+import type { Env } from '../index'
+
+export interface ProviderConfig {
+  id: string
+  name: string
+  baseUrl: string
+  models: ModelInfo[]
+  authHeader: (apiKey: string) => Record<string, string>
+  extraHeaders?: Record<string, string>
+}
+
+export interface ModelInfo {
+  id: string
+  label: string
+  contextWindow: number
+  free: boolean
+  speed: 'fast' | 'medium' | 'slow'
+  bestFor: string[]
+}
+
+// ─── PROVIDER REGISTRY ────────────────────────────────────────────
+
+export const PROVIDERS: Record<string, ProviderConfig> = {
+
+  groq: {
+    id: 'groq',
+    name: 'Groq',
+    baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
+    authHeader: (key) => ({ 'Authorization': `Bearer ${key}` }),
+    models: [
+      {
+        id: 'llama-3.3-70b-versatile',
+        label: 'Llama 3.3 70B ⚡',
+        contextWindow: 128000,
+        free: true,
+        speed: 'fast',
+        bestFor: ['brain', 'creative', 'json'],
+      },
+      {
+        id: 'llama-3.1-8b-instant',
+        label: 'Llama 3.1 8B Instant ⚡⚡',
+        contextWindow: 128000,
+        free: true,
+        speed: 'fast',
+        bestFor: ['rewrite', 'short_tasks'],
+      },
+      {
+        id: 'gemma2-9b-it',
+        label: 'Gemma 2 9B ⚡',
+        contextWindow: 8192,
+        free: true,
+        speed: 'fast',
+        bestFor: ['rewrite', 'vo'],
+      },
+      {
+        id: 'mixtral-8x7b-32768',
+        label: 'Mixtral 8x7B',
+        contextWindow: 32768,
+        free: true,
+        speed: 'medium',
+        bestFor: ['brain', 'multilingual'],
+      },
+    ],
+  },
+
+  openrouter: {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1/chat/completions',
+    authHeader: (key) => ({
+      'Authorization': `Bearer ${key}`,
+      'HTTP-Referer': 'https://fuzzystuf.pages.dev',
+      'X-Title': 'Fuzzy Short',
+    }),
+    models: [
+      {
+        id: 'google/gemma-3-27b-it:free',
+        label: 'Gemma 3 27B 🆓',
+        contextWindow: 96000,
+        free: true,
+        speed: 'medium',
+        bestFor: ['brain', 'creative', 'json'],
+      },
+      {
+        id: 'meta-llama/llama-3.3-70b-instruct:free',
+        label: 'Llama 3.3 70B 🆓',
+        contextWindow: 131072,
+        free: true,
+        speed: 'medium',
+        bestFor: ['brain', 'json'],
+      },
+      {
+        id: 'deepseek/deepseek-r1:free',
+        label: 'DeepSeek R1 🆓🧠',
+        contextWindow: 163840,
+        free: true,
+        speed: 'slow',
+        bestFor: ['complex_reasoning', 'long_form'],
+      },
+      {
+        id: 'deepseek/deepseek-v3-0324:free',
+        label: 'DeepSeek V3 🆓',
+        contextWindow: 131072,
+        free: true,
+        speed: 'medium',
+        bestFor: ['brain', 'creative'],
+      },
+      {
+        id: 'mistralai/mistral-7b-instruct:free',
+        label: 'Mistral 7B 🆓',
+        contextWindow: 32768,
+        free: true,
+        speed: 'fast',
+        bestFor: ['rewrite', 'short_tasks'],
+      },
+      {
+        id: 'google/gemini-2.0-flash-exp:free',
+        label: 'Gemini 2.0 Flash Exp 🆓',
+        contextWindow: 1048576,
+        free: true,
+        speed: 'fast',
+        bestFor: ['brain', 'multilingual', 'json'],
+      },
+    ],
+  },
+
+  glm: {
+    id: 'glm',
+    name: 'GLM (ZhipuAI)',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    authHeader: (key) => ({ 'Authorization': `Bearer ${key}` }),
+    models: [
+      {
+        id: 'glm-4-flash',
+        label: 'GLM-4-Flash 🆓',
+        contextWindow: 128000,
+        free: true,
+        speed: 'fast',
+        bestFor: ['brain', 'multilingual', 'chinese'],
+      },
+      {
+        id: 'glm-4-flash-250414',
+        label: 'GLM-4-Flash 250414 🆓',
+        contextWindow: 128000,
+        free: true,
+        speed: 'fast',
+        bestFor: ['brain', 'json', 'multilingual'],
+      },
+      {
+        id: 'glm-z1-flash',
+        label: 'GLM-Z1-Flash 🆓🧠',
+        contextWindow: 128000,
+        free: true,
+        speed: 'medium',
+        bestFor: ['reasoning', 'complex'],
+      },
+    ],
+  },
+
+  gemini: {
+    id: 'gemini',
+    name: 'Google Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    authHeader: (key) => ({ 'Authorization': `Bearer ${key}` }),
+    models: [
+      {
+        id: 'gemini-2.0-flash',
+        label: 'Gemini 2.0 Flash ⚡',
+        contextWindow: 1048576,
+        free: true,
+        speed: 'fast',
+        bestFor: ['brain', 'creative', 'json', 'multilingual'],
+      },
+      {
+        id: 'gemini-2.0-flash-lite',
+        label: 'Gemini 2.0 Flash Lite ⚡⚡',
+        contextWindow: 1048576,
+        free: true,
+        speed: 'fast',
+        bestFor: ['rewrite', 'short_tasks', 'vo'],
+      },
+      {
+        id: 'gemini-1.5-flash',
+        label: 'Gemini 1.5 Flash',
+        contextWindow: 1048576,
+        free: true,
+        speed: 'fast',
+        bestFor: ['brain', 'json'],
+      },
+      {
+        id: 'gemini-1.5-flash-8b',
+        label: 'Gemini 1.5 Flash 8B ⚡⚡',
+        contextWindow: 1048576,
+        free: true,
+        speed: 'fast',
+        bestFor: ['rewrite', 'short_tasks'],
+      },
+      {
+        id: 'gemini-2.5-pro-exp-03-25',
+        label: 'Gemini 2.5 Pro Exp 🧠',
+        contextWindow: 1048576,
+        free: true,
+        speed: 'slow',
+        bestFor: ['complex_reasoning', 'long_form', 'brain'],
+      },
+    ],
+  },
+}
+
+// Get provider config by model ID prefix or explicit provider
+export function getProviderForModel(modelId: string): ProviderConfig | null {
+  // Check explicit provider prefix: "groq:llama-3.3-70b-versatile"
+  if (modelId.includes(':') && !modelId.endsWith(':free')) {
+    const [providerId] = modelId.split(':')
+    return PROVIDERS[providerId] || null
+  }
+
+  // Auto-detect by model ID patterns
+  if (modelId.startsWith('llama') || modelId.startsWith('gemma2') || modelId.startsWith('mixtral')) {
+    return PROVIDERS.groq
+  }
+  if (modelId.includes('/') || modelId.endsWith(':free')) {
+    return PROVIDERS.openrouter
+  }
+  if (modelId.startsWith('glm') || modelId.startsWith('chatglm')) {
+    return PROVIDERS.glm
+  }
+  if (modelId.startsWith('gemini')) {
+    return PROVIDERS.gemini
+  }
+
+  return null
+}
+
+// Get API key for provider from env
+export function getProviderApiKey(provider: ProviderConfig, env: Env): string {
+  switch (provider.id) {
+    case 'groq': return env.GROQ_API_KEY || ''
+    case 'openrouter': return env.OPENROUTER_API_KEY || ''
+    case 'glm': return env.GLM_API_KEY || ''
+    case 'gemini': return env.GEMINI_API_KEY || ''
+    default: return ''
+  }
+}
+
+// Universal OpenAI-compat completion call
+export async function callProvider(
+  provider: ProviderConfig,
+  apiKey: string,
+  modelId: string,
+  messages: { role: string; content: string }[],
+  options?: {
+    temperature?: number
+    max_tokens?: number
+    response_format?: { type: 'json_object' }
+  }
+): Promise<string> {
+  if (!apiKey) {
+    throw new Error(`API key required for ${provider.name}. Add it in Settings.`)
+  }
+
+  // Strip provider prefix if present (but not :free suffixes)
+  const cleanModelId = modelId.includes(':') && !modelId.endsWith(':free')
+    ? modelId.split(':').slice(1).join(':')
+    : modelId
+
+  const body: Record<string, unknown> = {
+    model: cleanModelId,
+    messages,
+    temperature: options?.temperature ?? 0.7,
+    max_tokens: options?.max_tokens ?? 4096,
+  }
+
+  // response_format not supported by all providers
+  if (options?.response_format && provider.id !== 'glm') {
+    body.response_format = options.response_format
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...provider.authHeader(apiKey),
+    ...(provider.extraHeaders || {}),
+  }
+
+  const res = await fetch(provider.baseUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`${provider.name} API error ${res.status}: ${errText.slice(0, 200)}`)
+  }
+
+  const data = await res.json() as {
+    choices: { message: { content: string } }[]
+    error?: { message: string }
+  }
+
+  if (data.error) throw new Error(`${provider.name}: ${data.error.message}`)
+
+  return data.choices?.[0]?.message?.content || ''
+}
+
+// Export model list for frontend
+export function getAllModelsForFrontend() {
+  return Object.values(PROVIDERS).map(p => ({
+    provider: p.id,
+    providerName: p.name,
+    models: p.models,
+  }))
+}

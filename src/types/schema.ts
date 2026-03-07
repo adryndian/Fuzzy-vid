@@ -283,6 +283,10 @@ export interface AppSettings {
   elevenLabsApiKey: string
   runwayApiKey: string
   dashscopeApiKey: string
+  // Provider keys (OpenAI-compatible free-tier providers)
+  groqApiKey: string
+  openrouterApiKey: string
+  glmApiKey: string
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -296,6 +300,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   elevenLabsApiKey: '',
   runwayApiKey: '',
   dashscopeApiKey: '',
+  groqApiKey: '',
+  openrouterApiKey: '',
+  glmApiKey: '',
 }
 
 export const SETTINGS_STORAGE_KEY = 'fuzzy_short_settings'

@@ -42,10 +42,20 @@ export function Settings() {
 
     // Load from D1 first, fallback to user-specific localStorage
     getApiKeys()
-      .then((keys: Partial<AppSettings>) => {
+      .then((keys: Record<string, string>) => {
         if (keys && Object.keys(keys).length > 0) {
           setSettings(prev => {
-            const merged = { ...prev, ...keys }
+            const merged = {
+              ...prev,
+              awsAccessKeyId:     keys.aws_access_key_id     || prev.awsAccessKeyId,
+              awsSecretAccessKey: keys.aws_secret_access_key || prev.awsSecretAccessKey,
+              dashscopeApiKey:    keys.dashscope_api_key     || prev.dashscopeApiKey,
+              elevenLabsApiKey:   keys.elevenlabs_api_key    || prev.elevenLabsApiKey,
+              geminiApiKey:       keys.gemini_api_key        || prev.geminiApiKey,
+              groqApiKey:         keys.groq_api_key          || prev.groqApiKey,
+              openrouterApiKey:   keys.openrouter_api_key    || prev.openrouterApiKey,
+              glmApiKey:          keys.glm_api_key           || prev.glmApiKey,
+            }
             localStorage.setItem(storageKey, JSON.stringify(merged))
             return merged
           })
@@ -80,6 +90,10 @@ export function Settings() {
         aws_secret_access_key: settings.awsSecretAccessKey || '',
         dashscope_api_key: settings.dashscopeApiKey || '',
         elevenlabs_api_key: settings.elevenLabsApiKey || '',
+        gemini_api_key: settings.geminiApiKey || '',
+        groq_api_key: settings.groqApiKey || '',
+        openrouter_api_key: settings.openrouterApiKey || '',
+        glm_api_key: settings.glmApiKey || '',
       })
       await updatePreferences({
         brain_region: settings.brainRegion,
@@ -489,6 +503,87 @@ export function Settings() {
           <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.4)', marginTop: '4px', margin: 0 }}>
             App works without these — AWS services used as fallback
           </p>
+        </div>
+
+        {/* ── Groq ── */}
+        <div style={s.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '8px',
+              background: 'rgba(249,115,22,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '16px',
+            }}>⚡</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: '#1d1d1f' }}>Groq</div>
+              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.5)' }}>
+                Free • Fastest inference • console.groq.com
+              </div>
+            </div>
+            <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer"
+              style={{ marginLeft: 'auto', fontSize: '11px', color: '#007aff', textDecoration: 'none' }}>
+              Get Key →
+            </a>
+          </div>
+          <SecretInput
+            label="Groq API Key"
+            fieldKey="groqApiKey"
+            placeholder="gsk_xxxxxxxxxxxxxxxxxxxx"
+          />
+        </div>
+
+        {/* ── OpenRouter ── */}
+        <div style={s.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '8px',
+              background: 'rgba(139,92,246,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '16px',
+            }}>🔀</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: '#1d1d1f' }}>OpenRouter</div>
+              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.5)' }}>
+                Free models • DeepSeek, Gemma, Llama • openrouter.ai
+              </div>
+            </div>
+            <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer"
+              style={{ marginLeft: 'auto', fontSize: '11px', color: '#007aff', textDecoration: 'none' }}>
+              Get Key →
+            </a>
+          </div>
+          <SecretInput
+            label="OpenRouter API Key"
+            fieldKey="openrouterApiKey"
+            placeholder="sk-or-xxxxxxxxxxxxxxxxxxxx"
+          />
+        </div>
+
+        {/* ── GLM / ZhipuAI ── */}
+        <div style={s.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '8px',
+              background: 'rgba(6,182,212,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '16px',
+            }}>🌐</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: '#1d1d1f' }}>GLM-4-Flash</div>
+              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.5)' }}>
+                Free unlimited • ZhipuAI • open.bigmodel.cn
+              </div>
+            </div>
+            <a href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noreferrer"
+              style={{ marginLeft: 'auto', fontSize: '11px', color: '#007aff', textDecoration: 'none' }}>
+              Get Key →
+            </a>
+          </div>
+          <SecretInput
+            label="GLM API Key"
+            fieldKey="glmApiKey"
+            placeholder="xxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxx"
+          />
         </div>
 
         {/* ── Security Note ── */}

@@ -1,5 +1,7 @@
 import { verifyClerkJWT, ensureUser } from './lib/auth'
 import type { ClerkUser } from './lib/auth'
+import { handleProviderBrain } from './handlers/brain-provider'
+import { getAllModelsForFrontend } from './lib/providers'
 import {
   handleGetProfile, handleUpdatePreferences,
   handleSaveApiKeys, handleGetDecryptedApiKeys,
@@ -23,6 +25,9 @@ export interface Env {
   RUNWAY_API_KEY: string;
   ELEVENLABS_API_KEY: string;
   DASHSCOPE_API_KEY: string;
+  GROQ_API_KEY: string;
+  OPENROUTER_API_KEY: string;
+  GLM_API_KEY: string;
   CLERK_SECRET_KEY: string;
   CLERK_JWKS_URL: string;
   R2_BUCKET_NAME?: string;
@@ -40,6 +45,10 @@ export interface Credentials {
   elevenLabsApiKey: string
   runwayApiKey: string
   dashscopeApiKey: string
+  // Provider keys — user header takes priority, env fallback OK (shared free-tier keys)
+  groqApiKey: string
+  openrouterApiKey: string
+  glmApiKey: string
   r2AccountId: string
   r2AccessKeyId: string
   r2SecretAccessKey: string
@@ -78,6 +87,10 @@ export function extractCredentials(request: Request, env: Env): Credentials {
     elevenLabsApiKey:   h.get('X-ElevenLabs-Key')         || '',
     runwayApiKey:       h.get('X-Runway-Key')             || '',
     dashscopeApiKey:    h.get('X-Dashscope-Api-Key')      || '',
+    // Provider keys — user key takes priority, env fallback OK (shared free-tier keys)
+    groqApiKey:        h.get('X-Groq-Api-Key')        || env.GROQ_API_KEY        || '',
+    openrouterApiKey:  h.get('X-Openrouter-Api-Key')  || env.OPENROUTER_API_KEY  || '',
+    glmApiKey:         h.get('X-Glm-Api-Key')          || env.GLM_API_KEY         || '',
     // Region preferences from headers
     brainRegion:        h.get('X-Brain-Region')           || 'us-east-1',
     imageRegion:        h.get('X-Image-Region')           || 'us-east-1',
@@ -97,7 +110,7 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Gemini-Key, X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key, X-Brain-Region, X-Image-Region, X-Audio-Region, X-ElevenLabs-Key, X-Runway-Key, X-Dashscope-Api-Key, X-R2-Account-Id, X-R2-Access-Key-Id, X-R2-Secret-Access-Key, X-R2-Bucket',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Gemini-Key, X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key, X-Brain-Region, X-Image-Region, X-Audio-Region, X-ElevenLabs-Key, X-Runway-Key, X-Dashscope-Api-Key, X-R2-Account-Id, X-R2-Access-Key-Id, X-R2-Secret-Access-Key, X-R2-Bucket, X-Groq-Api-Key, X-Openrouter-Api-Key, X-Glm-Api-Key, X-Gemini-Api-Key',
       'Access-Control-Max-Age': '86400',
     }
 
@@ -181,6 +194,16 @@ export default {
         } else {
           response = Response.json({ error: 'Method not allowed' }, { status: 405 })
         }
+      }
+      // ── Provider routes ───────────────────────────────────────────────────
+      else if (path === '/api/providers/models' && request.method === 'GET') {
+        response = Response.json(
+          { providers: getAllModelsForFrontend() },
+          { headers: { 'Access-Control-Allow-Origin': '*' } }
+        )
+      }
+      else if (path === '/api/brain/provider' && request.method === 'POST') {
+        response = await handleProviderBrain(request, env)
       }
       // ── Brain routes ─────────────────────────────────────────────────────
       else if (path === '/api/brain/rewrite-vo') {
