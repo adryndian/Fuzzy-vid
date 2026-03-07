@@ -42,11 +42,15 @@ export default function VeoPromptSection({
   const subToneDef = VEO_SUBTONES[selectedSubTone as VeoSubTone]
 
   const handleCopy = useCallback(async () => {
-    if (!veoPrompt?.full_veo_prompt) return
-    await navigator.clipboard.writeText(veoPrompt.full_veo_prompt)
+    if (!veoPrompt) return
+    const text = showRaw
+      ? JSON.stringify(veoPrompt, null, 2)
+      : (veoPrompt.full_veo_prompt || '')
+    if (!text) return
+    await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }, [veoPrompt])
+  }, [veoPrompt, showRaw])
 
   const handleRegenerate = async () => {
     setRegenerating(true)
@@ -245,7 +249,7 @@ export default function VeoPromptSection({
                   color: copied ? '#34c759' : '#007aff',
                   fontSize: '11px', fontWeight: 700, cursor: 'pointer',
                 }}>
-                  {copied ? '✅ Copied!' : '📋 Copy Prompt'}
+                  {copied ? '✅ Copied!' : showRaw ? '📋 Copy JSON' : '📋 Copy Prompt'}
                 </button>
 
                 <button onClick={openInAIStudio} style={{
