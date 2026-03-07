@@ -330,30 +330,26 @@ export function Settings() {
     setGeminiStatus('testing')
     setGeminiMsg('Testing connection...')
     try {
-      const res = await fetch(`${WORKER_URL}/api/brain/generate`, {
+      const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Gemini-Key': settings.geminiApiKey,
-          'X-Brain-Region': settings.brainRegion,
+          'X-Gemini-Api-Key': settings.geminiApiKey,
         },
         body: JSON.stringify({
-          title: 'Connection Test',
-          story: 'Short test story',
-          platform: 'youtube_shorts',
-          brain_model: 'gemini',
-          language: 'id',
-          art_style: 'cinematic_realistic',
-          total_scenes: 1,
+          brain_model: 'gemini-2.0-flash',
+          system_prompt: 'You are helpful.',
+          user_prompt: 'Reply with: {"ok":true}',
+          max_tokens: 20,
         }),
       })
-      const data = await res.json() as Record<string, unknown>
-      if (res.ok) {
+      const data = await res.json() as { content?: string; error?: string }
+      if (res.ok && data.content) {
         setGeminiStatus('success')
-        setGeminiMsg('✅ Gemini API Key valid!')
+        setGeminiMsg('✅ Gemini connected!')
       } else {
         setGeminiStatus('failed')
-        setGeminiMsg(`❌ ${(data.error as string) || `HTTP ${res.status}`}`)
+        setGeminiMsg(`❌ ${data.error || `HTTP ${res.status}`}`)
       }
     } catch {
       setGeminiStatus('failed')

@@ -12,7 +12,7 @@ import { buildBrainSystemPrompt, buildBrainUserPrompt, type Tone, type Language 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Brain-Provider, X-Brain-Model',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Gemini-Key, X-Gemini-Api-Key, X-Groq-Api-Key, X-Openrouter-Api-Key, X-Glm-Api-Key',
 }
 
 export async function handleProviderBrain(
@@ -74,7 +74,10 @@ export async function handleProviderBrain(
   }
 
   // Get API key — user header takes priority, env fallback OK for shared free-tier keys
-  const userKey = request.headers.get(`X-${provider.id.charAt(0).toUpperCase() + provider.id.slice(1)}-Api-Key`) || ''
+  // Gemini accepts both X-Gemini-Api-Key (new standard) and X-Gemini-Key (legacy)
+  const userKey = provider.id === 'gemini'
+    ? (request.headers.get('X-Gemini-Api-Key') || request.headers.get('X-Gemini-Key') || '')
+    : (request.headers.get(`X-${provider.id.charAt(0).toUpperCase() + provider.id.slice(1)}-Api-Key`) || '')
   const apiKey = userKey || getProviderApiKey(provider, env)
   if (!apiKey) {
     return Response.json(

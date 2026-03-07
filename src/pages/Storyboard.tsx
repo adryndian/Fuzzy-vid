@@ -1395,7 +1395,8 @@ export function Storyboard() {
                 imagePrompt={editedPrompts[sceneNum] || (scene.image_prompt as string) || ''}
                 tone={(storyboard.tone as string) || 'narrative_storytelling'}
                 platform={(storyboard.platform as string) || 'TikTok'}
-                brainModel="gemini-2.0-flash"
+                brainModel={(storyboard.brain_model as string) || 'gemini-2.0-flash'}
+                apiHeaders={getApiHeaders(user?.id)}
                 onUpdate={(vp) => {
                   updateAsset(sceneNum, { veoPrompt: vp })
                   saveSceneAsset({

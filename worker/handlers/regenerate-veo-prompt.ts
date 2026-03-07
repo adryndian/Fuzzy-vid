@@ -62,7 +62,11 @@ Generate the Veo 3.1 prompt for this scene.`
       throw new Error(`Unknown model: ${body.brain_model}. Cannot generate Veo prompt.`)
     }
 
-    const apiKey = getProviderApiKey(provider, env)
+    // Read user-supplied key from request headers (same pattern as brain-provider.ts)
+    const userKey = provider.id === 'gemini'
+      ? (request.headers.get('X-Gemini-Api-Key') || request.headers.get('X-Gemini-Key') || '')
+      : (request.headers.get(`X-${provider.id.charAt(0).toUpperCase() + provider.id.slice(1)}-Api-Key`) || '')
+    const apiKey = userKey || getProviderApiKey(provider, env)
     const content = await callProvider(provider, apiKey, body.brain_model, [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },

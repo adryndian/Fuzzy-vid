@@ -1,8 +1,7 @@
 // src/components/VeoPromptSection.tsx
 import { useState, useCallback } from 'react'
 import { VEO_SUBTONES, TONE_TO_SUBTONES, type VeoSubTone } from '../lib/veoSubtones'
-
-const WORKER_URL = import.meta.env.VITE_WORKER_URL as string
+import { WORKER_URL } from '../lib/api'
 
 interface VeoPrompt {
   sub_tone?: string
@@ -23,12 +22,13 @@ interface Props {
   tone: string
   platform: string
   brainModel: string
+  apiHeaders?: Record<string, string>
   onUpdate: (veoPrompt: VeoPrompt) => void
 }
 
 export default function VeoPromptSection({
   sceneNumber, veoPrompt, voScript, imagePrompt,
-  tone, platform, brainModel, onUpdate,
+  tone, platform, brainModel, apiHeaders, onUpdate,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
@@ -53,7 +53,7 @@ export default function VeoPromptSection({
     try {
       const res = await fetch(`${WORKER_URL}/api/brain/regenerate-veo-prompt`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(apiHeaders || {}) },
         body: JSON.stringify({
           scene_number: sceneNumber,
           vo_script: voScript,
