@@ -192,6 +192,15 @@ export const ALL_BRAIN_MODELS: FrontendModel[] = [
     bestFor: ['reasoning', 'complex'],
     requiresKey: 'glm',
   },
+  {
+    id: 'glm-4.6v',
+    label: 'GLM-4.6V',
+    provider: 'glm', providerLabel: 'ZhipuAI',
+    providerColor: '#06b6d4', providerEmoji: '🌐',
+    free: true, speed: 'fast', speedLabel: '●●●',
+    bestFor: ['brain', 'multilingual', 'json'],
+    requiresKey: 'glm',
+  },
   // ── Gemini ────────────────────────────────────────────────
   {
     id: 'gemini-2.0-flash',

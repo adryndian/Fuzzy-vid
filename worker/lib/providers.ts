@@ -157,6 +157,14 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
         speed: 'medium',
         bestFor: ['reasoning', 'complex'],
       },
+      {
+        id: 'glm-4.6v',
+        label: 'GLM-4.6V 🆓',
+        contextWindow: 128000,
+        free: true,
+        speed: 'fast',
+        bestFor: ['brain', 'multilingual', 'json'],
+      },
     ],
   },
 
