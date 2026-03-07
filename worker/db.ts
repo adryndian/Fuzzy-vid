@@ -142,13 +142,14 @@ export async function handleSaveStoryboard(
 
   await db.prepare(
     `INSERT INTO storyboards (id, user_id, title, story, platform, language, art_style,
-       aspect_ratio, total_scenes, brain_model, image_model, video_model, scenes_data, status, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+       aspect_ratio, total_scenes, brain_model, image_model, video_model, tone, scenes_data, status, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
        title = excluded.title,
        story = excluded.story,
        status = excluded.status,
        scenes_data = excluded.scenes_data,
+       tone = excluded.tone,
        updated_at = datetime('now')`
   ).bind(
     id, user.id,
@@ -162,6 +163,7 @@ export async function handleSaveStoryboard(
     (body.brain_model as string) || null,
     (body.image_model as string) || null,
     (body.video_model as string) || null,
+    (body.tone as string) || 'narrative_storytelling',
     body.scenes_data ? JSON.stringify(body.scenes_data) : null,
     (body.status as string) || 'draft',
   ).run()

@@ -1,4 +1,5 @@
 import { Env } from './index';
+import { buildBrainSystemPrompt, buildBrainUserPrompt, type Tone, type Language as BrainLanguage } from './lib/brain-system-prompt'
 
 function getVoCharLimit(durationSeconds: number, language: string): number {
   const charsPerSecond = language === 'id' ? 15 : 18
@@ -261,7 +262,27 @@ export async function handleBrainRequest(
                 return new Response(JSON.stringify({ error: 'Bad Request', message: 'Missing title, story or brain_model' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
 
-            const { systemPrompt, userPrompt: promptWithContext } = buildBrainPrompts(body);
+            const tone = (body.tone || 'narrative_storytelling') as Tone
+            const language = (body.language || 'id') as BrainLanguage
+            const totalScenes = Math.min(15, Math.max(1, (body.total_scenes as number) || 5))
+
+            const systemPrompt = buildBrainSystemPrompt({
+              tone,
+              language,
+              platform: (body.platform as string) || 'TikTok',
+              artStyle: (body.art_style as string) || 'cinematic_realistic',
+              totalScenes,
+              aspectRatio: (body.aspect_ratio as string) || '9_16',
+            })
+            const promptWithContext = buildBrainUserPrompt({
+              story: body.story as string,
+              platform: (body.platform as string) || 'TikTok',
+              language,
+              tone,
+              totalScenes,
+              artStyle: (body.art_style as string) || 'cinematic_realistic',
+              aspectRatio: (body.aspect_ratio as string) || '9_16',
+            })
             let responseText: string
 
             if (model === 'claude_sonnet' || model === 'gemini') {

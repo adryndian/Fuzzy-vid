@@ -223,6 +223,56 @@ export async function callProviderBrain(
   return data.content
 }
 
+export async function generateBrain(params: {
+  story: string
+  platform: string
+  language: string
+  tone: string
+  totalScenes: number
+  artStyle: string
+  aspectRatio: string
+  brainModel: string
+  userId?: string
+}): Promise<unknown> {
+  const { brainModel, userId } = params
+  const headers = getApiHeaders(userId)
+
+  // Route: AWS Bedrock (us.*) and Dashscope (qwen*/qwq*) → /api/brain/generate
+  // All other models (Groq, GLM, Gemini, OpenRouter IDs) → /api/brain/provider
+  const isProvider = !brainModel.startsWith('us.') && !brainModel.startsWith('qwen') && !brainModel.startsWith('qwq')
+  const endpoint = isProvider ? '/api/brain/provider' : '/api/brain/generate'
+
+  const res = await fetch(`${WORKER_URL}${endpoint}`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      story: params.story,
+      platform: params.platform,
+      language: params.language,
+      tone: params.tone,
+      total_scenes: params.totalScenes,
+      art_style: params.artStyle,
+      aspect_ratio: params.aspectRatio,
+      brain_model: brainModel,
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json() as { error: string }
+    throw new Error(err.error || `Brain failed: ${res.status}`)
+  }
+
+  const data = await res.json() as { content?: string; scenes?: unknown[] }
+
+  // Handle provider response (returns {content: "json string"})
+  if (data.content) {
+    const clean = data.content.replace(/```json|```/g, '').trim()
+    return JSON.parse(clean)
+  }
+
+  return data
+}
+
 export async function generateAudio(params: {
   text: string
   language: string

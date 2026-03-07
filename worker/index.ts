@@ -1,6 +1,7 @@
 import { verifyClerkJWT, ensureUser } from './lib/auth'
 import type { ClerkUser } from './lib/auth'
 import { handleProviderBrain } from './handlers/brain-provider'
+import { handleRegenerateVeoPrompt } from './handlers/regenerate-veo-prompt'
 import { getAllModelsForFrontend } from './lib/providers'
 import {
   handleGetProfile, handleUpdatePreferences,
@@ -213,6 +214,9 @@ export default {
           const { handleRewriteVO } = await import('./brain')
           response = await handleRewriteVO(request, env, creds)
         }
+      }
+      else if (path === '/api/brain/regenerate-veo-prompt' && request.method === 'POST') {
+        response = await handleRegenerateVeoPrompt(request, env)
       }
       else if (path === '/api/brain/regenerate-video-prompt') {
         const denied = requireAwsKeys(creds)

@@ -7,6 +7,7 @@ import {
   getProviderApiKey,
   callProvider,
 } from '../lib/providers'
+import { buildBrainSystemPrompt, buildBrainUserPrompt, type Tone, type Language as BrainLanguage } from '../lib/brain-system-prompt'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,14 +21,48 @@ export async function handleProviderBrain(
 ): Promise<Response> {
   const body = await request.json() as {
     brain_model: string          // e.g. "llama-3.3-70b-versatile" or "groq:llama-3.3-70b"
-    system_prompt: string
-    user_prompt: string
+    // Option A: raw prompts (existing)
+    system_prompt?: string
+    user_prompt?: string
+    // Option B: story params (new — brain builds prompts internally)
+    story?: string
+    platform?: string
+    language?: BrainLanguage
+    tone?: Tone
+    total_scenes?: number
+    art_style?: string
+    aspect_ratio?: string
+    // Common
     temperature?: number
     max_tokens?: number
     response_format?: { type: 'json_object' }
   }
 
-  const { brain_model, system_prompt, user_prompt } = body
+  const { brain_model } = body
+
+  let systemPrompt = body.system_prompt || ''
+  let userPrompt = body.user_prompt || ''
+
+  if (body.story && !body.system_prompt) {
+    const totalScenes = Math.min(15, Math.max(1, body.total_scenes || 5))
+    systemPrompt = buildBrainSystemPrompt({
+      tone: body.tone || 'narrative_storytelling',
+      language: body.language || 'id',
+      platform: body.platform || 'TikTok',
+      artStyle: body.art_style || 'cinematic_realistic',
+      totalScenes,
+      aspectRatio: body.aspect_ratio || '9_16',
+    })
+    userPrompt = buildBrainUserPrompt({
+      story: body.story,
+      platform: body.platform || 'TikTok',
+      language: body.language || 'id',
+      tone: body.tone || 'narrative_storytelling',
+      totalScenes,
+      artStyle: body.art_style || 'cinematic_realistic',
+      aspectRatio: body.aspect_ratio || '9_16',
+    })
+  }
 
   // Find provider
   const provider = getProviderForModel(brain_model)
@@ -54,8 +89,8 @@ export async function handleProviderBrain(
       apiKey,
       brain_model,
       [
-        { role: 'system', content: system_prompt },
-        { role: 'user', content: user_prompt },
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
       ],
       {
         temperature: body.temperature,

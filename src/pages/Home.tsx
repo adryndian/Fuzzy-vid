@@ -38,6 +38,18 @@ const IMAGE_MODELS = [
   { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo',     tag: 'Qwen', desc: 'Fast (legacy)',       provider: 'dashscope' },
 ] as const
 
+const TONES = [
+  { id: 'narrative_storytelling', label: '📖 Narrative Story', desc: 'Story arc with emotional beats' },
+  { id: 'documentary_viral',      label: '📰 Documentary Viral', desc: 'Journalistic + Veo 3.1 optimized' },
+  { id: 'natural_genz',           label: '✌️ Natural Gen Z',  desc: 'Casual, relatable, authentic' },
+  { id: 'informative',            label: '💡 Informative',    desc: 'Factual, clear, structured' },
+  { id: 'product_ads',            label: '🛍️ Product Ads',   desc: 'Benefit-focused with CTA' },
+  { id: 'educational',            label: '🎓 Educational',   desc: 'Step-by-step explanation' },
+  { id: 'entertainment',          label: '🎉 Entertainment', desc: 'Fun, energetic, surprising' },
+  { id: 'motivational',           label: '💪 Motivational',  desc: 'Empowering and uplifting' },
+]
+const VEO_TONES = ['documentary_viral', 'natural_genz', 'informative', 'narrative_storytelling']
+
 const VIDEO_MODELS_HOME = [
   { id: 'nova_reel',         label: 'Nova Reel',        tag: 'AWS',  desc: 'Up to 6s',          provider: 'bedrock' },
   { id: 'wan2.1-i2v-plus',  label: 'Wan2.1 I2V+',     tag: 'Qwen', desc: 'Image→Video best',  provider: 'dashscope' },
@@ -90,6 +102,7 @@ export function Home() {
   const [imageModel, setImageModel] = useState('nova_canvas')
   const [videoModel, setVideoModel] = useState('nova_reel')
   const [audioModel, setAudioModel] = useState<'polly' | 'elevenlabs'>('polly')
+  const [tone, setTone] = useState<string>('narrative_storytelling')
   const [scenes, setScenes] = useState(5)
   const [totalDuration, setTotalDuration] = useState(60)
   const [error, setError] = useState('')
@@ -207,6 +220,7 @@ export function Home() {
           platform,
           brain_model: brainModel,
           language,
+          tone,
           art_style: artStyle,
           total_scenes: scenes,
           aspect_ratio: aspectRatio,
@@ -252,6 +266,7 @@ export function Home() {
             story,
             platform,
             language,
+            tone,
             art_style: artStyle,
             aspect_ratio: aspectRatio,
             total_scenes: scenes,
@@ -530,6 +545,40 @@ export function Home() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Content Tone */}
+        <div style={{ marginBottom: '14px' }}>
+          <span style={labelStyle}>Content Tone</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
+            {TONES.map(t => (
+              <button key={t.id} onClick={() => setTone(t.id)} style={{
+                padding: '8px 10px', borderRadius: '12px', border: 'none',
+                background: tone === t.id
+                  ? 'linear-gradient(135deg, #ff6b35, #ff4500)'
+                  : 'rgba(118,118,128,0.08)',
+                color: tone === t.id ? 'white' : '#1d1d1f',
+                fontSize: '11px', fontWeight: tone === t.id ? 700 : 500,
+                cursor: 'pointer', textAlign: 'left',
+                boxShadow: tone === t.id ? '0 2px 12px rgba(255,107,53,0.35)' : 'none',
+                transition: 'all 0.2s',
+              }}>
+                <div>{t.label}</div>
+                <div style={{ fontSize: '9px', opacity: 0.7, marginTop: '1px' }}>{t.desc}</div>
+              </button>
+            ))}
+          </div>
+          {VEO_TONES.includes(tone) && (
+            <div style={{
+              marginTop: '6px', padding: '8px 10px',
+              background: 'rgba(255,107,53,0.06)',
+              border: '0.5px solid rgba(255,107,53,0.2)',
+              borderRadius: '10px', fontSize: '10px',
+              color: 'rgba(60,60,67,0.6)',
+            }}>
+              🎬 Veo 3.1 prompts akan di-generate untuk tone ini — siap di-paste ke Google AI Studio
+            </div>
+          )}
         </div>
 
         {/* Art Style */}
