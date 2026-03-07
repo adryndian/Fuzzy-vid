@@ -104,6 +104,38 @@ MOVEMENT TYPE SELECTION GUIDE (pick ONE based on VO keywords):
 - locked_observe → observation, waiting, ambient scene, time passing
 `
 
+// ─── IMAGE PROMPT GUIDE ───────────────────────────────────────────
+
+const IMAGE_PROMPT_GUIDE = `
+IMAGE PROMPT — MANDATORY CINEMATIC ELEMENTS (all 6 required):
+1. SHOT TYPE: extreme close-up | close-up | medium shot | wide shot | establishing | aerial overhead
+2. LENS: 24mm ultra-wide | 35mm standard | 50mm natural | 85mm portrait | 135mm telephoto | macro
+3. LIGHTING: golden hour rim light | harsh directional side shadow | soft diffused overhead | neon backlight silhouette | overcast flat fill | practical lamp warm glow | blue-hour ambient
+4. DEPTH OF FIELD: shallow DOF with creamy bokeh | deep focus sharp foreground to background | rack focus blur pull
+5. COLOR GRADE: warm amber tones | cool desaturated blue-grey | high contrast noir | soft pastel haze | rich saturated vivid | moody dark underexposed | clean bright airy
+6. SUBJECT DETAIL + TEXTURE: describe specific textures and materials — worn leather, wet cobblestone, silk folds, cracked concrete, steam rising, rain-soaked surface, rough bark
+
+Target: 180-250 characters. Start with shot type. Be cinematic and precise, never vague.
+GOOD: "Extreme close-up 85mm portrait, weathered hands gripping steaming clay cup, golden hour rim light from left, warm amber grade, shallow DOF creamy bokeh background, worn leather sleeve visible"
+BAD: "A person holding a cup in a market" — NEVER write vague prompts like this.
+`
+
+// ─── VIDEO PROMPT GUIDE ───────────────────────────────────────────
+
+const VIDEO_PROMPT_GUIDE = `
+VIDEO PROMPT full_prompt FORMAT (max 200 chars):
+"[lens] [camera movement] — [subject action with precise physics detail] — [atmosphere/environment motion] — [Xsec]"
+
+PHYSICS ELEMENTS (pick one, be specific):
+- Water: "water surface rippling outward", "steam curling upward in backlight", "rain droplets on glass"
+- Particles: "golden dust motes drifting through light shaft", "smoke wisps rising", "embers floating"
+- Fabric/organic: "loose fabric rippling in wind", "hair strands catching light", "leaves spinning"
+- Light: "light beam sweeping across", "lens flare blooming", "shadow crawling across surface"
+- Liquid: "coffee swirling in cup", "ink dissolving in water", "condensation dripping"
+
+EXAMPLE: "35mm slow dolly forward — mother's hands carefully fold origami paper on wooden desk — golden dust motes drift through warm afternoon light shaft — 6sec"
+`
+
 // ─── MASTER SYSTEM PROMPT BUILDER ─────────────────────────────────
 
 export function buildBrainSystemPrompt(params: {
@@ -143,11 +175,16 @@ Visual Style: ${toneDef.videoStyle}
 ## MOVEMENT TYPES
 ${MOVEMENT_GUIDE}
 
+## IMAGE PROMPT RULES
+${IMAGE_PROMPT_GUIDE}
+
 ## VIDEO PROMPT RULES
-1. full_prompt MAX 200 characters
-2. Include "X seconds" at the end matching vo_duration_sec
+${VIDEO_PROMPT_GUIDE}
+Additional rules:
+1. full_prompt MAX 200 characters — follow the format above
+2. Include duration "Xsec" at the end matching vo_duration_sec
 3. Describe ONE primary movement only — no complex multi-movement
-4. Include at least ONE physics detail (steam, dust, fabric, water, light, wind)
+4. Include at least ONE specific physics detail from the guide above
 5. Human element MUST appear in at least 60% of scenes
 6. Match energy level to VO emotional tone:
    - Urgent/exciting VO → fast energy, whip_pan or push_in
@@ -185,16 +222,16 @@ Respond ONLY with valid JSON. No markdown, no explanation, no backticks.
       "vo_word_count": number,
       "vo_duration_sec": number,
       "scene_purpose": "hook|buildup|conflict|reveal|resolution|cta",
-      "image_prompt": "string — detailed visual description, English, include art style, lighting, composition, 100-200 chars",
+      "image_prompt": "string — CINEMATIC English description 180-250 chars: shot type + lens + lighting + DOF + color grade + subject texture detail. See IMAGE PROMPT RULES above.",
       "video_prompt": {
         "duration_sec": number,
         "movement_type": "one of: pull_back|push_in|pan_left|pan_right|tilt_up|tilt_down|static_hero|orbit|whip_pan|slow_zoom_in|handheld_follow|locked_observe",
         "energy": "slow|medium|fast",
-        "subject_motion": "string — what the subject does",
-        "camera_start": "string — starting frame description",
-        "camera_end": "string — ending frame description",
-        "physics_detail": "string — one specific physics element",
-        "full_prompt": "string — max 200 chars, ends with 'X seconds'"
+        "subject_motion": "string — precise subject action with material/texture detail",
+        "camera_start": "string — exact starting frame: subject position, framing, lens perspective",
+        "camera_end": "string — exact ending frame after movement completes",
+        "physics_detail": "string — one SPECIFIC physics element (e.g. 'steam curling upward in backlight', not just 'steam')",
+        "full_prompt": "string — max 200 chars, format: '[lens] [movement] — [subject action] — [physics] — Xsec'"
       }${isVeoTone ? `,
       "veo_prompt": {
         "camera_locked": boolean,

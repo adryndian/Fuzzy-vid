@@ -783,9 +783,10 @@ export function Storyboard() {
 
   const handleRewriteVO = async (scene: Record<string, unknown>, sceneNum: number) => {
     setRewritingVO(prev => ({ ...prev, [sceneNum]: true }))
-    const originalText = language === 'id'
-      ? (scene.text_id as string) || ''
-      : (scene.text_en as string) || ''
+    const originalText = (scene.vo_script as string)
+      || (language === 'id'
+        ? (scene.text_id as string) || ''
+        : (scene.text_en as string) || '')
     const data = storyboard as Record<string, unknown>
     const artStyle = (data.art_style as string) || 'cinematic_realistic'
 
@@ -810,6 +811,7 @@ export function Storyboard() {
   const handleRegenerateVideoPromptScene = async (scene: Record<string, unknown>, sceneNum: number) => {
     setRegenVideoPrompt(prev => ({ ...prev, [sceneNum]: true }))
     const narration = customVO[sceneNum]
+      || (scene.vo_script as string)
       || (language === 'id' ? (scene.text_id as string) : (scene.text_en as string)) || ''
     const data = storyboard as Record<string, unknown>
     const artStyle = (data.art_style as string) || 'cinematic_realistic'
@@ -843,6 +845,7 @@ export function Storyboard() {
   const handleGenerateAudio = async (scene: Record<string, unknown>) => {
     const sceneNum = scene.scene_number as number
     const text = customVO[sceneNum]
+      || (scene.vo_script as string)
       || (language === 'id'
         ? (scene.text_id as string) || (scene.text_en as string)
         : (scene.text_en as string) || (scene.text_id as string))
@@ -1057,9 +1060,10 @@ export function Storyboard() {
   const renderSceneCard = (scene: Record<string, unknown>) => {
     const sceneNum = scene.scene_number as number
     const sceneAsset: SceneAssets = storedAssets[sceneNum] || defaultSceneAssets()
-    const narration = language === 'id'
-      ? (scene.text_id as string) || (scene.text_en as string)
-      : (scene.text_en as string) || (scene.text_id as string)
+    const narration = (scene.vo_script as string)
+      || (language === 'id'
+        ? (scene.text_id as string) || (scene.text_en as string)
+        : (scene.text_en as string) || (scene.text_id as string))
     const hasImage = sceneAsset.imageStatus === 'done' && sceneAsset.imageUrl
     const hasVideo = sceneAsset.videoStatus === 'done' && sceneAsset.videoUrl
     const hasAudio = sceneAsset.audioStatus === 'done' && sceneAsset.audioUrl
@@ -1863,6 +1867,32 @@ export function Storyboard() {
                 </div>
                 {statusBadge(sceneAsset.audioStatus, 'Audio')}
               </div>
+
+              {/* VO text that will be spoken */}
+              {(customVO[sceneNum] || narration) && (
+                <div style={{
+                  background: 'rgba(175,82,222,0.06)',
+                  border: '0.5px solid rgba(175,82,222,0.18)',
+                  borderRadius: '10px',
+                  padding: '8px 10px',
+                  marginBottom: '8px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <span style={{ color: '#af52de', fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      VO Script {customVO[sceneNum] ? '(edited)' : ''}
+                    </span>
+                    <button
+                      onClick={() => handleCopy(customVO[sceneNum] || narration)}
+                      style={{ ...smallIconBtn, color: '#af52de', borderColor: 'rgba(175,82,222,0.25)' }}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <p style={{ color: '#1d1d1f', fontSize: '12px', lineHeight: '1.5', fontStyle: 'italic', margin: 0 }}>
+                    "{customVO[sceneNum] || narration}"
+                  </p>
+                </div>
+              )}
 
               {/* Audio history (newest first) */}
               {sceneAsset.audioHistory && sceneAsset.audioHistory.length > 0 && (
