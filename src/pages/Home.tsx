@@ -78,28 +78,30 @@ function buildSteps(current: number): GenStep[] {
   }))
 }
 
-const dropdownStyle: React.CSSProperties = {
-  width: '100%',
-  background: 'rgba(118,118,128,0.1)',
-  border: '1px solid rgba(118,118,128,0.2)',
-  borderRadius: '12px',
-  padding: '10px 32px 10px 12px',
-  color: '#1d1d1f',
-  fontSize: '13px',
-  outline: 'none',
-  cursor: 'pointer',
-  appearance: 'none',
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%233c3c43' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: 'right 12px center',
-  fontFamily: 'inherit',
-}
-// Note: dropdownStyle is used directly without dark override (select element handles it via OS)
-
 export function Home() {
   const navigate = useNavigate()
   const { isDark } = useTheme()
   const t = tk(isDark)
+
+  const dropdownStyle: React.CSSProperties = {
+    width: '100%',
+    background: t.inputBg,
+    border: t.inputBorder,
+    borderRadius: '12px',
+    padding: '10px 32px 10px 12px',
+    color: t.textPrimary,
+    fontSize: '13px',
+    outline: 'none',
+    cursor: 'pointer',
+    appearance: 'none',
+    backgroundImage: isDark
+      ? "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23ebebf5' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")"
+      : "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%233c3c43' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 12px center',
+    fontFamily: 'inherit',
+  }
+
   const [title, setTitle] = useState('')
   const [story, setStory] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -408,8 +410,8 @@ export function Home() {
     padding: '7px 4px',
     borderRadius: '12px',
     border: 'none',
-    background: active ? activeColor : 'rgba(118,118,128,0.12)',
-    color: active ? 'white' : '#1d1d1f',
+    background: active ? activeColor : t.pillInactive,
+    color: active ? 'white' : t.textPrimary,
     fontSize: '13px',
     fontWeight: active ? 600 : 400,
     cursor: 'pointer',
@@ -418,17 +420,17 @@ export function Home() {
   })
 
   const navBtnStyle: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.8)',
+    background: t.cardBg,
     backdropFilter: 'blur(12px)',
     WebkitBackdropFilter: 'blur(12px)',
-    border: '0.5px solid rgba(255,255,255,0.9)',
+    border: t.cardBorder,
     borderRadius: '14px',
-    color: '#1d1d1f',
+    color: t.textPrimary,
     padding: '8px 12px',
     cursor: 'pointer',
     fontSize: '18px',
     position: 'relative' as const,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1), 0 1px 0 rgba(255,255,255,0.8) inset',
+    boxShadow: t.cardShadow,
   }
 
   return (
@@ -447,9 +449,9 @@ export function Home() {
         .glass-input:focus {
           outline: none !important;
           border-color: rgba(0,122,255,0.5) !important;
-          background: rgba(255,255,255,0.9) !important;
+          background: ${isDark ? 'rgba(60,60,67,0.4)' : 'rgba(255,255,255,0.9)'} !important;
         }
-        select option { background: #f2f2f7; color: #1d1d1f; }
+        select option { background: ${isDark ? '#2c2c2e' : '#f2f2f7'}; color: ${isDark ? '#f2f2f7' : '#1d1d1f'}; }
         .adv-section { overflow: hidden; transition: max-height 0.3s ease; }
       `}</style>
 
@@ -529,9 +531,9 @@ export function Home() {
                     flexShrink: 0,
                     padding: '6px 11px',
                     borderRadius: '11px',
-                    border: active ? `1.5px solid ${meta.color}` : '0.5px solid rgba(0,0,0,0.09)',
-                    background: active ? `${meta.color}18` : 'rgba(255,255,255,0.72)',
-                    color: active ? meta.color : hasKey ? '#1d1d1f' : 'rgba(60,60,67,0.35)',
+                    border: active ? `1.5px solid ${meta.color}` : t.cardBorder,
+                    background: active ? `${meta.color}18` : t.pillInactive,
+                    color: active ? meta.color : hasKey ? t.textPrimary : t.textTertiary,
                     fontSize: '12px',
                     fontWeight: active ? 700 : 400,
                     cursor: 'pointer',
@@ -619,7 +621,7 @@ export function Home() {
             cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             marginBottom: '10px',
-            color: showAdvanced ? '#007aff' : 'rgba(60,60,67,0.6)',
+            color: showAdvanced ? '#007aff' : t.textSecondary,
             fontSize: '12px',
             fontWeight: 600,
           }}
@@ -651,20 +653,20 @@ export function Home() {
         <div style={{ marginBottom: '14px' }}>
           <span style={labelStyle}>Content Tone</span>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
-            {TONES.map(t => (
-              <button key={t.id} onClick={() => setTone(t.id)} style={{
+            {TONES.map(tn => (
+              <button key={tn.id} onClick={() => setTone(tn.id)} style={{
                 padding: '8px 10px', borderRadius: '12px', border: 'none',
-                background: tone === t.id
+                background: tone === tn.id
                   ? 'linear-gradient(135deg, #ff6b35, #ff4500)'
-                  : 'rgba(118,118,128,0.08)',
-                color: tone === t.id ? 'white' : '#1d1d1f',
-                fontSize: '11px', fontWeight: tone === t.id ? 700 : 500,
+                  : t.pillInactive,
+                color: tone === tn.id ? 'white' : t.textPrimary,
+                fontSize: '11px', fontWeight: tone === tn.id ? 700 : 500,
                 cursor: 'pointer', textAlign: 'left',
-                boxShadow: tone === t.id ? '0 2px 12px rgba(255,107,53,0.35)' : 'none',
+                boxShadow: tone === tn.id ? '0 2px 12px rgba(255,107,53,0.35)' : 'none',
                 transition: 'all 0.2s',
               }}>
-                <div>{t.label}</div>
-                <div style={{ fontSize: '9px', opacity: 0.7, marginTop: '1px' }}>{t.desc}</div>
+                <div>{tn.label}</div>
+                <div style={{ fontSize: '9px', opacity: 0.7, marginTop: '1px' }}>{tn.desc}</div>
               </button>
             ))}
           </div>
@@ -674,7 +676,7 @@ export function Home() {
               background: 'rgba(255,107,53,0.06)',
               border: '0.5px solid rgba(255,107,53,0.2)',
               borderRadius: '10px', fontSize: '10px',
-              color: 'rgba(60,60,67,0.6)',
+              color: t.textSecondary,
             }}>
               🎬 Veo 3.1 prompts akan di-generate untuk tone ini — siap di-paste ke Google AI Studio
             </div>
@@ -698,8 +700,8 @@ export function Home() {
                   padding: '8px 3px',
                   borderRadius: '12px',
                   border: 'none',
-                  background: artStyle === s.id ? '#007aff' : 'rgba(118,118,128,0.12)',
-                  color: artStyle === s.id ? 'white' : '#1d1d1f',
+                  background: artStyle === s.id ? '#007aff' : t.pillInactive,
+                  color: artStyle === s.id ? 'white' : t.textPrimary,
                   fontSize: '12px',
                   fontWeight: artStyle === s.id ? 600 : 400,
                   cursor: 'pointer',
@@ -728,14 +730,14 @@ export function Home() {
                   padding: '8px 3px',
                   borderRadius: '12px',
                   border: 'none',
-                  background: aspectRatio === r.id ? '#007aff' : 'rgba(118,118,128,0.12)',
+                  background: aspectRatio === r.id ? '#007aff' : t.pillInactive,
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                   boxShadow: aspectRatio === r.id ? '0 4px 12px rgba(0,122,255,0.3)' : 'none',
                 }}>
                 <div style={{ fontSize: '15px', marginBottom: '2px' }}>{r.icon}</div>
-                <div style={{ color: aspectRatio === r.id ? 'white' : '#1d1d1f', fontSize: '12px', fontWeight: 700 }}>{r.label}</div>
-                <div style={{ color: aspectRatio === r.id ? 'rgba(255,255,255,0.75)' : 'rgba(60,60,67,0.5)', fontSize: '10px' }}>{r.desc}</div>
+                <div style={{ color: aspectRatio === r.id ? 'white' : t.textPrimary, fontSize: '12px', fontWeight: 700 }}>{r.label}</div>
+                <div style={{ color: aspectRatio === r.id ? 'rgba(255,255,255,0.75)' : t.textSecondary, fontSize: '10px' }}>{r.desc}</div>
               </button>
             ))}
           </div>
@@ -747,7 +749,7 @@ export function Home() {
             display: 'flex', alignItems: 'center', gap: '6px'
           }}>
             <span style={{ fontSize: '11px' }}>🎬</span>
-            <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px' }}>
+            <span style={{ color: t.textSecondary, fontSize: '11px' }}>
               Resolution: <span style={{ color: '#007aff', fontWeight: 600 }}>1080p</span>
               {' · '}Output: <span style={{ color: '#007aff', fontWeight: 600 }}>
                 {aspectRatio === '9_16' ? '1080×1920' :
@@ -772,8 +774,8 @@ export function Home() {
                   flexShrink: 0,
                   padding: '6px 9px',
                   borderRadius: '10px',
-                  border: imageModel === m.id ? '1.5px solid #007aff' : '0.5px solid rgba(0,0,0,0.1)',
-                  background: imageModel === m.id ? 'rgba(0,122,255,0.1)' : 'rgba(255,255,255,0.7)',
+                  border: imageModel === m.id ? '1.5px solid #007aff' : t.cardBorder,
+                  background: imageModel === m.id ? 'rgba(0,122,255,0.1)' : t.pillInactive,
                   cursor: 'pointer',
                   display: 'flex', flexDirection: 'column', gap: '1px',
                   textAlign: 'left',
@@ -787,9 +789,9 @@ export function Home() {
                     color: m.tag === 'Qwen' ? '#ff8c00' : m.tag === 'GLM' ? '#06b6d4' : '#007aff',
                     fontSize: '8px', fontWeight: 700,
                   }}>{m.tag}</span>
-                  <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>{m.label}</span>
+                  <span style={{ color: t.textPrimary, fontSize: '12px', fontWeight: 600 }}>{m.label}</span>
                 </div>
-                <span style={{ color: 'rgba(60,60,67,0.45)', fontSize: '10px' }}>{m.desc}</span>
+                <span style={{ color: t.textTertiary, fontSize: '10px' }}>{m.desc}</span>
               </button>
             ))}
           </div>
@@ -807,8 +809,8 @@ export function Home() {
                   flexShrink: 0,
                   padding: '6px 9px',
                   borderRadius: '10px',
-                  border: videoModel === m.id ? '1.5px solid #007aff' : '0.5px solid rgba(0,0,0,0.1)',
-                  background: videoModel === m.id ? 'rgba(0,122,255,0.1)' : 'rgba(255,255,255,0.7)',
+                  border: videoModel === m.id ? '1.5px solid #007aff' : t.cardBorder,
+                  background: videoModel === m.id ? 'rgba(0,122,255,0.1)' : t.pillInactive,
                   cursor: 'pointer',
                   display: 'flex', flexDirection: 'column', gap: '1px',
                   textAlign: 'left',
@@ -822,9 +824,9 @@ export function Home() {
                     color: m.tag === 'Qwen' ? '#ff8c00' : m.tag === 'GLM' ? '#06b6d4' : '#007aff',
                     fontSize: '8px', fontWeight: 700,
                   }}>{m.tag}</span>
-                  <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>{m.label}</span>
+                  <span style={{ color: t.textPrimary, fontSize: '12px', fontWeight: 600 }}>{m.label}</span>
                 </div>
-                <span style={{ color: 'rgba(60,60,67,0.45)', fontSize: '10px' }}>{m.desc}</span>
+                <span style={{ color: t.textTertiary, fontSize: '10px' }}>{m.desc}</span>
               </button>
             ))}
           </div>
@@ -857,7 +859,7 @@ export function Home() {
             onChange={e => setTotalDuration(Number(e.target.value))}
             style={{ width: '100%', accentColor: '#007aff' }}
           />
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(60,60,67,0.4)', fontSize: '11px', marginTop: '3px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: t.textTertiary, fontSize: '11px', marginTop: '3px' }}>
             <span>15s</span><span>120s</span>
           </div>
         </div>
@@ -868,7 +870,7 @@ export function Home() {
             <span style={labelStyle}>Scenes</span>
             <span style={{ color: '#ff6b35', fontSize: '13px', fontWeight: 700 }}>
               {scenes}
-              <span style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginLeft: '6px', fontWeight: 400 }}>(~{scenes * 7}s total)</span>
+              <span style={{ fontSize: '10px', color: t.textTertiary, marginLeft: '6px', fontWeight: 400 }}>(~{scenes * 7}s total)</span>
             </span>
           </div>
           <input
@@ -876,7 +878,7 @@ export function Home() {
             onChange={e => setScenes(Number(e.target.value))}
             style={{ width: '100%', accentColor: '#ff6b35' }}
           />
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(60,60,67,0.4)', fontSize: '11px', marginTop: '3px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: t.textTertiary, fontSize: '11px', marginTop: '3px' }}>
             <span>3</span><span>15</span>
           </div>
         </div>
@@ -919,7 +921,7 @@ export function Home() {
       </div>
 
       {/* Footer */}
-      <p style={{ color: 'rgba(60,60,67,0.25)', fontSize: '10px', marginTop: '12px' }}>
+      <p style={{ color: t.textTertiary, fontSize: '10px', marginTop: '12px' }}>
         Fuzzy Short · AI Video
       </p>
 
