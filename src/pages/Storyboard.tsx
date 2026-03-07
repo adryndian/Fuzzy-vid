@@ -30,12 +30,12 @@ const IMAGE_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen' | 'GLM'; de
 ]
 
 const VIDEO_MODELS: { id: string; label: string; tag: 'AWS' | 'Qwen' | 'GLM'; desc: string; provider: 'bedrock' | 'dashscope' | 'glm'; badge?: string }[] = [
-  { id: 'nova_reel',         label: 'Nova Reel',         tag: 'AWS',  desc: 'Up to 6s',            provider: 'bedrock' },
-  { id: 'wan2.1-i2v-plus',  label: 'Wan2.1 I2V Plus',  tag: 'Qwen', desc: 'Image→Video best',    provider: 'dashscope', badge: '⭐' },
-  { id: 'wan2.1-i2v-turbo', label: 'Wan2.1 I2V Turbo', tag: 'Qwen', desc: 'Image→Video fast',    provider: 'dashscope', badge: '⚡' },
-  { id: 'wan2.1-t2v-plus',  label: 'Wan2.1 T2V Plus',  tag: 'Qwen', desc: 'Text→Video best',     provider: 'dashscope', badge: '📝⭐' },
-  { id: 'wan2.1-t2v-turbo', label: 'Wan2.1 T2V Turbo', tag: 'Qwen', desc: 'Text→Video fast',     provider: 'dashscope', badge: '📝⚡' },
-  { id: 'cogvideox-2',      label: 'CogVideoX-2',       tag: 'GLM',  desc: 'I2V/T2V 5-10s',      provider: 'glm',       badge: '🎬' },
+  { id: 'nova_reel',          label: 'Nova Reel',          tag: 'AWS',  desc: 'Up to 6s',            provider: 'bedrock' },
+  { id: 'wan2.6-i2v-flash',  label: 'Wan2.6 I2V',         tag: 'Qwen', desc: 'Image→Video best',    provider: 'dashscope', badge: '⭐' },
+  { id: 'wanx2.1-i2v-turbo', label: 'Wan2.1 I2V Turbo',   tag: 'Qwen', desc: 'Image→Video fast',    provider: 'dashscope', badge: '⚡' },
+  { id: 'wan2.6-t2v-flash',  label: 'Wan2.6 T2V',         tag: 'Qwen', desc: 'Text→Video best',     provider: 'dashscope', badge: '📝⭐' },
+  { id: 'wan2.1-t2v-turbo',  label: 'Wan2.1 T2V Turbo',   tag: 'Qwen', desc: 'Text→Video fast',     provider: 'dashscope', badge: '📝⚡' },
+  { id: 'cogvideox-2',       label: 'CogVideoX-2',         tag: 'GLM',  desc: 'I2V/T2V 5-10s',      provider: 'glm',       badge: '🎬' },
 ]
 
 const dropdownStyle: React.CSSProperties = {

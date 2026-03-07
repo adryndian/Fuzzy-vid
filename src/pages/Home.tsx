@@ -37,7 +37,9 @@ const IMAGE_MODELS = [
   { id: 'qwen-image-2.0',     label: 'Qwen Image 2.0',     tag: 'Qwen', desc: 'Balanced',            provider: 'dashscope' },
   { id: 'wan2.6-image',       label: 'Wan 2.6 Image',      tag: 'Qwen', desc: 'Latest Wan model',    provider: 'dashscope' },
   { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo',     tag: 'Qwen', desc: 'Fast (legacy)',       provider: 'dashscope' },
-] as const
+  { id: 'cogview-4',          label: 'CogView-4',          tag: 'GLM',  desc: 'Best quality',        provider: 'glm' },
+  { id: 'cogview-4-flash',    label: 'CogView-4 Flash',    tag: 'GLM',  desc: 'Fast & free',         provider: 'glm' },
+]
 
 const TONES = [
   { id: 'narrative_storytelling', label: '📖 Narrative Story', desc: 'Story arc with emotional beats' },
@@ -52,12 +54,13 @@ const TONES = [
 const VEO_TONES = ['documentary_viral', 'natural_genz', 'informative', 'narrative_storytelling']
 
 const VIDEO_MODELS_HOME = [
-  { id: 'nova_reel',         label: 'Nova Reel',        tag: 'AWS',  desc: 'Up to 6s',          provider: 'bedrock' },
-  { id: 'wan2.1-i2v-plus',  label: 'Wan2.1 I2V+',     tag: 'Qwen', desc: 'Image→Video best',  provider: 'dashscope' },
-  { id: 'wan2.1-i2v-turbo', label: 'Wan2.1 I2V',      tag: 'Qwen', desc: 'Image→Video fast',  provider: 'dashscope' },
-  { id: 'wan2.1-t2v-plus',  label: 'Wan2.1 T2V+',     tag: 'Qwen', desc: 'Text→Video best',   provider: 'dashscope' },
-  { id: 'wan2.1-t2v-turbo', label: 'Wan2.1 T2V',      tag: 'Qwen', desc: 'Text→Video fast',   provider: 'dashscope' },
-] as const
+  { id: 'nova_reel',          label: 'Nova Reel',        tag: 'AWS',  desc: 'Up to 6s',          provider: 'bedrock' },
+  { id: 'wan2.6-i2v-flash',  label: 'Wan2.6 I2V',      tag: 'Qwen', desc: 'Image→Video best',  provider: 'dashscope' },
+  { id: 'wanx2.1-i2v-turbo', label: 'Wan2.1 I2V',      tag: 'Qwen', desc: 'Image→Video fast',  provider: 'dashscope' },
+  { id: 'wan2.6-t2v-flash',  label: 'Wan2.6 T2V',      tag: 'Qwen', desc: 'Text→Video best',   provider: 'dashscope' },
+  { id: 'wan2.1-t2v-turbo',  label: 'Wan2.1 T2V',      tag: 'Qwen', desc: 'Text→Video fast',   provider: 'dashscope' },
+  { id: 'cogvideox-2',        label: 'CogVideoX-2',     tag: 'GLM',  desc: 'I2V/T2V 5-10s',    provider: 'glm' },
+]
 
 const STEP_LABELS = [
   'Connecting to AI...',
@@ -771,8 +774,8 @@ export function Home() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <span style={{
                     padding: '1px 4px', borderRadius: '4px',
-                    background: m.tag === 'Qwen' ? 'rgba(255,140,0,0.15)' : 'rgba(0,122,255,0.12)',
-                    color: m.tag === 'Qwen' ? '#ff8c00' : '#007aff',
+                    background: m.tag === 'Qwen' ? 'rgba(255,140,0,0.15)' : m.tag === 'GLM' ? 'rgba(6,182,212,0.15)' : 'rgba(0,122,255,0.12)',
+                    color: m.tag === 'Qwen' ? '#ff8c00' : m.tag === 'GLM' ? '#06b6d4' : '#007aff',
                     fontSize: '8px', fontWeight: 700,
                   }}>{m.tag}</span>
                   <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>{m.label}</span>
@@ -806,8 +809,8 @@ export function Home() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <span style={{
                     padding: '1px 4px', borderRadius: '4px',
-                    background: m.tag === 'Qwen' ? 'rgba(255,140,0,0.15)' : 'rgba(0,122,255,0.12)',
-                    color: m.tag === 'Qwen' ? '#ff8c00' : '#007aff',
+                    background: m.tag === 'Qwen' ? 'rgba(255,140,0,0.15)' : m.tag === 'GLM' ? 'rgba(6,182,212,0.15)' : 'rgba(0,122,255,0.12)',
+                    color: m.tag === 'Qwen' ? '#ff8c00' : m.tag === 'GLM' ? '#06b6d4' : '#007aff',
                     fontSize: '8px', fontWeight: 700,
                   }}>{m.tag}</span>
                   <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>{m.label}</span>
