@@ -331,7 +331,7 @@ export function saveSettings(settings: AppSettings): void {
 
 export function buildApiHeaders(settings: AppSettings): Record<string, string> {
   const headers: Record<string, string> = {}
-  if (settings.geminiApiKey) headers['X-Gemini-Key'] = settings.geminiApiKey
+  if (settings.geminiApiKey) headers['X-Gemini-Api-Key'] = settings.geminiApiKey
   if (settings.awsAccessKeyId) headers['X-AWS-Access-Key-Id'] = settings.awsAccessKeyId
   if (settings.awsSecretAccessKey) headers['X-AWS-Secret-Access-Key'] = settings.awsSecretAccessKey
   if (settings.brainRegion) headers['X-Brain-Region'] = settings.brainRegion

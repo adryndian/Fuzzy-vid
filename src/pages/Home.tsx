@@ -173,7 +173,7 @@ export function Home() {
       const stored = localStorage.getItem(storageKey)
       if (stored) {
         const s = JSON.parse(stored)
-        if (s.geminiApiKey) apiHeaders['X-Gemini-Key'] = s.geminiApiKey
+        if (s.geminiApiKey) apiHeaders['X-Gemini-Api-Key'] = s.geminiApiKey
         if (s.awsAccessKeyId) apiHeaders['X-AWS-Access-Key-Id'] = s.awsAccessKeyId
         if (s.awsSecretAccessKey) apiHeaders['X-AWS-Secret-Access-Key'] = s.awsSecretAccessKey
         if (s.brainRegion) apiHeaders['X-Brain-Region'] = s.brainRegion
