@@ -116,6 +116,12 @@ export function Home() {
 
   const { user } = useUser()
 
+  const handleProviderChange = (pid: string) => {
+    const models = MODEL_GROUPS[pid] || []
+    const first = models.find(m => pid === 'gemini' || hasRequiredKey(m, userSettings)) || models[0]
+    if (first) setBrainModel(first.id)
+  }
+
   const addCostEntry = useCostStore((s) => s.addEntry)
   const addHistoryItem = useHistoryStore((s) => s.addItem)
   const historyCount = useHistoryStore((s) => s.items.length)
@@ -520,77 +526,95 @@ export function Home() {
         {/* AI Brain */}
         <div style={{ marginBottom: '14px' }}>
           <span style={labelStyle}>AI Brain</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+
+          {/* Provider pill row */}
+          <style>{`.provider-pills::-webkit-scrollbar{display:none}`}</style>
+          <div className="provider-pills" style={{
+            display: 'flex', gap: '5px', overflowX: 'auto',
+            paddingBottom: '8px', marginBottom: '8px',
+          }}>
             {PROVIDER_ORDER.map(pid => {
-              const models = MODEL_GROUPS[pid]
-              if (!models || models.length === 0) return null
               const meta = PROVIDER_META[pid]
-              const providerHasKey = pid === 'gemini' || models.some(m => hasRequiredKey(m, userSettings))
+              const models = MODEL_GROUPS[pid] || []
+              const hasKey = pid === 'gemini' || models.some(m => hasRequiredKey(m, userSettings))
+              const active = (getModelById(brainModel)?.provider || 'gemini') === pid
               return (
-                <div key={pid}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '5px' }}>
-                    <span style={{ fontSize: '11px' }}>{meta.emoji}</span>
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: meta.color }}>{meta.label}</span>
-                    {!providerHasKey && (
-                      <span style={{
-                        fontSize: '9px', padding: '0 5px', borderRadius: '6px',
-                        background: 'rgba(255,59,48,0.1)', color: '#ff3b30', fontWeight: 600,
-                      }}>No key</span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                    {models.map(m => {
-                      const hasKey = pid === 'gemini' || hasRequiredKey(m, userSettings)
-                      const selected = brainModel === m.id
-                      return (
-                        <button
-                          key={m.id}
-                          onClick={() => { if (hasKey) setBrainModel(m.id) }}
-                          style={{
-                            padding: '5px 9px', borderRadius: '10px',
-                            border: selected ? `1.5px solid ${meta.color}` : '0.5px solid rgba(0,0,0,0.08)',
-                            background: selected ? `${meta.color}22` : hasKey ? 'rgba(255,255,255,0.8)' : 'rgba(118,118,128,0.05)',
-                            color: selected ? meta.color : hasKey ? '#1d1d1f' : 'rgba(60,60,67,0.3)',
-                            fontSize: '11px', fontWeight: selected ? 700 : 400,
-                            cursor: hasKey ? 'pointer' : 'not-allowed',
-                            transition: 'all 0.15s',
-                            display: 'flex', alignItems: 'center', gap: '3px',
-                          }}
-                        >
-                          {!hasKey && <span style={{ fontSize: '9px' }}>🔒</span>}
-                          <span>{m.label}</span>
-                          {m.free && !selected && (
-                            <span style={{
-                              fontSize: '8px', padding: '0 3px', borderRadius: '4px',
-                              background: 'rgba(52,199,89,0.15)', color: '#34c759', fontWeight: 700,
-                            }}>FREE</span>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                <button
+                  key={pid}
+                  onClick={() => handleProviderChange(pid)}
+                  style={{
+                    flexShrink: 0,
+                    padding: '6px 11px',
+                    borderRadius: '11px',
+                    border: active ? `1.5px solid ${meta.color}` : '0.5px solid rgba(0,0,0,0.09)',
+                    background: active ? `${meta.color}18` : 'rgba(255,255,255,0.72)',
+                    color: active ? meta.color : hasKey ? '#1d1d1f' : 'rgba(60,60,67,0.35)',
+                    fontSize: '12px',
+                    fontWeight: active ? 700 : 400,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <span>{meta.emoji}</span>
+                  <span>{meta.label}</span>
+                  {!hasKey && <span style={{ fontSize: '9px', opacity: 0.7 }}>🔒</span>}
+                </button>
               )
             })}
           </div>
+
+          {/* Model dropdown for selected provider */}
           {(() => {
+            const currentProvider = getModelById(brainModel)?.provider || 'gemini'
+            const meta = PROVIDER_META[currentProvider]
+            const models = MODEL_GROUPS[currentProvider] || []
+            const providerHasKey = currentProvider === 'gemini' || models.some(m => hasRequiredKey(m, userSettings))
             const sel = getModelById(brainModel)
-            if (!sel) return null
             return (
-              <div style={{
-                marginTop: '8px', padding: '7px 10px',
-                background: 'rgba(118,118,128,0.06)',
-                border: '0.5px solid rgba(118,118,128,0.12)',
-                borderRadius: '10px',
-                display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap',
-              }}>
-                <span>{sel.providerEmoji}</span>
-                <span style={{ fontSize: '11px', color: sel.providerColor, fontWeight: 600 }}>{sel.providerLabel}</span>
-                <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '10px' }}>·</span>
-                <span style={{ fontSize: '11px', color: 'rgba(60,60,67,0.5)' }}>Speed: {sel.speedLabel}</span>
-                <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '10px' }}>·</span>
-                <span style={{ fontSize: '11px', color: 'rgba(60,60,67,0.5)' }}>{sel.bestFor.join(', ')}</span>
-              </div>
+              <>
+                <select
+                  value={brainModel}
+                  onChange={e => setBrainModel(e.target.value)}
+                  style={{
+                    ...dropdownStyle,
+                    borderColor: providerHasKey ? 'rgba(118,118,128,0.2)' : 'rgba(255,59,48,0.3)',
+                  }}
+                >
+                  {models.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}{m.free ? ' · FREE' : ''}
+                    </option>
+                  ))}
+                </select>
+
+                {!providerHasKey && (
+                  <div style={{
+                    marginTop: '5px', padding: '4px 9px',
+                    background: 'rgba(255,59,48,0.07)',
+                    border: '0.5px solid rgba(255,59,48,0.2)',
+                    borderRadius: '8px', fontSize: '10px', color: '#ff3b30', fontWeight: 600,
+                  }}>
+                    🔑 No {meta.label} key — add in Settings
+                  </div>
+                )}
+
+                {sel && (
+                  <div style={{
+                    marginTop: '6px', padding: '5px 10px',
+                    background: `${meta.color}0a`,
+                    border: `0.5px solid ${meta.color}25`,
+                    borderRadius: '8px',
+                    display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap',
+                  }}>
+                    <span style={{ fontSize: '11px', color: meta.color, fontWeight: 600 }}>{meta.emoji} {sel.providerLabel}</span>
+                    <span style={{ color: 'rgba(60,60,67,0.25)', fontSize: '11px' }}>·</span>
+                    <span style={{ fontSize: '11px', color: 'rgba(60,60,67,0.5)' }}>Speed {sel.speedLabel}</span>
+                    <span style={{ color: 'rgba(60,60,67,0.25)', fontSize: '11px' }}>·</span>
+                    <span style={{ fontSize: '11px', color: 'rgba(60,60,67,0.45)' }}>{sel.bestFor.slice(0, 3).join(', ')}</span>
+                  </div>
+                )}
+              </>
             )
           })()}
         </div>
