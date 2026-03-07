@@ -2096,121 +2096,135 @@ export function Storyboard() {
       {/* Header */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 100,
-        background: 'rgba(242,242,247,0.85)',
+        background: 'rgba(242,242,247,0.92)',
         backdropFilter: 'blur(30px)',
         WebkitBackdropFilter: 'blur(30px)',
         borderBottom: '0.5px solid rgba(0,0,0,0.1)',
         padding: isDesktop ? '10px 24px' : '10px 11px',
       }}>
-      <div style={{
-        maxWidth: isDesktop ? '1400px' : undefined,
-        margin: isDesktop ? '0 auto' : undefined,
-        display: 'flex', alignItems: 'center', gap: '10px',
-        width: '100%',
-      }}>
-        <button onClick={() => navigate('/')} style={{
-          background: 'rgba(255,255,255,0.85)',
-          border: '0.5px solid rgba(0,0,0,0.12)',
-          borderRadius: '12px', color: '#007aff',
-          padding: '6px 12px', cursor: 'pointer',
-          fontSize: '13px', fontWeight: 600,
-          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+        {/* Row 1: Back + Title + Save + Minimize */}
+        <div style={{
+          maxWidth: isDesktop ? '1400px' : undefined,
+          margin: isDesktop ? '0 auto' : undefined,
+          display: 'flex', alignItems: 'center', gap: '8px',
+          width: '100%',
         }}>
-          ← Back
-        </button>
-        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-          <div style={{ color: '#1d1d1f', fontSize: '15px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {storyboard.title as string}
+          <button onClick={() => navigate('/')} style={{
+            flexShrink: 0,
+            background: 'rgba(255,255,255,0.85)',
+            border: '0.5px solid rgba(0,0,0,0.12)',
+            borderRadius: '12px', color: '#007aff',
+            padding: '6px 12px', cursor: 'pointer',
+            fontSize: '13px', fontWeight: 600,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          }}>
+            ← Back
+          </button>
+
+          {/* Title block — flex:1 so it takes all available space */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              color: '#1d1d1f', fontSize: '15px', fontWeight: 700,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {(storyboard.title as string) || 'Storyboard'}
+            </div>
+            <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>{scenes.length} scenes</span>
+              {sessionTotal > 0 && (
+                <span style={{ color: '#ff6b35', fontWeight: 600 }}>· {formatCost(sessionTotal)}</span>
+              )}
+            </div>
           </div>
-          <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '11px' }}>
-            {scenes.length} scenes · Storyboard
-          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={isAlreadySaved}
+            style={{
+              flexShrink: 0,
+              padding: '6px 12px', borderRadius: '10px',
+              border: `0.5px solid ${isAlreadySaved ? 'rgba(52,199,89,0.3)' : 'rgba(255,107,53,0.3)'}`,
+              background: isAlreadySaved ? 'rgba(52,199,89,0.1)' : 'rgba(255,107,53,0.1)',
+              color: isAlreadySaved ? '#34c759' : '#ff6b35',
+              fontSize: '12px', fontWeight: 600,
+              cursor: isAlreadySaved ? 'default' : 'pointer',
+            }}
+          >
+            {isAlreadySaved ? '✓ Saved' : 'Save'}
+          </button>
+
+          <button
+            onClick={handleMinimize}
+            title="Minimize to queue"
+            style={{
+              flexShrink: 0,
+              padding: '6px 12px', borderRadius: '10px',
+              border: '0.5px solid rgba(0,122,255,0.25)',
+              background: 'rgba(0,122,255,0.1)',
+              color: '#007aff',
+              fontSize: '12px', fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            ↙ Min
+          </button>
         </div>
-        {/* Minimize to queue */}
-        <button
-          onClick={handleMinimize}
-          title="Minimize to queue — continue generating in background"
-          style={{
-            flexShrink: 0,
-            padding: '6px 12px', borderRadius: '10px',
-            border: '0.5px solid rgba(0,122,255,0.25)',
-            background: 'rgba(0,122,255,0.1)',
-            color: '#007aff',
-            fontSize: '12px', fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          ↙ Minimize
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={isAlreadySaved}
-          style={{
-            flexShrink: 0,
-            padding: '6px 12px', borderRadius: '10px',
-            border: `0.5px solid ${isAlreadySaved ? 'rgba(52,199,89,0.3)' : 'rgba(255,107,53,0.3)'}`,
-            background: isAlreadySaved ? 'rgba(52,199,89,0.1)' : 'rgba(255,107,53,0.1)',
-            color: isAlreadySaved ? '#34c759' : '#ff6b35',
-            fontSize: '12px', fontWeight: 600,
-            cursor: isAlreadySaved ? 'default' : 'pointer',
-          }}
-        >
-          {isAlreadySaved ? '✓ Saved' : 'Save'}
-        </button>
+
+        {/* Row 2: Veo action buttons (only shown for Veo-compatible tones) */}
         {isVeoTone((storyboard.tone as string) || '') && (
-          <button
-            onClick={handleGenerateAllVeo}
-            disabled={generatingAllVeo}
-            style={{
-              flexShrink: 0,
-              padding: '6px 12px', borderRadius: '10px',
-              background: generatingAllVeo ? 'rgba(118,118,128,0.08)' : 'rgba(255,107,53,0.1)',
-              border: `0.5px solid ${generatingAllVeo ? 'rgba(118,118,128,0.2)' : 'rgba(255,107,53,0.3)'}`,
-              color: generatingAllVeo ? 'rgba(60,60,67,0.4)' : '#ff6b35',
-              fontSize: '11px', fontWeight: 700,
-              cursor: generatingAllVeo ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {generatingAllVeo ? '⏳ Generating...' : '🎬 Gen All Veo'}
-          </button>
+          <div style={{
+            maxWidth: isDesktop ? '1400px' : undefined,
+            margin: isDesktop ? '4px auto 0' : '6px 0 0',
+            display: 'flex', gap: '6px', flexWrap: 'wrap',
+          }}>
+            <button
+              onClick={handleGenerateAllVeo}
+              disabled={generatingAllVeo}
+              style={{
+                padding: '5px 12px', borderRadius: '10px',
+                background: generatingAllVeo ? 'rgba(118,118,128,0.08)' : 'rgba(255,107,53,0.1)',
+                border: `0.5px solid ${generatingAllVeo ? 'rgba(118,118,128,0.2)' : 'rgba(255,107,53,0.3)'}`,
+                color: generatingAllVeo ? 'rgba(60,60,67,0.4)' : '#ff6b35',
+                fontSize: '11px', fontWeight: 700,
+                cursor: generatingAllVeo ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {generatingAllVeo ? '⏳ Generating...' : '🎬 Gen All Veo'}
+            </button>
+            <button
+              onClick={() => {
+                const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
+                const allPrompts = scenes.map((s: Record<string, unknown>) => {
+                  const sNum = s.scene_number as number
+                  const veo = storedAssets[sNum]?.veoPrompt
+                  return [
+                    `=== SCENE ${sNum} ===`,
+                    `VO: "${s.vo_script as string}"`,
+                    ``,
+                    `VEO 3.1 PROMPT:`,
+                    veo?.full_veo_prompt || '(not generated yet)',
+                    ``,
+                  ].join('\n')
+                }).join('\n')
+                const blob = new Blob([allPrompts], { type: 'text/plain' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `veo-prompts-${((storyboard.title as string) || 'storyboard').replace(/\s/g, '-')}.txt`
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              style={{
+                padding: '5px 12px', borderRadius: '10px',
+                background: 'rgba(255,107,53,0.1)',
+                border: '0.5px solid rgba(255,107,53,0.3)',
+                color: '#ff6b35', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              🎬 Export Veo
+            </button>
+          </div>
         )}
-        {isVeoTone((storyboard.tone as string) || '') && (
-          <button
-            onClick={() => {
-              const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
-              const allPrompts = scenes.map((s: Record<string, unknown>) => {
-                const sNum = s.scene_number as number
-                const veo = storedAssets[sNum]?.veoPrompt
-                return [
-                  `=== SCENE ${sNum} ===`,
-                  `VO: "${s.vo_script as string}"`,
-                  ``,
-                  `VEO 3.1 PROMPT:`,
-                  veo?.full_veo_prompt || '(not generated yet)',
-                  ``,
-                ].join('\n')
-              }).join('\n')
-              const blob = new Blob([allPrompts], { type: 'text/plain' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `veo-prompts-${((storyboard.title as string) || 'storyboard').replace(/\s/g, '-')}.txt`
-              a.click()
-              URL.revokeObjectURL(url)
-            }}
-            style={{
-              flexShrink: 0,
-              padding: '6px 12px', borderRadius: '10px',
-              background: 'rgba(255,107,53,0.1)',
-              border: '0.5px solid rgba(255,107,53,0.3)',
-              color: '#ff6b35', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
-            }}
-          >
-            🎬 Export Veo
-          </button>
-        )}
-        <span style={{ fontSize: '18px', flexShrink: 0 }}>🎬</span>
-      </div>
       </div>
 
       {/* API Key Warning */}
@@ -2274,10 +2288,10 @@ export function Storyboard() {
                 }}
                 style={{
                   padding: '2px 7px', borderRadius: '10px',
-                  border: `1px solid ${costFilter === svc ? (serviceColors[svc] || '#EFE1CF') : 'rgba(255,255,255,0.1)'}`,
-                  background: costFilter === svc ? `${serviceColors[svc] || '#EFE1CF'}22` : 'rgba(255,255,255,0.04)',
-                  color: serviceColors[svc] || 'rgba(239,225,207,0.5)',
-                  fontSize: '11px', fontWeight: 500, cursor: 'pointer',
+                  border: `0.5px solid ${costFilter === svc ? (serviceColors[svc] || '#007aff') : 'rgba(0,0,0,0.1)'}`,
+                  background: costFilter === svc ? `${serviceColors[svc] || '#007aff'}18` : 'rgba(0,0,0,0.04)',
+                  color: serviceColors[svc] || '#1d1d1f',
+                  fontSize: '11px', fontWeight: 600, cursor: 'pointer',
                 }}
               >
                 {svc}: {formatCost(total)}
@@ -2321,8 +2335,8 @@ export function Storyboard() {
                   </span>
                   <span style={{
                     padding: '1px 6px', borderRadius: '6px',
-                    background: `${serviceColors[entry.service] || '#EFE1CF'}18`,
-                    color: serviceColors[entry.service] || '#EFE1CF',
+                    background: `${serviceColors[entry.service] || '#007aff'}18`,
+                    color: serviceColors[entry.service] || '#007aff',
                     fontSize: '10px', fontWeight: 600,
                   }}>
                     {entry.service}
