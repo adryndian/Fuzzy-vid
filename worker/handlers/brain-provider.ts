@@ -102,6 +102,19 @@ export async function handleProviderBrain(
       }
     )
 
+    // Storyboard generation mode: parse the AI JSON and return it directly
+    // (same format as /api/brain/generate — frontend expects scenes at top level)
+    if (body.story && !body.system_prompt) {
+      // Strip reasoning model think blocks, markdown fences, then parse
+      const clean = content
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/```json|```/g, '')
+        .trim()
+      const storyboardData = JSON.parse(clean)
+      return Response.json(storyboardData, { headers: corsHeaders })
+    }
+
+    // Raw prompt mode (Settings test, Veo regen, etc.): return content wrapper
     return Response.json({ content, provider: provider.id, model: brain_model }, {
       headers: corsHeaders,
     })

@@ -183,6 +183,7 @@ export function Storyboard() {
 
   // Cost tracker UI state
   const [costExpanded, setCostExpanded] = useState(false)
+  const [generatingAllVeo, setGeneratingAllVeo] = useState(false)
   const [costFilter, setCostFilter] = useState<string | null>(null)
 
   // Video polling refs
@@ -382,6 +383,50 @@ export function Storyboard() {
       updateAssetInStore(activeSessionId, sceneNum, update)
     }
   }, [activeSessionId, updateAssetInStore])
+
+  // ─── Generate All Veo Prompts ───────────────────────────────
+  const handleGenerateAllVeo = async () => {
+    if (!storyboard || generatingAllVeo) return
+    const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
+    const brainModel = (storyboard.brain_model as string) || 'gemini-2.0-flash'
+    const headers = { 'Content-Type': 'application/json', ...getApiHeaders(user?.id) }
+
+    setGeneratingAllVeo(true)
+    let generated = 0
+    for (const scene of scenes) {
+      const sceneNum = scene.scene_number as number
+      try {
+        const res = await fetch(`${WORKER_URL}/api/brain/regenerate-veo-prompt`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            scene_number: sceneNum,
+            vo_script: (scene.vo_script as string) || '',
+            image_prompt: editedPrompts[sceneNum] || (scene.image_prompt as string) || '',
+            tone: (storyboard.tone as string) || 'narrative_storytelling',
+            platform: (storyboard.platform as string) || 'TikTok',
+            brain_model: brainModel,
+          }),
+        })
+        const data = await res.json() as { veo_prompt?: SceneAssets['veoPrompt']; error?: string }
+        if (data.veo_prompt) {
+          updateAsset(sceneNum, { veoPrompt: data.veo_prompt })
+          saveSceneAsset({
+            storyboard_id: activeSessionId || 'storyboard',
+            scene_number: sceneNum,
+            video_prompt: JSON.stringify(data.veo_prompt),
+          }).catch(console.error)
+          generated++
+        }
+      } catch (e) {
+        console.error(`Veo gen failed scene ${sceneNum}:`, e)
+      }
+    }
+    setGeneratingAllVeo(false)
+    if (generated > 0) {
+      toast(`Veo prompts generated for ${generated}/${scenes.length} scenes`, { icon: '🎬', duration: 3000 })
+    }
+  }
 
   // ─── Duration control ──────────────────────────────────────
   const handleTotalDurationChange = (total: number) => {
@@ -2126,6 +2171,22 @@ export function Storyboard() {
         >
           {isAlreadySaved ? '✓ Saved' : 'Save'}
         </button>
+        {isVeoTone((storyboard.tone as string) || '') && (
+          <button
+            onClick={handleGenerateAllVeo}
+            disabled={generatingAllVeo}
+            style={{
+              padding: '6px 12px', borderRadius: '10px',
+              background: generatingAllVeo ? 'rgba(118,118,128,0.08)' : 'rgba(255,107,53,0.1)',
+              border: `0.5px solid ${generatingAllVeo ? 'rgba(118,118,128,0.2)' : 'rgba(255,107,53,0.3)'}`,
+              color: generatingAllVeo ? 'rgba(60,60,67,0.4)' : '#ff6b35',
+              fontSize: '11px', fontWeight: 700,
+              cursor: generatingAllVeo ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {generatingAllVeo ? '⏳ Generating...' : '🎬 Gen All Veo'}
+          </button>
+        )}
         {isVeoTone((storyboard.tone as string) || '') && (
           <button
             onClick={() => {

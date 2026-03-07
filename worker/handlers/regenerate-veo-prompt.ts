@@ -72,8 +72,11 @@ Generate the Veo 3.1 prompt for this scene.`
       { role: 'user', content: userPrompt },
     ], { max_tokens: 512 })
 
-    // Parse JSON — strip markdown fences if present
-    const clean = content.replace(/```json|```/g, '').trim()
+    // Parse JSON — strip reasoning think blocks + markdown fences
+    const clean = content
+      .replace(/<think>[\s\S]*?<\/think>/gi, '')
+      .replace(/```json|```/g, '')
+      .trim()
     const parsed = JSON.parse(clean)
 
     return Response.json({ veo_prompt: parsed }, { headers: cors })
