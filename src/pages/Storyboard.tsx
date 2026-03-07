@@ -1241,52 +1241,6 @@ export function Storyboard() {
               )}
             </div>
 
-            {/* Narration + Rewrite VO */}
-            {narration && (
-              <div style={{ marginBottom: '11px' }}>
-                <div style={{
-                  background: 'rgba(0,0,0,0.03)',
-                  border: '0.5px solid rgba(0,0,0,0.08)',
-                  borderRadius: '14px',
-                  padding: '10px 12px',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Narration VO
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {voCharInfo[sceneNum] && (
-                        <span style={{
-                          fontSize: '10px', fontWeight: 600,
-                          color: voCharInfo[sceneNum].count <= voCharInfo[sceneNum].limit ? '#34c759' : '#ff3b30'
-                        }}>
-                          {voCharInfo[sceneNum].count}/{voCharInfo[sceneNum].limit} chars
-                        </span>
-                      )}
-                      <button onClick={() => handleCopy(customVO[sceneNum] || narration)} style={smallIconBtn}>
-                        Copy
-                      </button>
-                      <button
-                        onClick={() => handleRewriteVO(scene, sceneNum)}
-                        disabled={rewritingVO[sceneNum]}
-                        style={{
-                          padding: '4px 10px', borderRadius: '8px',
-                          background: 'rgba(0,122,255,0.1)',
-                          border: '0.5px solid rgba(0,122,255,0.25)',
-                          color: '#007aff', fontSize: '10px', fontWeight: 600,
-                          cursor: rewritingVO[sceneNum] ? 'not-allowed' : 'pointer',
-                          opacity: rewritingVO[sceneNum] ? 0.6 : 1,
-                        }}>
-                        {rewritingVO[sceneNum] ? '⏳...' : `✏️ Rewrite (${sceneDurations[sceneNum] || 4}s)`}
-                      </button>
-                    </div>
-                  </div>
-                  <p style={{ color: '#1d1d1f', fontSize: '13px', lineHeight: '1.5', fontStyle: 'italic', margin: 0 }}>
-                    "{customVO[sceneNum] || narration}"
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* IMAGE SECTION */}
             <div style={{
