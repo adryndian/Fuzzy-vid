@@ -1,6 +1,6 @@
 # Fuzzy Short — Gemini CLI Project Instructions
 
-# Version 3.8 — Updated March 2026
+# Version 3.9 — Updated 2026-03-08
 
 # READ THIS COMPLETELY before starting any task
 
@@ -28,8 +28,8 @@ Brain AI:  AWS Bedrock (Claude Sonnet 4.6, Llama 4) +
            Groq (Llama 3.3 70B, Llama 3.1 8B, Gemma 2 9B, Mixtral 8x7B) +
            OpenRouter (DeepSeek R1/V3, Gemma 3, Llama 3.3, Mistral 7B) +
            ZhipuAI GLM (glm-4-flash, glm-4-flash-250414, glm-z1-flash, glm-4.6v)
-Image AI:  AWS Bedrock (Nova Canvas, SD 3.5) + Dashscope (Wanx)
-Video AI:  AWS Bedrock Nova Reel (async) + Dashscope Wan2.1 (async)
+Image AI:  AWS Bedrock (Nova Canvas, SD 3.5) + Dashscope (Wanx/Qwen-Image) + ZhipuAI GLM (CogView-3-Flash)
+Video AI:  AWS Bedrock Nova Reel (async) + Dashscope Wan2.1/2.6 (async)
 Audio:     AWS Polly + ElevenLabs
 
 -----
@@ -39,16 +39,18 @@ Audio:     AWS Polly + ElevenLabs
 src/
   pages/
     Home.tsx           <- story input form, provider pill + dropdown brain selector
-    Storyboard.tsx     <- per-scene cards, image/video/audio gen, Gen All Veo button
-    Settings.tsx       <- API keys (6 providers), test buttons, checkmark indicators
+    Storyboard.tsx     <- per-scene cards, image/video/audio gen, Gen All Veo button, scene nav bar
+    Settings.tsx       <- API keys (6 providers), test buttons, checkmark indicators, dark mode
     Dashboard.tsx      <- storyboard list, credits badge, tone pills
   lib/
     api.ts             <- all Worker fetch calls; exports WORKER_URL, getApiHeaders()
     providerModels.ts  <- 29 brain models x 6 providers; getModelsByProvider/getModelById/hasRequiredKey
+    theme.tsx          <- ThemeProvider context, useTheme() hook, tk(isDark) token function
   types/
     schema.ts          <- AppSettings, VideoJob, SceneAssets, buildApiHeaders()
   components/
-    VeoPromptSection.tsx <- per-scene Veo 3.1 prompt UI, sub-tone selector, copy/regen
+    VeoPromptSection.tsx <- per-scene Veo 3.1 prompt UI, sub-tone selector, copy/regen, JSON copy fix
+    BottomNav.tsx        <- 3-tab bottom navigation (Home/Dashboard/Settings), rounded top corners
 
 worker/
   index.ts                        <- route handler, extractCredentials(), CORS headers
@@ -147,8 +149,14 @@ REMOVED: wanx-v1 (DOES NOT EXIST on dashscope-intl), wanx2.1-t2i-plus (replaced 
 
 ### Dashscope Singapore — Video (ALL async)
 
-wan2.1-i2v-plus, wan2.1-i2v-turbo  <- image->video
-wan2.1-t2v-plus, wan2.1-t2v-turbo  <- text->video
+wan2.6-i2v-flash   <- image->video, best quality  [added v3.9]
+wanx2.1-i2v-turbo  <- image->video, fast
+wan2.6-t2v-flash   <- text->video, best quality   [added v3.9]
+wan2.1-t2v-turbo   <- text->video, fast
+
+UPDATED IDs in dashscope.ts QWEN_VIDEO_MODELS (v3.9):
+  wan2.6-i2v-flash  (was wan2.1-i2v-plus label)
+  wan2.6-t2v-flash  (was wan2.1-t2v-plus label)
 
 ### Google Gemini (route: /api/brain/provider, header: X-Gemini-Api-Key)
 
@@ -186,6 +194,19 @@ glm-4.6v            <- latest GLM model, fast + multilingual (FREE)  [added v3.8
 Note: Reasoning models (glm-z1-flash, deepseek-r1) output <think>...</think> blocks
 before JSON. Both brain-provider.ts and regenerate-veo-prompt.ts strip these automatically.
 
+### ZhipuAI GLM — Image (route: /api/image/generate, provider: glm)
+
+cogview-3-flash  <- FREE, fast image generation (CogView-3 Flash)  [valid as of v3.9]
+
+IMPORTANT: cogview-4-flash does NOT exist on ZhipuAI API — returns "模型不存在" error.
+Only cogview-3-flash is valid as a free GLM image model.
+cogview-4 (paid) and cogview-4-plus (paid) exist but are NOT integrated.
+
+GLM image endpoint: https://open.bigmodel.cn/api/paas/v4/images/generations
+Auth: Authorization: Bearer {glmApiKey}
+Body: { model: 'cogview-3-flash', prompt: string, size: '1024x1024' | '720x1280' | '1280x720' }
+Response: { data: [{ url: string }] } — URL is synchronous (no polling needed)
+
 -----
 
 ## DASHSCOPE API RULES
@@ -198,10 +219,17 @@ Brain:
 POST /compatible-mode/v1/chat/completions
 Body: { model, messages: [{role, content}], max_tokens }
 
-Image (wanx2.1 / qwen-image models):
+Image (wanx2.1-t2i-turbo — standard format):
 POST /api/v1/services/aigc/text2image/image-synthesis
 Header: X-DashScope-Async: enable
-Body: { model, input: { prompt }, parameters: { size, n, negative_prompt, watermark: false } }
+Body: { model, input: { prompt }, parameters: { size, n, negative_prompt, watermark: false, prompt_extend: true } }
+
+Image (qwen-image-2.0-pro / qwen-image-2.0 — NO prompt_extend, NO watermark!):
+POST /api/v1/services/aigc/text2image/image-synthesis
+Header: X-DashScope-Async: enable
+Body: { model, input: { prompt }, parameters: { size, n, negative_prompt } }
+CRITICAL: Do NOT pass prompt_extend (boolean) or watermark to qwen-image models.
+These models treat prompt_extend as a URL string field — passing true causes "url error, please check url".
 
 Image (wan2.6-image ONLY — different format!):
 POST /api/v1/services/aigc/text2image/image-synthesis
@@ -337,7 +365,9 @@ CLERK_JWKS_URL must match key's domain: https://[slug].clerk.accounts.dev/.well-
 
 -----
 
-## UI DESIGN — iOS 26 Liquid Glass
+## UI DESIGN — iOS 26 Liquid Glass + Dark Mode (v3.9)
+
+### Light Mode Base
 
 Background: linear-gradient(145deg, #f2f2f7 0%, #e5e5ea 50%, #f2f2f7 100%)
 
@@ -369,6 +399,66 @@ Button (active/generate):
   borderRadius: 16px
   boxShadow: 0 4px 20px rgba(255,107,53,0.4)
   color: white
+
+### Dark Mode System (v3.9)
+
+File: src/lib/theme.tsx
+
+ThemeProvider: wraps app in App.tsx, provides isDark boolean from localStorage('fuzzy_theme').
+useTheme() hook: returns { isDark, toggleTheme } from context.
+tk(isDark) function: returns token object based on current mode.
+
+All pages import:
+  import { useTheme, tk } from '../lib/theme'
+  const { isDark } = useTheme()
+  const t = tk(isDark)   // or thm = tk(isDark) — same thing
+
+Token reference (tk(isDark) return values):
+
+  Token           | Light value                          | Dark value
+  ----------------|--------------------------------------|----------------------------------------
+  pageBg          | linear-gradient(145deg,#f2f2f7...)   | linear-gradient(145deg,#1c1c1e,#2c2c2e)
+  cardBg          | rgba(255,255,255,0.75)                | rgba(44,44,46,0.85)
+  cardBorder      | 0.5px solid rgba(255,255,255,0.9)    | 0.5px solid rgba(255,255,255,0.08)
+  cardShadow      | 0 2px 24px rgba(0,0,0,0.07),...      | 0 2px 24px rgba(0,0,0,0.4),...
+  headerBg        | rgba(242,242,247,0.85)               | rgba(28,28,30,0.92)
+  navBg           | rgba(242,242,247,0.9)                | rgba(28,28,30,0.95)
+  navBorder       | 0.5px solid rgba(0,0,0,0.1)          | 0.5px solid rgba(255,255,255,0.08)
+  textPrimary     | #1d1d1f                              | #f2f2f7
+  textSecondary   | rgba(60,60,67,0.6)                   | rgba(235,235,245,0.6)
+  textTertiary    | rgba(60,60,67,0.3)                   | rgba(235,235,245,0.3)
+  inputBg         | rgba(255,255,255,0.9)                | rgba(58,58,60,0.9)
+  inputBorder     | 0.5px solid rgba(0,0,0,0.12)         | 0.5px solid rgba(255,255,255,0.12)
+  pillInactive    | rgba(120,120,128,0.12)               | rgba(120,120,128,0.25)
+  sectionBg       | rgba(120,120,128,0.08)               | rgba(120,120,128,0.2)
+  labelColor      | rgba(60,60,67,0.5)                   | rgba(235,235,245,0.5)
+
+Theme persists to localStorage('fuzzy_theme') — 'dark' | 'light'.
+Toggle button in Home.tsx header (☀️/🌙 icon button).
+
+RULES:
+  - NEVER hardcode '#1d1d1f', 'rgba(255,255,255,0.X)', 'rgba(60,60,67,0.X)' in page components
+  - ALWAYS use t.textPrimary, t.cardBg, etc.
+  - Select <option> elements require a <style> tag for dark bg (inline styles can't target options):
+      <style>{`select option { background: ${isDark ? '#2c2c2e' : '#f2f2f7'}; color: ${t.textPrimary}; }`}</style>
+  - dropdownStyle must be defined INSIDE the component after tk(isDark) is called — NOT at module level
+  - TONES.map(t => ...) SHADOWS the outer t = tk(isDark) — rename iterator: TONES.map(tn => ...)
+    Same for any .map() that uses 't' as iterator name inside a component with t = tk(isDark)
+
+### Navigation (v3.9)
+
+BottomNav component (src/components/BottomNav.tsx):
+  3 tabs: Home / Dashboard / Settings
+  Position: fixed, bottom: 0, height ~65px
+  Style: borderRadius: '24px 24px 0 0' (rounded top corners)
+  Uses useTheme() internally — no theme props needed
+
+Scene Navigation Bar (Storyboard.tsx, mobile-only):
+  Condition: !isDesktop && scenes.length > 1
+  Position: fixed, bottom: 65px (above BottomNav), zIndex: 98
+  Style: headerBg + navBorder + blur backdrop
+  Controls: ← Prev / scene counter / Next → buttons
+  paddingBottom on main content: 130px (extra space for nav bar + BottomNav)
 
 -----
 
@@ -648,6 +738,14 @@ After deploy, hard-refresh browser (Cmd+Shift+R / Ctrl+F5) to bypass CDN cache.
 23. Strip <think>...</think> from reasoning model outputs before JSON.parse
 24. VeoPromptSection must receive apiHeaders prop from getApiHeaders(user?.id)
 25. hasRequiredKey(model, userSettings) from providerModels.ts — use for UI key gating
+26. Dark mode: ALL page components use useTheme() + tk(isDark) — never hardcode light-only colors
+27. dropdownStyle defined INSIDE component function (after tk() call) — never at module-level
+28. Map iterator shadowing: never use 't' as iterator name in components where t = tk(isDark)
+29. Dashscope qwen-image-2.0-pro / qwen-image-2.0: omit prompt_extend and watermark params entirely
+30. GLM image model: cogview-3-flash (NOT cogview-4-flash — that model does not exist)
+31. GLM image API: synchronous (no polling), response: { data: [{ url }] }
+32. VeoPromptSection copy button: when showRaw=true copy full JSON, when false copy full_veo_prompt plain text
+33. Mobile paddingBottom in Storyboard.tsx: 130px (not 80px) — accounts for BottomNav + scene nav bar
 
 -----
 
@@ -665,8 +763,15 @@ Nova Reel "UnknownOperationException"
 -> Wrong model ID. Check valid list above. wanx-v1 does not exist on dashscope-intl.
 -> wanx2.1-t2i-plus removed — use qwen-image-2.0-pro instead
 
-"url error, please check url" (Dashscope image)
--> Remove img_url from t2i requests. Only i2v needs img_url.
+"url error, please check url！" (Dashscope image — qwen-image models)
+-> Root cause: prompt_extend: true (boolean) was passed to qwen-image-2.0-pro / qwen-image-2.0.
+   These models interpret prompt_extend as a URL string field (not a boolean toggle).
+   Passing boolean true is treated as an invalid URL string -> "url error".
+-> Fix: detect isQwenImage = model === 'qwen-image-2.0-pro' || model === 'qwen-image-2.0'
+   Skip prompt_extend and watermark entirely for these models; only pass them for wanx/wan models.
+
+"url error, please check url" (Dashscope image — wrong input)
+-> Separate cause: img_url sent to t2i model. Remove img_url from t2i requests. Only i2v needs img_url.
 
 "InvalidParameter" from Dashscope wan2.6
 -> Use messages[] format: input: { messages: [{role:'user', content:[{text:prompt}]}] }
@@ -700,6 +805,18 @@ Header name mismatch (Gemini key not forwarded)
 -> Fixed in 0bd0f94: all frontend code now sends X-Gemini-Api-Key.
 -> Worker extractCredentials accepts both for backward compat: X-Gemini-Api-Key || X-Gemini-Key
 
+"模型不存在" (ZhipuAI GLM image — model not found)
+-> cogview-4-flash does NOT exist on ZhipuAI API. Use cogview-3-flash.
+-> cogview-4 (paid) and cogview-4-plus (paid) exist but are NOT integrated in this app.
+-> Always verify GLM image model IDs against the list above before using.
+
+Dark mode: some cards/inputs still appearing white after switching themes
+-> dropdownStyle was defined at module level (outside component), so it couldn't access tk(isDark).
+   Move dropdownStyle const INSIDE the component function, after the t = tk(isDark) line.
+-> Map iterators: TONES.map(t => ...) shadows outer t = tk(isDark). Rename iterator to tn or tone.
+   Same for any .map() using 't' as a variable name inside a themed component.
+-> select <option> background cannot be set via inline styles — use a <style> JSX tag instead.
+
 "Clerk: Failed to load Clerk" / failed_to_load_clerk_js
 -> Use pk_test_ keys for .pages.dev deployments (pk_live_ needs a real custom domain).
 -> CLERK_JWKS_URL must match key's domain.
@@ -711,6 +828,107 @@ AWSCompromisedKeyQuarantineV3
 -----
 
 ## CHANGELOG
+
+### v3.9 (2026-03-08) — UI Revamp + Dark Mode + Bug Fixes
+
+#### Fix 1 — Dark mode system (theme.tsx)
+
+New file: src/lib/theme.tsx
+  - ThemeProvider: React context, wraps entire app in App.tsx
+  - useTheme() hook: returns { isDark, toggleTheme }
+  - tk(isDark): returns 15 design tokens for the current mode (see UI DESIGN section)
+  - Persists to localStorage('fuzzy_theme')
+  - Toggle button in Home.tsx header (☀️ / 🌙)
+
+Applied across all 3 main pages:
+  Home.tsx:
+    - dropdownStyle moved inside component (was module-level const)
+    - TONES.map renamed iterator t -> tn to avoid shadowing theme t
+    - All pill buttons, provider chips, art style/aspect ratio buttons use t.pillInactive/textPrimary
+    - glass-input focus style: dark-aware rgba
+    - select option <style> tag for dark bg
+  Settings.tsx:
+    - Header, card, label, input, select all use thm.* tokens
+    - Back button: dark bg when isDark
+    - Region sub-card: thm.sectionBg + thm.navBorder
+    - Section headings all use thm.textPrimary
+    - Security Note card: dark-aware blue bg
+  Storyboard.tsx:
+    - dropdownStyle moved inside component
+    - glassCard, smallIconBtn, back button, header, thumbnail list all use thm.*
+    - Scene card headers, VO script, audio history, video prompt textarea all themed
+    - JSON pre block, desktop thumbnail sidebar, cost tracker all themed
+    - select option <style> tag for dark bg
+    - Mobile paddingBottom increased to 130px (was 80px)
+
+#### Fix 2 — Scene navigation bar (mobile, Storyboard.tsx)
+
+Added a fixed navigation bar on mobile (below scenes, above BottomNav):
+  - Position: fixed, bottom: 65px, zIndex: 98 (below GenTaskBar's 199)
+  - Only visible when: !isDesktop && scenes.length > 1
+  - Buttons: ← Prev / scene counter / Next → (disabled at boundaries)
+  - Colors: blue tint when active, t.pillInactive when disabled
+  - Uses thm.headerBg + blur backdrop + thm.navBorder top
+
+#### Fix 3 — Qwen image "url error" (dashscope.ts)
+
+Root cause: handleDashscopeImageStart() was passing prompt_extend: true and
+watermark: false to ALL image models, including qwen-image-2.0-pro and qwen-image-2.0.
+These Qwen models treat prompt_extend as a URL string field — passing boolean true
+causes the API to return "url error, please check url！".
+
+Fix: added isQwenImage detection. For qwen-image models: only pass size, n, negative_prompt.
+For wanx/wan models: also pass prompt_extend: true and watermark: false.
+
+Code:
+  const isQwenImage = model === 'qwen-image-2.0-pro' || model === 'qwen-image-2.0'
+  const parameters: Record<string, unknown> = { size, n: 1, negative_prompt: ... }
+  if (!isQwenImage) {
+    parameters.prompt_extend = true
+    parameters.watermark = false
+  }
+
+#### Fix 4 — GLM image "模型不存在" (model does not exist)
+
+Root cause: Model ID cogview-4-flash was used in both Home.tsx and Storyboard.tsx.
+This model does not exist on ZhipuAI API. Returns HTTP error "模型不存在" (model not found).
+
+Fix: Changed all references from cogview-4-flash -> cogview-3-flash (valid free model).
+  src/pages/Home.tsx
+  src/pages/Storyboard.tsx (IMAGE_MODELS constant)
+
+#### Fix 5 — VeoPromptSection copy button context-aware (VeoPromptSection.tsx)
+
+Problem: Copy button always copied full_veo_prompt plain text, even when JSON view was active.
+
+Fix:
+  handleCopy now checks showRaw state:
+    showRaw=true  -> copies JSON.stringify(veoPrompt, null, 2) — full JSON object
+    showRaw=false -> copies veoPrompt.full_veo_prompt — plain text prompt string
+  Button label changes:
+    showRaw=true  -> "📋 Copy JSON"
+    showRaw=false -> "📋 Copy Prompt"
+
+#### Fix 6 — BottomNav rounded top corners (BottomNav.tsx)
+
+Applied borderRadius: '24px 24px 0 0' to BottomNav container.
+Consistent with iOS 26 design language — tab bar has smooth curved top edge.
+
+#### Fix 7 — OpenRouter storyboard generation routing
+
+Problem: OpenRouter provider routing was broken due to header key naming mismatch.
+Fixed: frontend consistently uses X-Openrouter-Api-Key header.
+brain-provider.ts: routes to OpenRouter when X-Openrouter-Api-Key is present.
+
+#### Wan 2.6 video models added (dashscope.ts)
+
+Updated QWEN_VIDEO_MODELS:
+  wan2.6-i2v-flash  <- image->video, best quality (replaces wan2.1-i2v-plus badge)
+  wanx2.1-i2v-turbo <- image->video, fast (unchanged)
+  wan2.6-t2v-flash  <- text->video, best quality (replaces wan2.1-t2v-plus badge)
+  wan2.1-t2v-turbo  <- text->video, fast (unchanged)
+
+-----
 
 ### v3.8 (2026-03-07) — Bug Fixes + GLM-4.6V + Gen All Veo
 
@@ -873,23 +1091,96 @@ Clear session on user change. API key warnings added to UI.
 
 -----
 
-## GEMINI CLI USAGE TIPS
+## GEMINI CLI + FIREBASE STUDIO USAGE
+
+### General workflow
 
 When given a task file (.md):
-  Read task file -> execute tasks in order -> report after each task
+  Read task file completely -> execute tasks in order -> report after each task
+  Never skip TypeScript check before deploying
 
 For TypeScript errors:
-  npx tsc --noEmit 2>&1 | head -30
-  Fix all errors before proceeding to next task
+  npx tsc --noEmit 2>&1 | head -50
+  Fix ALL errors before proceeding. Common causes:
+  - Variable shadowing (e.g., t = tk(isDark) then TONES.map(t => ...))
+  - dropdownStyle at module level referencing theme tokens (move inside component)
+  - Missing type annotations on Record<string, unknown> payloads
 
 For Worker deployment:
   wrangler deploy 2>&1 | tail -10
-  Test with curl before marking task complete:
+  Test with curl after deploy:
   curl -s -X POST https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/provider \
     -H "Content-Type: application/json" \
     -H "X-Gemini-Api-Key: YOUR_KEY" \
     -d '{"brain_model":"gemini-2.0-flash","system_prompt":"You are helpful.","user_prompt":"Reply ok","max_tokens":10}' | python3 -m json.tool
 
+For frontend deployment:
+  npm run build                         # must show 0 errors
+  git add src/... worker/...            # SPECIFIC files only (never git add -A)
+  git commit -m "feat/fix: description"
+  git push origin main                  # triggers Cloudflare Pages auto-deploy
+
 Always commit after all tasks complete:
   git add <specific files> && git commit -m "feat/fix: description" && git push origin main
-  Never use git add -A or git add . (risk of committing secrets or large binaries)
+  NEVER use git add -A or git add . (risk of committing secrets or tsconfig.tsbuildinfo)
+
+### Firebase Studio / Project IDX setup
+
+If working in Firebase Studio (Project IDX) or similar cloud IDE:
+
+1. Clone repo or open existing workspace:
+   git clone https://github.com/[your-repo]/Fuzzy-vid
+   cd Fuzzy-vid && npm install
+
+2. Environment setup — create .env.local:
+   VITE_CLERK_PUBLISHABLE_KEY=pk_test_...   (development key for .pages.dev)
+   VITE_WORKER_URL=https://fuzzy-vid-worker.officialdian21.workers.dev
+
+3. Start dev server:
+   npm run dev
+   (Vite serves on port 5173 by default — Firebase Studio auto-forwards port)
+
+4. Worker local dev (optional — usually test against deployed worker):
+   wrangler dev --port 8787
+   Then set VITE_WORKER_URL=http://localhost:8787 in .env.local
+
+5. Wrangler auth in cloud IDE:
+   wrangler login                   # opens OAuth in browser
+   OR: set CLOUDFLARE_API_TOKEN env var (preferred for non-interactive environments)
+   export CLOUDFLARE_API_TOKEN=your_token_here
+
+6. Common cloud IDE gotchas:
+   - wrangler deploy may need CLOUDFLARE_API_TOKEN set (login may not persist)
+   - npm run build output goes to dist/ — Cloudflare Pages reads this on push
+   - localStorage and sessionStorage work normally in preview browser
+   - Hard-refresh after deploy: Ctrl+Shift+R (bypass CDN cache)
+
+### Gemini CLI specific tips
+
+When Gemini CLI reads this file and receives a task:
+  1. Read ALL relevant source files before making any edits
+  2. For theme changes: check tk(isDark) token names before using them
+  3. For model changes: verify model IDs against the VALID MODEL IDs section above
+  4. For Worker changes: always check route order in index.ts (specific before catch-all)
+  5. For Dashscope: check isQwenImage before adding any parameters
+
+Quick health check commands:
+  # Check Worker is up
+  curl -s https://fuzzy-vid-worker.officialdian21.workers.dev/api/health
+
+  # Test GLM brain (replace with real key)
+  curl -s -X POST https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/provider \
+    -H "Content-Type: application/json" \
+    -H "X-Glm-Api-Key: YOUR_GLM_KEY" \
+    -d '{"brain_model":"glm-4-flash","system_prompt":"Reply JSON only.","user_prompt":"Say ok","max_tokens":10}'
+
+  # Check TypeScript
+  npx tsc --noEmit 2>&1 | grep -c error
+
+File size reference (as of v3.9):
+  Home.tsx:       ~900 lines
+  Storyboard.tsx: ~1400 lines
+  Settings.tsx:   ~700 lines
+  dashscope.ts:   ~368 lines
+  brain.ts:       ~200 lines
+  index.ts:       ~350 lines
