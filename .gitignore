@@ -25,3 +25,14 @@ dist-ssr
 .wrangler/
 .mcp.json
 .env.local
+
+# MCP configs with secrets
+.idx/mcp.json
+
+# Dev databases
+.dev.sqlite
+*.sqlite
+*.db
+
+# Dev folders
+.gemini/
