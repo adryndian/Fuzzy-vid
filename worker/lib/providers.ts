@@ -231,8 +231,8 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
         bestFor: ['rewrite', 'short_tasks'],
       },
       {
-        id: 'gemini-2.5-pro-exp-03-25',
-        label: 'Gemini 2.5 Pro Exp 🧠',
+        id: 'gemini-2.5-pro',
+        label: 'Gemini 2.5 Pro 🧠',
         contextWindow: 1048576,
         free: true,
         speed: 'slow',
@@ -283,7 +283,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
       {
         id: 'mistral-small-latest',
         label: 'Mistral Small 3.1',
-        contextWindow: 32768,
+        contextWindow: 131072,
         free: true,
         speed: 'fast',
         bestFor: ['json', 'structured', 'efficient']
@@ -375,8 +375,12 @@ export function getProviderForModel(modelId: string): ProviderConfig | null {
     return PROVIDERS.groq
   }
   if (modelId.startsWith('mistral-') || modelId.startsWith('open-mistral-')) return PROVIDERS.mistral
-  if (modelId.includes('/')) return PROVIDERS.siliconflow  // SiliconFlow uses org/model format
-  if (modelId.includes('/') || modelId.endsWith(':free')) {
+  // SiliconFlow uses uppercase org prefixes: Qwen/, deepseek-ai/, THUDM/
+  if (modelId.startsWith('Qwen/') || modelId.startsWith('deepseek-ai/') || modelId.startsWith('THUDM/')) {
+    return PROVIDERS.siliconflow
+  }
+  // OpenRouter uses lowercase org/model format and :free suffix
+  if (modelId.endsWith(':free') || modelId.includes('/')) {
     return PROVIDERS.openrouter
   }
   if (modelId.startsWith('glm') || modelId.startsWith('chatglm')) {
@@ -475,8 +479,11 @@ export async function callProvider(
     max_tokens: options?.max_tokens ?? 4096,
   }
 
-  // response_format not supported by all providers
-  if (options?.response_format && provider.id !== 'glm') {
+  // response_format not supported by all providers or reasoning models
+  // GLM, and reasoning models (DeepSeek-R1, QwQ variants) reject json_object mode
+  const isReasoningModel = cleanModelId.includes('DeepSeek-R1') || cleanModelId.includes('deepseek-r1')
+    || cleanModelId.includes('r1-distill') || cleanModelId === 'qwq-plus'
+  if (options?.response_format && provider.id !== 'glm' && !isReasoningModel) {
     body.response_format = options.response_format
   }
 

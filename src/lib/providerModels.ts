@@ -275,8 +275,8 @@ export const ALL_BRAIN_MODELS: FrontendModel[] = [
     requiresKey: 'gemini',
   },
   {
-    id: 'gemini-2.5-pro-exp-03-25',
-    label: 'Gemini 2.5 Pro Exp 🧠',
+    id: 'gemini-2.5-pro',
+    label: 'Gemini 2.5 Pro 🧠',
     provider: 'gemini', providerLabel: 'Google Gemini',
     providerColor: '#4285f4', providerEmoji: '✨',
     free: true, speed: 'slow', speedLabel: '●○○',
