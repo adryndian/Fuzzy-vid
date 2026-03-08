@@ -11,8 +11,9 @@ export interface StoryboardSession {
   title: string
   imageModel: string
   imageEngine: string
-  audioEngine: 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'
-  audioVoice: string
+  audioEngine: 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio' | Record<number, 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'>
+  audioVoice: string | Record<number, string>
+  audioLanguage: string | Record<number, 'id' | 'en'>
   language: string
   assets: SceneAssetsMap
   isMinimized: boolean
@@ -26,8 +27,9 @@ interface StoryboardSessionState {
     title: string
     imageModel: string
     imageEngine: string
-    audioEngine: 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'
-    audioVoice: string
+    audioEngine: 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio' | Record<number, 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'>
+    audioVoice: string | Record<number, string>
+    audioLanguage: string | Record<number, 'id' | 'en'>
     language: string
   }) => string
   updateAsset: (id: string, sceneNum: number, update: Partial<SceneAssets>) => void

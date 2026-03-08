@@ -88,9 +88,9 @@ export function Storyboard() {
   const [imageEngine, setImageEngine] = useState<string>('cf-flux')
   const [videoModel, setVideoModel] = useState<Record<number, string>>({})
   const [defaultVideoModel, setDefaultVideoModel] = useState('nova_reel')
-  const [audioEngine, setAudioEngine] = useState<'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'>('gemini_tts')
-  const [audioVoice, setAudioVoice] = useState('Ruth')
-  const [audioLanguage, setAudioLanguage] = useState<'id' | 'en'>('id')
+  const [audioEngine, setAudioEngine] = useState<Record<number, 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'>>({})
+  const [audioVoice, setAudioVoice] = useState<Record<number, string>>({})
+  const [audioLanguage, setAudioLanguage] = useState<Record<number, 'id' | 'en'>>({})
   const [language, setLanguage] = useState('id')
 
   // Per-scene UI state
@@ -209,14 +209,18 @@ export function Storyboard() {
     ? (sessions[activeSessionId]?.assets || {})
     : {}
 
-  // Reset voice when engine or language changes
-  useEffect(() => {
-    if (audioEngine === 'polly') {
-      setAudioVoice(audioLanguage === 'id' ? 'Marlene' : 'Ruth')
+  // Function to reset voice when engine or language changes for a specific scene
+  const resetAudioVoiceForScene = (sceneNum: number) => {
+    const currentEngine = audioEngine[sceneNum] || 'gemini_tts'
+    const currentLanguage = audioLanguage[sceneNum] || 'id'
+    
+    if (currentEngine === 'polly') {
+      const newVoice = currentLanguage === 'id' ? 'Marlene' : 'Ruth'
+      setAudioVoice(prev => ({ ...prev, [sceneNum]: newVoice }))
     } else {
-      setAudioVoice('Bella')
+      setAudioVoice(prev => ({ ...prev, [sceneNum]: 'Bella' }))
     }
-  }, [audioEngine, audioLanguage])
+  }
 
   const handleSave = () => {
     if (!storyboard || !rawJson || isAlreadySaved) return
@@ -268,8 +272,47 @@ export function Storyboard() {
       sid = sessionId
       setImageModel(session.imageModel)
       setImageEngine(session.imageEngine || 'cf-flux')
-      setAudioEngine(session.audioEngine)
-      setAudioVoice(session.audioVoice)
+      // Load per-scene audio settings if they exist, otherwise fallback to old format
+      if (session.audioEngine && typeof session.audioEngine === 'object') {
+        setAudioEngine(session.audioEngine as Record<number, 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'>)
+      } else {
+        // Convert old single value to per-scene format (apply to all scenes)
+        const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
+        const newAudioEngine: Record<number, 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'> = {}
+        scenes.forEach(scene => {
+          const sceneNum = scene.scene_number as number
+          newAudioEngine[sceneNum] = (session.audioEngine as 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio') || 'gemini_tts'
+        })
+        setAudioEngine(newAudioEngine)
+      }
+      
+      if (session.audioVoice && typeof session.audioVoice === 'object') {
+        setAudioVoice(session.audioVoice as Record<number, string>)
+      } else {
+        // Convert old single value to per-scene format (apply to all scenes)
+        const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
+        const newAudioVoice: Record<number, string> = {}
+        scenes.forEach(scene => {
+          const sceneNum = scene.scene_number as number
+          newAudioVoice[sceneNum] = (session.audioVoice as string) || 'Ruth'
+        })
+        setAudioVoice(newAudioVoice)
+      }
+      
+      // Load per-scene audio language settings if they exist, otherwise fallback to old format
+      if (session.audioLanguage && typeof session.audioLanguage === 'object') {
+        setAudioLanguage(session.audioLanguage as Record<number, 'id' | 'en'>)
+      } else {
+        // Convert old single value to per-scene format (apply to all scenes)
+        const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
+        const newAudioLanguage: Record<number, 'id' | 'en'> = {}
+        scenes.forEach(scene => {
+          const sceneNum = scene.scene_number as number
+          newAudioLanguage[sceneNum] = ((session.audioLanguage as string) || 'id') as 'id' | 'en'
+        })
+        setAudioLanguage(newAudioLanguage)
+      }
+      
       setLanguage(session.language)
     } else {
       // Fallback: create new session from sessionStorage
@@ -286,7 +329,10 @@ export function Storyboard() {
       if (storedVideoModel) setDefaultVideoModel(storedVideoModel)
 
       setImageModel(imgModel)
-      setAudioEngine(audModel)
+      // Initialize audio engine with default for all scenes (will be converted when scenes are loaded)
+      setAudioEngine({})
+      setAudioVoice({})
+      setAudioLanguage({})
 
       // Load language from settings
       const stored = localStorage.getItem('fuzzy_short_settings')
@@ -321,6 +367,9 @@ export function Storyboard() {
         imageEngine: imgEngine,
         audioEngine: audModel,
         audioVoice: audModel === 'polly' ? 'Ruth' : 'Bella',
+        audioLanguage: localStorage.getItem('fuzzy_short_settings')
+          ? (JSON.parse(localStorage.getItem('fuzzy_short_settings')!).language || 'id')
+          : 'id',
         language: localStorage.getItem('fuzzy_short_settings')
           ? JSON.parse(localStorage.getItem('fuzzy_short_settings')!).language || 'id'
           : 'id',
@@ -460,14 +509,21 @@ export function Storyboard() {
     if (activeSessionId) updateSession(activeSessionId, { imageEngine: val })
   }
 
-  const handleAudioEngineChange = (val: 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio') => {
-    setAudioEngine(val)
-    if (activeSessionId) updateSession(activeSessionId, { audioEngine: val })
+  const handleAudioEngineChange = (sceneNum: number, val: 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio') => {
+    setAudioEngine(prev => ({ ...prev, [sceneNum]: val }))
+    resetAudioVoiceForScene(sceneNum)
+    if (activeSessionId) updateSession(activeSessionId, { [`audioEngine_${sceneNum}`]: val } as any)
   }
 
-  const handleAudioVoiceChange = (val: string) => {
-    setAudioVoice(val)
-    if (activeSessionId) updateSession(activeSessionId, { audioVoice: val })
+  const handleAudioVoiceChange = (sceneNum: number, val: string) => {
+    setAudioVoice(prev => ({ ...prev, [sceneNum]: val }))
+    if (activeSessionId) updateSession(activeSessionId, { [`audioVoice_${sceneNum}`]: val } as any)
+  }
+
+  const handleAudioLanguageChange = (sceneNum: number, val: 'id' | 'en') => {
+    setAudioLanguage(prev => ({ ...prev, [sceneNum]: val }))
+    resetAudioVoiceForScene(sceneNum) // Reset voice when language changes
+    if (activeSessionId) updateSession(activeSessionId, { [`audioLanguage_${sceneNum}`]: val } as any)
   }
 
   // --- Copy helper ---
@@ -962,19 +1018,21 @@ export function Storyboard() {
       return
     }
     updateAsset(sceneNum, { audioStatus: 'generating', audioError: undefined })
-    
+
     const headers = { ...getApiHeaders(user?.id), 'Content-Type': 'application/json' }
     const body = {
       text: text,
-      language: audioLanguage,
+      language: audioLanguage[sceneNum] || 'id',
       tone: (storyboard as any)?.tone || 'informative',
       scene_number: sceneNum,
       project_id: ((storyboard as any)?.project_id as string) || 'storyboard',
+      engine: audioEngine[sceneNum] || 'gemini_tts',
+      voice: audioVoice[sceneNum] || 'Ruth',
     }
 
     // Pilih endpoint berdasarkan engine
     let endpoint: string
-    switch (audioEngine) {
+    switch (audioEngine[sceneNum] || 'gemini_tts') {
       case 'gemini_tts':
         endpoint = `${WORKER_URL}/api/audio/gemini-tts`
         break
@@ -1001,14 +1059,14 @@ export function Storyboard() {
         audio_url: data.audio_url,
         audio_engine: data.engine,
         audio_voice: data.voice_used || data.voice_id,
-        audio_language: audioLanguage,
+        audio_language: audioLanguage[sceneNum] || 'id',
       })
 
       // Update local state
       const newHistoryItem: AudioHistoryItem = {
         url: data.audio_url,
-        engine: data.engine || audioEngine,
-        voice: data.voice_used || data.voice_id || audioVoice,
+        engine: data.engine || audioEngine[sceneNum] || 'gemini_tts',
+        voice: data.voice_used || data.voice_id || audioVoice[sceneNum] || 'Ruth',
         timestamp: new Date().toISOString(),
       }
       const current = storedAssets[sceneNum] || defaultSceneAssets()
@@ -1020,12 +1078,12 @@ export function Storyboard() {
         audioHistory: newHistory,
       })
 
-      const audCost = estimateAudioCost(audioEngine, text.length)
-      const modelLabel = audioEngine === 'elevenlabs' ? 'ElevenLabs' : 
-                        audioEngine === 'gemini_tts' ? 'Gemini TTS' : 
-                        audioEngine === 'fish_audio' ? 'Fish Audio' : 'Polly'
+      const audCost = estimateAudioCost(audioEngine[sceneNum] || 'gemini_tts', text.length)
+      const modelLabel = (audioEngine[sceneNum] || 'gemini_tts') === 'elevenlabs' ? 'ElevenLabs' :
+                        (audioEngine[sceneNum] || 'gemini_tts') === 'gemini_tts' ? 'Gemini TTS' :
+                        (audioEngine[sceneNum] || 'gemini_tts') === 'fish_audio' ? 'Fish Audio' : 'Polly'
       addCostEntry({ service: 'audio', model: modelLabel, cost: audCost })
-      toast.success(`Scene ${sceneNum} audio ready · ${formatCost(audCost)}`)
+      toast.success(`Scene ${sceneNum} audio ready (${modelLabel}) · ${formatCost(audCost)}`)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       const isKeyError = msg.toLowerCase().includes('credentials') || msg.toLowerCase().includes('api key required')
@@ -2063,15 +2121,70 @@ export function Storyboard() {
                 </p>
               )}
 
-              {/* Voice dropdown only (engine is selected in header) */}
+              {/* Audio Engine Selector */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '7px', flexWrap: 'wrap' }}>
+                {[
+                  { id: 'gemini_tts', label: 'Gemini', emoji: '✨', free: true },
+                  { id: 'polly',      label: 'Polly',  emoji: '🔊', free: false },
+                  { id: 'fish_audio', label: 'Fish',   emoji: '🐟', free: true },
+                ].map(eng => (
+                  <button
+                    key={eng.id}
+                    onClick={() => handleAudioEngineChange(sceneNum, eng.id as any)}
+                    style={{
+                      padding: '4px 12px', borderRadius: 20,
+                      border: (audioEngine[sceneNum] || 'gemini_tts') === eng.id
+                        ? '1.5px solid #af52de'
+                        : '1px solid rgba(60,60,67,0.15)',
+                      background: (audioEngine[sceneNum] || 'gemini_tts') === eng.id
+                        ? 'rgba(175,82,222,0.15)'
+                        : 'rgba(255,255,255,0.6)',
+                      color: (audioEngine[sceneNum] || 'gemini_tts') === eng.id ? '#af52de' : 'rgba(60,60,67,0.6)',
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 4
+                    }}
+                  >
+                    <span>{eng.emoji}</span>
+                    <span>{eng.label}</span>
+                    {eng.free && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700,
+                        background: 'rgba(52,199,89,0.2)', color: '#34c759',
+                        padding: '1px 4px', borderRadius: 6
+                      }}>FREE</span>
+                    )}
+                  </button>
+                ))}
+
+                {/* Language selector */}
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {(['id', 'en'] as const).map(lang => (
+                    <button
+                      key={lang}
+                      onClick={() => handleAudioLanguageChange(sceneNum, lang)}
+                      style={{
+                        padding: '4px 10px', borderRadius: 16, fontSize: 12, fontWeight: 600,
+                        border: (audioLanguage[sceneNum] || 'id') === lang ? '1.5px solid #af52de' : '1px solid rgba(60,60,67,0.15)',
+                        background: (audioLanguage[sceneNum] || 'id') === lang ? 'rgba(175,82,222,0.12)' : 'rgba(255,255,255,0.6)',
+                        color: (audioLanguage[sceneNum] || 'id') === lang ? '#af52de' : 'rgba(60,60,67,0.6)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {lang === 'id' ? '🇮🇩 ID' : '🇺🇸 EN'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Voice dropdown */}
               <div style={{ display: 'flex', gap: '6px', marginBottom: '7px', flexWrap: 'wrap' }}>
                 <select
-                  value={audioVoice}
-                  onChange={e => handleAudioVoiceChange(e.target.value)}
+                  value={audioVoice[sceneNum] || 'Ruth'}
+                  onChange={e => handleAudioVoiceChange(sceneNum, e.target.value)}
                   style={dropdownStyle}
                 >
-                  {audioEngine === 'polly' ? (
-                    audioLanguage === 'id' ? (
+                  {(audioEngine[sceneNum] || 'gemini_tts') === 'polly' ? (
+                    (audioLanguage[sceneNum] || 'id') === 'id' ? (
                       POLLY_VOICES_ID.map(v => <option key={v} value={v}>{v}</option>)
                     ) : (
                       POLLY_VOICES_EN.map(v => <option key={v} value={v}>{v}</option>)
@@ -2083,7 +2196,7 @@ export function Storyboard() {
               </div>
 
               {/* ElevenLabs voice settings sliders */}
-              {audioEngine === 'elevenlabs' && (
+              {(audioEngine[sceneNum] || 'gemini_tts') === 'elevenlabs' && (
                 <div style={{ marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   {([
                     { label: 'Stability', value: elStability, set: setElStability },
@@ -2112,7 +2225,7 @@ export function Storyboard() {
                 '#af52de'
               )}
               <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '5px' }}>
-                Est. {narration ? formatCost(estimateAudioCost(audioEngine, narration.length)) : '<$0.01'}
+                Est. {narration ? formatCost(estimateAudioCost(audioEngine[sceneNum] || 'gemini_tts', narration.length)) : '<$0.01'}
               </div>
             </div>
 
@@ -2372,121 +2485,6 @@ export function Storyboard() {
             </div>
           </div>
         )}
-
-        {/* Image Engine Selector */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 14px', borderRadius: 14,
-          background: 'rgba(0,122,255,0.08)',
-          border: '1px solid rgba(0,122,255,0.2)',
-          marginBottom: 8, flexWrap: 'wrap'
-        }}>
-          <span style={{ fontSize: 16 }}>🎨</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#007aff' }}>Image Engine:</span>
-
-          {IMAGE_ENGINES.map((eng, index) => {
-            // Check apakah key tersedia
-            const settingsFromStorage = localStorage.getItem('fuzzy_short_settings')
-            const userSettings = settingsFromStorage ? JSON.parse(settingsFromStorage) : {}
-            const hasKey = !eng.requiresKey || !!userSettings[eng.requiresKey]
-            if (!hasKey && !eng.free) return null  // Sembunyikan engine yang tidak ada keynya
-
-            return (
-              <button
-                key={`${eng.id}-${index}`}
-                onClick={() => setImageEngine(eng.id)}
-                title={eng.note}
-                style={{
-                  padding: '4px 12px', borderRadius: 20,
-                  border: imageEngine === eng.id
-                    ? '1.5px solid #007aff'
-                    : '1px solid rgba(60,60,67,0.15)',
-                  background: imageEngine === eng.id
-                    ? 'rgba(0,122,255,0.12)'
-                    : 'rgba(255,255,255,0.6)',
-                  color: imageEngine === eng.id ? '#007aff' : 'rgba(60,60,67,0.6)',
-                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 4
-                }}
-              >
-                <span>{eng?.emoji || '🎨'}</span>
-                <span>{eng?.label || 'Engine'}</span>
-                {eng?.free && (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700,
-                    background: 'rgba(52,199,89,0.2)', color: '#34c759',
-                    padding: '1px 4px', borderRadius: 6
-                  }}>FREE</span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Audio Engine Selector */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 14px', borderRadius: 14,
-          background: 'rgba(175,82,222,0.08)',
-          border: '1px solid rgba(175,82,222,0.2)',
-          marginBottom: 8
-        }}>
-          <span style={{ fontSize: 16 }}>🎙️</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#af52de' }}>TTS Engine:</span>
-
-          {/* Engine Pills */}
-          {[
-            { id: 'gemini_tts', label: 'Gemini', emoji: '✨', free: true },
-            { id: 'polly',      label: 'Polly',  emoji: '🔊', free: false },
-            { id: 'fish_audio', label: 'Fish',   emoji: '🐟', free: true },
-          ].map(eng => (
-            <button
-              key={eng.id}
-              onClick={() => setAudioEngine(eng.id as any)}
-              style={{
-                padding: '4px 12px', borderRadius: 20,
-                border: audioEngine === eng.id
-                  ? '1.5px solid #af52de'
-                  : '1px solid rgba(60,60,67,0.15)',
-                background: audioEngine === eng.id
-                  ? 'rgba(175,82,222,0.15)'
-                  : 'rgba(255,255,255,0.6)',
-                color: audioEngine === eng.id ? '#af52de' : 'rgba(60,60,67,0.6)',
-                fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 4
-              }}
-            >
-              <span>{eng.emoji}</span>
-              <span>{eng.label}</span>
-              {eng.free && (
-                <span style={{
-                  fontSize: 9, fontWeight: 700,
-                  background: 'rgba(52,199,89,0.2)', color: '#34c759',
-                  padding: '1px 4px', borderRadius: 6
-                }}>FREE</span>
-              )}
-            </button>
-          ))}
-
-          {/* Language selector */}
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-            {(['id', 'en'] as const).map(lang => (
-              <button
-                key={lang}
-                onClick={() => setAudioLanguage(lang)}
-                style={{
-                  padding: '4px 10px', borderRadius: 16, fontSize: 12, fontWeight: 600,
-                  border: audioLanguage === lang ? '1.5px solid #af52de' : '1px solid rgba(60,60,67,0.15)',
-                  background: audioLanguage === lang ? 'rgba(175,82,222,0.12)' : 'rgba(255,255,255,0.6)',
-                  color: audioLanguage === lang ? '#af52de' : 'rgba(60,60,67,0.6)',
-                  cursor: 'pointer'
-                }}
-              >
-                {lang === 'id' ? '🇮🇩 ID' : '🇺🇸 EN'}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Row 2: Veo action buttons (only shown for Veo-compatible tones) */}
         {isVeoTone((storyboard.tone as string) || '') && (

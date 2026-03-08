@@ -297,6 +297,7 @@ export function Home() {
             imageEngine: 'cf-flux',  // Default to free CF FLUX
             audioEngine: audioModel,
             audioVoice: audioModel === 'polly' ? 'Ruth' : 'Bella',
+            audioLanguage: language as 'id' | 'en',
             language,
           })
 
