@@ -358,8 +358,10 @@ export function getProviderForModel(modelId: string): ProviderConfig | null {
   }
 
   // Auto-detect by model ID patterns
-  if (modelId.startsWith('llama-4') || modelId.startsWith('llama-3.3') || modelId.startsWith('llama-3.1') || modelId.startsWith('qwen-3')) {
-    // Could be cerebras or groq — check by exact Cerebras model list
+  // llama-4 (no org prefix) → Cerebras only (Groq has no llama-4 models)
+  if (modelId.startsWith('llama-4')) return PROVIDERS.cerebras
+  if (modelId.startsWith('llama-3.3') || modelId.startsWith('llama-3.1') || modelId.startsWith('qwen-3')) {
+    // llama-3.3-70b and qwen-3-32b are exact Cerebras IDs; everything else → Groq
     if (['llama-3.3-70b', 'qwen-3-32b'].includes(modelId)) return PROVIDERS.cerebras
     return PROVIDERS.groq
   }
@@ -464,9 +466,23 @@ export async function callProvider(
     return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
   }
 
+  // Gemma models (google/gemma-*) don't support system role — merge into first user message
+  const isGemma = cleanModelId.startsWith('google/gemma') || cleanModelId.includes('gemma-3') || cleanModelId.includes('gemma-2')
+  let finalMessages = messages
+  if (isGemma && provider.id === 'openrouter') {
+    const systemMsg = messages.find(m => m.role === 'system')
+    const otherMsgs = messages.filter(m => m.role !== 'system')
+    if (systemMsg && otherMsgs.length > 0) {
+      finalMessages = [
+        { role: 'user', content: `${systemMsg.content}\n\n${otherMsgs[0].content}` },
+        ...otherMsgs.slice(1),
+      ]
+    }
+  }
+
   const body: Record<string, unknown> = {
     model: cleanModelId,
-    messages,
+    messages: finalMessages,
     temperature: options?.temperature ?? 0.7,
     max_tokens: options?.max_tokens ?? 4096,
   }

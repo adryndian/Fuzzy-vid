@@ -448,7 +448,7 @@ export function Settings() {
       const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Openrouter-Api-Key': settings.openrouterApiKey },
-        body: JSON.stringify({ brain_model: 'google/gemma-3-27b-it:free', system_prompt: 'You are helpful.', user_prompt: 'Reply with: {"ok":true}', max_tokens: 20 }),
+        body: JSON.stringify({ brain_model: 'meta-llama/llama-3.3-70b-instruct:free', system_prompt: 'You are helpful.', user_prompt: 'Reply with: {"ok":true}', max_tokens: 20 }),
       })
       const data = await res.json() as { content?: string; error?: string }
       if (res.ok && data.content) {
