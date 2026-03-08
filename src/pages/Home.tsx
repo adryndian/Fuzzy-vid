@@ -38,8 +38,7 @@ const IMAGE_MODELS = [
   { id: 'qwen-image-2.0',     label: 'Qwen Image 2.0',     tag: 'Qwen', desc: 'Balanced',            provider: 'dashscope' },
   { id: 'wan2.6-image',       label: 'Wan 2.6 Image',      tag: 'Qwen', desc: 'Latest Wan model',    provider: 'dashscope' },
   { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo',     tag: 'Qwen', desc: 'Fast (legacy)',       provider: 'dashscope' },
-  { id: 'cogview-4',          label: 'CogView-4',          tag: 'GLM',  desc: 'Best quality',        provider: 'glm' },
-  { id: 'cogview-3-flash',    label: 'CogView-4 Flash',    tag: 'GLM',  desc: 'Fast & free',         provider: 'glm' },
+  { id: 'cogview-3-flash',    label: 'CogView-3 Flash',    tag: 'GLM',  desc: 'Free & fast',         provider: 'glm' },
 ]
 
 const TONES = [

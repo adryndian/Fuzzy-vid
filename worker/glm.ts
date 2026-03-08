@@ -54,7 +54,7 @@ export async function handleGlmImageGenerate(
   }
 
   const size = getGlmImageSize(body.aspect_ratio)
-  const model = body.image_model || 'cogview-4'
+  const model = body.image_model || 'cogview-3-flash'
 
   const res = await fetch(`${GLM_BASE}/images/generations`, {
     method: 'POST',

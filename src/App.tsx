@@ -9,7 +9,6 @@ import { History } from './pages/History'
 import { Settings } from './pages/Settings'
 import { Dashboard } from './pages/Dashboard'
 import { Auth } from './pages/Auth'
-import { GenTaskBar } from './components/GenTaskBar'
 import { BottomNav } from './components/BottomNav'
 
 function clearSessionData() {
@@ -93,7 +92,6 @@ function AppContent() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/auth" element={<Auth />} />
       </Routes>
-      <GenTaskBar />
       <BottomNav />
     </BrowserRouter>
   )

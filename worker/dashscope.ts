@@ -321,7 +321,7 @@ export async function handleDashscopeVideoStart(
   }
 
   const payload = JSON.stringify({
-    model: body.video_model || 'wan2.1-i2v-plus',
+    model: body.video_model || 'wan2.6-i2v-flash',
     input,
     parameters: {
       size,
