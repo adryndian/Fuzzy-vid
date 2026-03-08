@@ -1242,9 +1242,9 @@ export function Storyboard() {
                 padding: '3px 8px',
                 borderRadius: '8px',
                 border: 'var(--nav-border)',
-                background: 'rgba(255,255,255,0.8)',
-                color: 'var(--text-secondary)',
-                fontSize: '11px', fontWeight: 500,
+                background: 'var(--input-bg)',
+                color: 'var(--text-primary)',
+                fontSize: '11px', fontWeight: 600,
                 cursor: 'pointer',
               }}
             >

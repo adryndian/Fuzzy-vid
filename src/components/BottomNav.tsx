@@ -23,7 +23,7 @@ export function BottomNav() {
   const updateSession = useStoryboardSessionStore(s => s.updateSession)
   const removeSession = useStoryboardSessionStore(s => s.removeSession)
 
-  const runningTasks = tasks.filter(t => t.status === 'running').length
+  const runningTasks = tasks.filter(task => task.status === 'running').length
   const minimizedSessions = Object.values(sessions).filter(s => s.isMinimized)
   const totalIndicator = runningTasks + minimizedSessions.length
   const hasTasks = tasks.length > 0 || minimizedSessions.length > 0
