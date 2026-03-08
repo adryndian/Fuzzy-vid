@@ -477,7 +477,7 @@ export function Home() {
       </div>
 
       {/* Main Glass Card */}
-      <div style={{ ...card, background: t.cardBg, border: t.cardBorder, boxShadow: t.cardShadow, width: '100%', maxWidth: '440px', padding: '20px 17px', position: 'relative' }}>
+      <div style={{ ...card, background: t.cardBg, border: t.cardBorder, boxShadow: t.cardShadow, width: '100%', maxWidth: '440px', padding: '17px', position: 'relative' }}>
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,1), transparent)' }} />
 
         {/* Story Title */}

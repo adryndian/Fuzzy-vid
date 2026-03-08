@@ -139,21 +139,6 @@ export function Dashboard() {
         <span style={{ color: t.textPrimary, fontSize: '17px', fontWeight: 700, flex: 1 }}>
           My Projects
         </span>
-        <button
-          onClick={() => toggle()}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '20px',
-            padding: '4px',
-            borderRadius: '8px',
-            color: t.textPrimary,
-            marginRight: '8px',
-          }}
-        >
-          {isDark ? '🌙' : '☀️'}
-        </button>
         {usage && (
           <span style={{
             background: 'rgba(52,199,89,0.15)',

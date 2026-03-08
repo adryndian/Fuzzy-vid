@@ -1037,6 +1037,7 @@ export function Storyboard() {
     border: thm.cardBorder,
     borderRadius: '22px',
     boxShadow: thm.cardShadow,
+    padding: '16px',
     marginBottom: '11px',
     overflow: 'hidden',
   }
@@ -1193,7 +1194,7 @@ export function Storyboard() {
 
         {/* Scene Header */}
         <div style={{
-          padding: '10px 11px 7px',
+          padding: '0 0 7px',
           borderBottom: isCollapsed ? 'none' : thm.navBorder,
           display: 'flex', alignItems: 'center', gap: '8px',
         }}>
@@ -2256,21 +2257,6 @@ export function Storyboard() {
           </div>
 
           <button
-            onClick={() => toggle()}
-            style={{
-              flexShrink: 0,
-              padding: '6px 12px', borderRadius: '10px',
-              border: '0.5px solid rgba(118,118,128,0.2)',
-              background: 'rgba(118,118,128,0.1)',
-              color: thm.textPrimary,
-              fontSize: '12px', fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            {isDark ? '🌙' : '☀️'}
-          </button>
-
-          <button
             onClick={handleSave}
             disabled={isAlreadySaved}
             style={{
@@ -2378,21 +2364,6 @@ export function Storyboard() {
             >
               {generatingAllVeo ? '⏳ Generating...' : '🎬 Gen All Veo'}
             </button>
-            {/* Brain model selector for Veo prompt generation */}
-            <select
-              value={veoBrainModel}
-              onChange={e => setVeoBrainModel(e.target.value)}
-              style={{
-                ...dropdownStyle,
-                fontSize: '10px', padding: '4px 22px 4px 7px',
-                borderRadius: '8px', maxWidth: '130px',
-              }}
-              title="Brain model for Veo prompt generation"
-            >
-              {ALL_BRAIN_MODELS.map(m => (
-                <option key={m.id} value={m.id}>{m.providerEmoji} {m.label}</option>
-              ))}
-            </select>
             <button
               onClick={() => {
                 const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
@@ -2576,7 +2547,7 @@ export function Storyboard() {
         <div style={{ padding: isDesktop ? '0 24px' : undefined, maxWidth: isDesktop ? '720px' : undefined, margin: isDesktop ? '0 auto' : undefined }}>
         {/* Production Notes */}
         {productionNotes && (
-          <div style={{ ...glassCard, padding: '11px', marginBottom: '14px' }}>
+          <div style={{ ...glassCard, marginBottom: '14px' }}>
             <p style={{ color: thm.textSecondary, fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: '7px', margin: '0 0 7px' }}>
               Production Notes
             </p>

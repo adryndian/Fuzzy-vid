@@ -474,21 +474,6 @@ export function Settings() {
         <span style={{ color: thm.textPrimary, fontSize: '17px', fontWeight: 700, flex: 1 }}>
           Settings
         </span>
-        <button
-          onClick={() => toggleDark()}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '20px',
-            padding: '4px',
-            borderRadius: '8px',
-            color: thm.textPrimary,
-            marginRight: '8px',
-          }}
-        >
-          {isDark ? '🌙' : '☀️'}
-        </button>
         {user && (
           <span style={{ fontSize: '12px', color: thm.textSecondary, marginRight: '8px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {user.primaryEmailAddress?.emailAddress}
