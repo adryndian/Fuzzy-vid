@@ -2384,7 +2384,7 @@ export function Storyboard() {
           <span style={{ fontSize: 16 }}>🎨</span>
           <span style={{ fontSize: 13, fontWeight: 600, color: '#007aff' }}>Image Engine:</span>
 
-          {IMAGE_ENGINES.map(eng => {
+          {IMAGE_ENGINES.map((eng, index) => {
             // Check apakah key tersedia
             const settingsFromStorage = localStorage.getItem('fuzzy_short_settings')
             const userSettings = settingsFromStorage ? JSON.parse(settingsFromStorage) : {}
@@ -2393,7 +2393,7 @@ export function Storyboard() {
 
             return (
               <button
-                key={eng.id}
+                key={`${eng.id}-${index}`}
                 onClick={() => setImageEngine(eng.id)}
                 title={eng.note}
                 style={{
@@ -2409,9 +2409,9 @@ export function Storyboard() {
                   display: 'flex', alignItems: 'center', gap: 4
                 }}
               >
-                <span>{eng.emoji}</span>
-                <span>{eng.label}</span>
-                {eng.free && (
+                <span>{eng?.emoji || '🎨'}</span>
+                <span>{eng?.label || 'Engine'}</span>
+                {eng?.free && (
                   <span style={{
                     fontSize: 9, fontWeight: 700,
                     background: 'rgba(52,199,89,0.2)', color: '#34c759',
