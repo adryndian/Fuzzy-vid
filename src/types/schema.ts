@@ -297,6 +297,9 @@ export interface AppSettings {
   groqApiKey: string
   openrouterApiKey: string
   glmApiKey: string
+  cerebrasApiKey: string
+  mistralApiKey: string
+  siliconflowApiKey: string
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -313,6 +316,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   groqApiKey: '',
   openrouterApiKey: '',
   glmApiKey: '',
+  cerebrasApiKey: '',
+  mistralApiKey: '',
+  siliconflowApiKey: '',
 }
 
 export const SETTINGS_STORAGE_KEY = 'fuzzy_short_settings'
@@ -340,5 +346,11 @@ export function buildApiHeaders(settings: AppSettings): Record<string, string> {
   if (settings.elevenLabsApiKey) headers['X-ElevenLabs-Key'] = settings.elevenLabsApiKey
   if (settings.runwayApiKey) headers['X-Runway-Key'] = settings.runwayApiKey
   if (settings.dashscopeApiKey) headers['X-Dashscope-Api-Key'] = settings.dashscopeApiKey
+  if (settings.groqApiKey) headers['X-Groq-Api-Key'] = settings.groqApiKey
+  if (settings.openrouterApiKey) headers['X-Openrouter-Api-Key'] = settings.openrouterApiKey
+  if (settings.glmApiKey) headers['X-Glm-Api-Key'] = settings.glmApiKey
+  if (settings.cerebrasApiKey) headers['X-Cerebras-Api-Key'] = settings.cerebrasApiKey
+  if (settings.mistralApiKey) headers['X-Mistral-Api-Key'] = settings.mistralApiKey
+  if (settings.siliconflowApiKey) headers['X-Siliconflow-Api-Key'] = settings.siliconflowApiKey
   return headers
 }

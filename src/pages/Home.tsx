@@ -19,7 +19,7 @@ import { useTheme, tk } from '../lib/theme'
 type Platform = 'youtube_shorts' | 'reels' | 'tiktok'
 type Language = 'id' | 'en'
 
-const PROVIDER_ORDER = ['aws', 'dashscope', 'gemini', 'groq', 'openrouter', 'glm']
+const PROVIDER_ORDER = ['aws', 'dashscope', 'gemini', 'groq', 'openrouter', 'glm', 'cerebras', 'mistral', 'siliconflow']
 const PROVIDER_META: Record<string, { emoji: string; color: string; label: string }> = {
   aws:        { emoji: '☁️',  color: '#ff9900', label: 'AWS Bedrock' },
   dashscope:  { emoji: '🧠',  color: '#ff8c00', label: 'Dashscope' },

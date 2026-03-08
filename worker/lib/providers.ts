@@ -240,6 +240,121 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
       },
     ],
   },
+
+  cerebras: {
+    id: 'cerebras',
+    name: 'Cerebras',
+    baseUrl: 'https://api.cerebras.ai/v1/chat/completions',
+    authHeader: (key) => ({ 'Authorization': `Bearer ${key}` }),
+    models: [
+      {
+        id: 'llama-4-scout-17b-16e-instruct',
+        label: 'Llama 4 Scout 17B ⚡⚡',
+        contextWindow: 131072,
+        free: true,
+        speed: 'fast',
+        bestFor: ['storyboard', 'creative', 'fast']
+      },
+      {
+        id: 'llama-3.3-70b',
+        label: 'Llama 3.3 70B',
+        contextWindow: 131072,
+        free: true,
+        speed: 'fast',
+        bestFor: ['quality', 'reasoning', 'json']
+      },
+      {
+        id: 'qwen-3-32b',
+        label: 'Qwen3 32B',
+        contextWindow: 131072,
+        free: true,
+        speed: 'fast',
+        bestFor: ['multilingual', 'indonesian', 'reasoning']
+      }
+    ]
+  },
+
+  mistral: {
+    id: 'mistral',
+    name: 'Mistral AI',
+    baseUrl: 'https://api.mistral.ai/v1/chat/completions',
+    authHeader: (key) => ({ 'Authorization': `Bearer ${key}` }),
+    models: [
+      {
+        id: 'mistral-small-latest',
+        label: 'Mistral Small 3.1',
+        contextWindow: 32768,
+        free: true,
+        speed: 'fast',
+        bestFor: ['json', 'structured', 'efficient']
+      },
+      {
+        id: 'mistral-large-latest',
+        label: 'Mistral Large',
+        contextWindow: 131072,
+        free: false,
+        speed: 'medium',
+        bestFor: ['quality', 'complex', 'reasoning']
+      },
+      {
+        id: 'open-mistral-nemo',
+        label: 'Mistral Nemo (Free)',
+        contextWindow: 131072,
+        free: true,
+        speed: 'fast',
+        bestFor: ['json', 'multilingual', 'efficient']
+      }
+    ]
+  },
+
+  siliconflow: {
+    id: 'siliconflow',
+    name: 'SiliconFlow',
+    baseUrl: 'https://api.siliconflow.cn/v1/chat/completions',
+    authHeader: (key) => ({ 'Authorization': `Bearer ${key}` }),
+    models: [
+      {
+        id: 'Qwen/Qwen2.5-72B-Instruct',
+        label: 'Qwen2.5 72B',
+        contextWindow: 131072,
+        free: false,
+        speed: 'medium',
+        bestFor: ['quality', 'indonesian', 'multilingual']
+      },
+      {
+        id: 'Qwen/Qwen2.5-7B-Instruct',
+        label: 'Qwen2.5 7B (Free)',
+        contextWindow: 32768,
+        free: true,
+        speed: 'fast',
+        bestFor: ['fast', 'indonesian', 'efficient']
+      },
+      {
+        id: 'deepseek-ai/DeepSeek-V3',
+        label: 'DeepSeek V3',
+        contextWindow: 131072,
+        free: false,
+        speed: 'medium',
+        bestFor: ['quality', 'reasoning', 'creative']
+      },
+      {
+        id: 'deepseek-ai/DeepSeek-R1',
+        label: 'DeepSeek R1 (Reasoning)',
+        contextWindow: 65536,
+        free: false,
+        speed: 'slow',
+        bestFor: ['reasoning', 'complex', 'analysis']
+      },
+      {
+        id: 'THUDM/glm-4-9b-chat',
+        label: 'GLM-4 9B (Free)',
+        contextWindow: 131072,
+        free: true,
+        speed: 'fast',
+        bestFor: ['chinese', 'multilingual', 'free']
+      }
+    ]
+  },
 }
 
 // Get provider config by model ID prefix or explicit provider
@@ -251,14 +366,16 @@ export function getProviderForModel(modelId: string): ProviderConfig | null {
   }
 
   // Auto-detect by model ID patterns
-  if (
-    modelId.startsWith('llama') ||
-    modelId.startsWith('gemma2') ||
-    modelId.startsWith('qwen-qwq') ||
-    modelId.startsWith('deepseek-r1-distill')
-  ) {
+  if (modelId.startsWith('llama-4') || modelId.startsWith('llama-3.3') || modelId.startsWith('qwen-3')) {
+    // Could be cerebras or groq — check by prefix
+    if (['llama-4-scout-17b-16e-instruct', 'llama-3.3-70b', 'qwen-3-32b'].includes(modelId)) return PROVIDERS.cerebras
     return PROVIDERS.groq
   }
+  if (modelId.startsWith('gemma2') || modelId.startsWith('qwen-qwq') || modelId.startsWith('deepseek-r1-distill')) {
+    return PROVIDERS.groq
+  }
+  if (modelId.startsWith('mistral-') || modelId.startsWith('open-mistral-')) return PROVIDERS.mistral
+  if (modelId.includes('/')) return PROVIDERS.siliconflow  // SiliconFlow uses org/model format
   if (modelId.includes('/') || modelId.endsWith(':free')) {
     return PROVIDERS.openrouter
   }
@@ -279,6 +396,9 @@ export function getProviderApiKey(provider: ProviderConfig, env: Env): string {
     case 'openrouter': return env.OPENROUTER_API_KEY || ''
     case 'glm': return env.GLM_API_KEY || ''
     case 'gemini': return env.GEMINI_API_KEY || ''
+    case 'cerebras': return env.CEREBRAS_API_KEY || ''
+    case 'mistral': return env.MISTRAL_API_KEY || ''
+    case 'siliconflow': return env.SILICONFLOW_API_KEY || ''
     default: return ''
   }
 }

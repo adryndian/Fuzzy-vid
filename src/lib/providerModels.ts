@@ -4,7 +4,7 @@
 export interface FrontendModel {
   id: string          // used as brain_model value
   label: string       // display name
-  provider: string    // groq | openrouter | glm | gemini | aws | dashscope
+  provider: string    // groq | openrouter | glm | gemini | aws | dashscope | cerebras | mistral | siliconflow
   providerLabel: string
   providerColor: string
   providerEmoji: string
@@ -12,7 +12,7 @@ export interface FrontendModel {
   speed: 'fast' | 'medium' | 'slow'
   speedLabel: string
   bestFor: string[]
-  requiresKey: 'groq' | 'openrouter' | 'glm' | 'gemini' | 'aws' | 'dashscope'
+  requiresKey: 'groq' | 'openrouter' | 'glm' | 'gemini' | 'aws' | 'dashscope' | 'cerebras' | 'mistral' | 'siliconflow'
 }
 
 export const ALL_BRAIN_MODELS: FrontendModel[] = [
@@ -283,6 +283,108 @@ export const ALL_BRAIN_MODELS: FrontendModel[] = [
     bestFor: ['complex_reasoning', 'long_form', 'brain'],
     requiresKey: 'gemini',
   },
+  // ─── CEREBRAS ───────────────────────────────────────────────────────
+  {
+    id: 'llama-4-scout-17b-16e-instruct',
+    label: 'Llama 4 Scout 17B',
+    provider: 'cerebras', providerLabel: 'Cerebras',
+    providerColor: '#ff9500', providerEmoji: '⚡',
+    free: true, speed: 'fast', speedLabel: '2,600 tok/s (FASTEST)',
+    bestFor: ['storyboard', 'creative', 'speed'],
+    requiresKey: 'cerebras',
+  },
+  {
+    id: 'llama-3.3-70b',
+    label: 'Llama 3.3 70B',
+    provider: 'cerebras', providerLabel: 'Cerebras',
+    providerColor: '#ff9500', providerEmoji: '⚡',
+    free: true, speed: 'fast', speedLabel: 'Ultra-fast 70B',
+    bestFor: ['quality', 'reasoning', 'json'],
+    requiresKey: 'cerebras',
+  },
+  {
+    id: 'qwen-3-32b',
+    label: 'Qwen3 32B',
+    provider: 'cerebras', providerLabel: 'Cerebras',
+    providerColor: '#ff9500', providerEmoji: '⚡',
+    free: true, speed: 'fast', speedLabel: 'Fast multilingual',
+    bestFor: ['multilingual', 'indonesian'],
+    requiresKey: 'cerebras',
+  },
+  // ─── MISTRAL ────────────────────────────────────────────────────────
+  {
+    id: 'mistral-small-latest',
+    label: 'Mistral Small 3.1',
+    provider: 'mistral', providerLabel: 'Mistral AI',
+    providerColor: '#5856d6', providerEmoji: '🌊',
+    free: true, speed: 'fast', speedLabel: 'Fast + JSON reliable',
+    bestFor: ['json', 'structured', 'efficient'],
+    requiresKey: 'mistral',
+  },
+  {
+    id: 'open-mistral-nemo',
+    label: 'Mistral Nemo',
+    provider: 'mistral', providerLabel: 'Mistral AI',
+    providerColor: '#5856d6', providerEmoji: '🌊',
+    free: true, speed: 'fast', speedLabel: 'Free multilingual',
+    bestFor: ['multilingual', 'free', 'json'],
+    requiresKey: 'mistral',
+  },
+  {
+    id: 'mistral-large-latest',
+    label: 'Mistral Large',
+    provider: 'mistral', providerLabel: 'Mistral AI',
+    providerColor: '#5856d6', providerEmoji: '🌊',
+    free: false, speed: 'medium', speedLabel: 'High quality (paid)',
+    bestFor: ['quality', 'reasoning', 'complex'],
+    requiresKey: 'mistral',
+  },
+  // ─── SILICONFLOW ────────────────────────────────────────────────────
+  {
+    id: 'Qwen/Qwen2.5-7B-Instruct',
+    label: 'Qwen2.5 7B',
+    provider: 'siliconflow', providerLabel: 'SiliconFlow',
+    providerColor: '#ff6b35', providerEmoji: '🔥',
+    free: true, speed: 'fast', speedLabel: 'Free + fast',
+    bestFor: ['free', 'indonesian', 'fast'],
+    requiresKey: 'siliconflow',
+  },
+  {
+    id: 'Qwen/Qwen2.5-72B-Instruct',
+    label: 'Qwen2.5 72B',
+    provider: 'siliconflow', providerLabel: 'SiliconFlow',
+    providerColor: '#ff6b35', providerEmoji: '🔥',
+    free: false, speed: 'medium', speedLabel: 'High quality Qwen',
+    bestFor: ['quality', 'indonesian', 'multilingual'],
+    requiresKey: 'siliconflow',
+  },
+  {
+    id: 'deepseek-ai/DeepSeek-V3',
+    label: 'DeepSeek V3',
+    provider: 'siliconflow', providerLabel: 'SiliconFlow',
+    providerColor: '#ff6b35', providerEmoji: '🔥',
+    free: false, speed: 'medium', speedLabel: 'Creative reasoning',
+    bestFor: ['quality', 'creative', 'reasoning'],
+    requiresKey: 'siliconflow',
+  },
+  {
+    id: 'deepseek-ai/DeepSeek-R1',
+    label: 'DeepSeek R1',
+    provider: 'siliconflow', providerLabel: 'SiliconFlow',
+    providerColor: '#ff6b35', providerEmoji: '🔥',
+    free: false, speed: 'slow', speedLabel: 'Deep reasoning (slow)',
+    bestFor: ['reasoning', 'complex', 'analysis'],
+    requiresKey: 'siliconflow',
+  },
+  {
+    id: 'THUDM/glm-4-9b-chat',
+    label: 'GLM-4 9B',
+    provider: 'siliconflow', providerLabel: 'SiliconFlow',
+    providerColor: '#ff6b35', providerEmoji: '🔥',
+    free: true, speed: 'fast', speedLabel: 'Free Chinese/multilingual',
+    bestFor: ['free', 'chinese', 'multilingual'],
+    requiresKey: 'siliconflow',
+  },
 ]
 
 // Helper: get model by id
@@ -299,6 +401,9 @@ export function hasRequiredKey(model: FrontendModel, settings: Record<string, st
     case 'openrouter': return !!settings.openrouterApiKey
     case 'glm': return !!settings.glmApiKey
     case 'gemini': return !!settings.geminiApiKey
+    case 'cerebras': return !!settings.cerebrasApiKey
+    case 'mistral': return !!settings.mistralApiKey
+    case 'siliconflow': return !!settings.siliconflowApiKey
     default: return false
   }
 }

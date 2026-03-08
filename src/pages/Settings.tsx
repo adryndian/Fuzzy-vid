@@ -30,11 +30,17 @@ export function Settings() {
   const [groqStatus, setGroqStatus] = useState<TestStatus>('idle')
   const [openrouterStatus, setOpenrouterStatus] = useState<TestStatus>('idle')
   const [glmStatus, setGlmStatus] = useState<TestStatus>('idle')
+  const [cerebrasStatus, setCerebrasStatus] = useState<TestStatus>('idle')
+  const [mistralStatus, setMistralStatus] = useState<TestStatus>('idle')
+  const [siliconflowStatus, setSiliconflowStatus] = useState<TestStatus>('idle')
   const [geminiMsg, setGeminiMsg] = useState('')
   const [awsMsg, setAwsMsg] = useState('')
   const [groqMsg, setGroqMsg] = useState('')
   const [openrouterMsg, setOpenrouterMsg] = useState('')
   const [glmMsg, setGlmMsg] = useState('')
+  const [cerebrasMsg, setCerebrasMsg] = useState('')
+  const [mistralMsg, setMistralMsg] = useState('')
+  const [siliconflowMsg, setSiliconflowMsg] = useState('')
 
   useEffect(() => {
     if (!user?.id) return
@@ -63,6 +69,9 @@ export function Settings() {
               groqApiKey:         keys.groq_api_key          || prev.groqApiKey,
               openrouterApiKey:   keys.openrouter_api_key    || prev.openrouterApiKey,
               glmApiKey:          keys.glm_api_key           || prev.glmApiKey,
+              cerebrasApiKey:     keys.cerebras_api_key      || prev.cerebrasApiKey,
+              mistralApiKey:      keys.mistral_api_key       || prev.mistralApiKey,
+              siliconflowApiKey:  keys.siliconflow_api_key   || prev.siliconflowApiKey,
             }
             localStorage.setItem(storageKey, JSON.stringify(merged))
             return merged
@@ -102,6 +111,9 @@ export function Settings() {
         groq_api_key: settings.groqApiKey || '',
         openrouter_api_key: settings.openrouterApiKey || '',
         glm_api_key: settings.glmApiKey || '',
+        cerebras_api_key: settings.cerebrasApiKey || '',
+        mistral_api_key: settings.mistralApiKey || '',
+        siliconflow_api_key: settings.siliconflowApiKey || '',
       })
       await updatePreferences({
         brain_region: settings.brainRegion,
@@ -461,6 +473,81 @@ export function Settings() {
     } catch { setGlmStatus('failed'); setGlmMsg('❌ Network error') }
   }
 
+  const testCerebras = async () => {
+    if (!settings.cerebrasApiKey) {
+      setCerebrasStatus('failed'); setCerebrasMsg('❌ Please enter Cerebras API Key'); return
+    }
+    setCerebrasStatus('testing'); setCerebrasMsg('Testing connection...')
+    try {
+      const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Cerebras-Api-Key': settings.cerebrasApiKey },
+        body: JSON.stringify({ 
+          brain_model: 'llama-4-scout-17b-16e-instruct', 
+          system_prompt: 'You are helpful.', 
+          user_prompt: 'Reply with: {"ok":true}', 
+          max_tokens: 20 
+        }),
+      })
+      const data = await res.json() as { content?: string; error?: string }
+      if (res.ok && data.content) {
+        setCerebrasStatus('success'); setCerebrasMsg('✅ Cerebras connected!')
+      } else {
+        setCerebrasStatus('failed'); setCerebrasMsg(`❌ ${data.error || `HTTP ${res.status}`}`)
+      }
+    } catch { setCerebrasStatus('failed'); setCerebrasMsg('❌ Network error') }
+  }
+
+  const testMistral = async () => {
+    if (!settings.mistralApiKey) {
+      setMistralStatus('failed'); setMistralMsg('❌ Please enter Mistral API Key'); return
+    }
+    setMistralStatus('testing'); setMistralMsg('Testing connection...')
+    try {
+      const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Mistral-Api-Key': settings.mistralApiKey },
+        body: JSON.stringify({ 
+          brain_model: 'open-mistral-nemo', 
+          system_prompt: 'You are helpful.', 
+          user_prompt: 'Reply with: {"ok":true}', 
+          max_tokens: 20 
+        }),
+      })
+      const data = await res.json() as { content?: string; error?: string }
+      if (res.ok && data.content) {
+        setMistralStatus('success'); setMistralMsg('✅ Mistral connected!')
+      } else {
+        setMistralStatus('failed'); setMistralMsg(`❌ ${data.error || `HTTP ${res.status}`}`)
+      }
+    } catch { setMistralStatus('failed'); setMistralMsg('❌ Network error') }
+  }
+
+  const testSiliconflow = async () => {
+    if (!settings.siliconflowApiKey) {
+      setSiliconflowStatus('failed'); setSiliconflowMsg('❌ Please enter SiliconFlow API Key'); return
+    }
+    setSiliconflowStatus('testing'); setSiliconflowMsg('Testing connection...')
+    try {
+      const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Siliconflow-Api-Key': settings.siliconflowApiKey },
+        body: JSON.stringify({ 
+          brain_model: 'Qwen/Qwen2.5-7B-Instruct', 
+          system_prompt: 'You are helpful.', 
+          user_prompt: 'Reply with: {"ok":true}', 
+          max_tokens: 20 
+        }),
+      })
+      const data = await res.json() as { content?: string; error?: string }
+      if (res.ok && data.content) {
+        setSiliconflowStatus('success'); setSiliconflowMsg('✅ SiliconFlow connected!')
+      } else {
+        setSiliconflowStatus('failed'); setSiliconflowMsg(`❌ ${data.error || `HTTP ${res.status}`}`)
+      }
+    } catch { setSiliconflowStatus('failed'); setSiliconflowMsg('❌ Network error') }
+  }
+
   // ─── Render ────────────────────────────────────────────────
   return (
     <div style={s.page}>
@@ -682,6 +769,108 @@ export function Settings() {
           </div>
           <p style={{ fontSize: '11px', color: thm.textTertiary, margin: 0 }}>
             GLM-4-Flash: unlimited free tier
+          </p>
+        </div>
+
+        {/* ── CEREBRAS ── */}
+        <div style={s.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '8px',
+              background: 'rgba(255,140,0,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '16px',
+            }}>⚡</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: thm.textPrimary }}>Cerebras</div>
+              <div style={{ fontSize: '10px', color: thm.textSecondary }}>
+                Fastest inference • Llama 4 Scout • cloud.cerebras.ai
+              </div>
+            </div>
+            <a href="https://cloud.cerebras.ai/" target="_blank" rel="noreferrer"
+              style={{ marginLeft: 'auto', fontSize: '11px', color: '#007aff', textDecoration: 'none' }}>
+              Get Key →
+            </a>
+          </div>
+          <SecretInput
+            label="Cerebras API Key"
+            fieldKey="cerebrasApiKey"
+            placeholder="csk-..."
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <TestButton label="Test Cerebras" status={cerebrasStatus} onClick={testCerebras} />
+            <StatusMsg status={cerebrasStatus} msg={cerebrasMsg} />
+          </div>
+          <p style={{ fontSize: '11px', color: thm.textTertiary, margin: 0 }}>
+            Free tier: 1M tokens/day • Llama 4 Scout 17B up to 2,600 tok/s
+          </p>
+        </div>
+
+        {/* ── MISTRAL AI ── */}
+        <div style={s.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '8px',
+              background: 'rgba(88,86,214,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '16px',
+            }}>🌊</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: thm.textPrimary }}>Mistral AI</div>
+              <div style={{ fontSize: '10px', color: thm.textSecondary }}>
+                Best JSON output • EU-based • mistral.ai
+              </div>
+            </div>
+            <a href="https://console.mistral.ai/" target="_blank" rel="noreferrer"
+              style={{ marginLeft: 'auto', fontSize: '11px', color: '#007aff', textDecoration: 'none' }}>
+              Get Key →
+            </a>
+          </div>
+          <SecretInput
+            label="Mistral API Key"
+            fieldKey="mistralApiKey"
+            placeholder="cmpl-..."
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <TestButton label="Test Mistral" status={mistralStatus} onClick={testMistral} />
+            <StatusMsg status={mistralStatus} msg={mistralMsg} />
+          </div>
+          <p style={{ fontSize: '11px', color: thm.textTertiary, margin: 0 }}>
+            Free tier: rate-limited • Great for structured output
+          </p>
+        </div>
+
+        {/* ── SILICONFLOW ── */}
+        <div style={s.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '8px',
+              background: 'rgba(255,107,53,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '16px',
+            }}>🔥</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: thm.textPrimary }}>SiliconFlow</div>
+              <div style={{ fontSize: '10px', color: thm.textSecondary }}>
+                Qwen + DeepSeek + GLM • Asia-optimized • siliconflow.cn
+              </div>
+            </div>
+            <a href="https://cloud.siliconflow.cn/" target="_blank" rel="noreferrer"
+              style={{ marginLeft: 'auto', fontSize: '11px', color: '#007aff', textDecoration: 'none' }}>
+              Get Key →
+            </a>
+          </div>
+          <SecretInput
+            label="SiliconFlow API Key"
+            fieldKey="siliconflowApiKey"
+            placeholder="sk-..."
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <TestButton label="Test SiliconFlow" status={siliconflowStatus} onClick={testSiliconflow} />
+            <StatusMsg status={siliconflowStatus} msg={siliconflowMsg} />
+          </div>
+          <p style={{ fontSize: '11px', color: thm.textTertiary, margin: 0 }}>
+            Free models: Qwen2.5-7B • Alternative to Dashscope
           </p>
         </div>
 

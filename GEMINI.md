@@ -209,6 +209,29 @@ Auth: Authorization: Bearer {glmApiKey}
 Body: { model: 'cogview-3-flash', prompt: string, size: '1024x1024' | '720x1280' | '1280x720' }
 Response: { data: [{ url: string }] } — URL is synchronous (no polling needed)
 
+### Cerebras (route: /api/brain/provider, header: X-Cerebras-Api-Key)
+
+llama-4-scout-17b-16e-instruct  <- fastest inference (2,600 tok/s), free tier
+llama-3.3-70b                   <- quality balance, free tier  
+qwen-3-32b                      <- multilingual + Indonesian, free tier
+Free tier: 1M tokens/day, 30 RPM (requests per minute)
+
+### Mistral AI (route: /api/brain/provider, header: X-Mistral-Api-Key)
+
+mistral-small-latest            <- fast, reliable JSON output (free tier)
+open-mistral-nemo               <- free multilingual, large context (free tier)
+mistral-large-latest            <- best quality (paid)
+Free tier: rate-limited, great for structured output
+
+### SiliconFlow (route: /api/brain/provider, header: X-Siliconflow-Api-Key)
+
+Qwen/Qwen2.5-7B-Instruct        <- free tier model, good for Indonesian
+Qwen/Qwen2.5-72B-Instruct       <- high quality, paid
+deepseek-ai/DeepSeek-V3         <- creative reasoning, paid
+deepseek-ai/DeepSeek-R1         <- deep reasoning (slow), paid
+THUDM/glm-4-9b-chat             <- free Chinese/multilingual model
+Note: SiliconFlow uses org/model format (Qwen/Qwen2.5-7B-Instruct), not just model names
+
 -----
 
 ## DASHSCOPE API RULES
@@ -352,6 +375,9 @@ GEMINI_API_KEY          <- fallback for Gemini if user supplies no X-Gemini-Api-
 GROQ_API_KEY            <- fallback for Groq (free tier shared key)
 OPENROUTER_API_KEY      <- fallback for OpenRouter
 GLM_API_KEY             <- fallback for GLM
+CEREBRAS_API_KEY        <- fallback for Cerebras (free tier shared key)
+MISTRAL_API_KEY         <- fallback for Mistral (rate-limited free tier)
+SILICONFLOW_API_KEY     <- fallback for SiliconFlow
 
 # NOT used as fallback (user must supply their own)
 DASHSCOPE_API_KEY       <- kept in env but NOT used in generation routes

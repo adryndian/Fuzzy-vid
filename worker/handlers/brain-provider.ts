@@ -12,7 +12,7 @@ import { buildBrainSystemPrompt, buildBrainUserPrompt, type Tone, type Language 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Gemini-Key, X-Gemini-Api-Key, X-Groq-Api-Key, X-Openrouter-Api-Key, X-Glm-Api-Key',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Gemini-Key, X-Gemini-Api-Key, X-Groq-Api-Key, X-Openrouter-Api-Key, X-Glm-Api-Key, X-Cerebras-Api-Key, X-Mistral-Api-Key, X-Siliconflow-Api-Key',
 }
 
 export async function handleProviderBrain(
@@ -68,7 +68,7 @@ export async function handleProviderBrain(
   const provider = getProviderForModel(brain_model)
   if (!provider) {
     return Response.json(
-      { error: `Unknown model: ${brain_model}. Supported: groq, openrouter, glm, gemini` },
+      { error: `Unknown model: ${brain_model}. Supported: groq, openrouter, glm, gemini, cerebras, mistral, siliconflow` },
       { status: 400, headers: corsHeaders }
     )
   }

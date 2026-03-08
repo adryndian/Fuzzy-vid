@@ -42,6 +42,9 @@ export function getApiHeaders(userId?: string): Record<string, string> {
       if (keys.openrouterApiKey)   headers['X-Openrouter-Api-Key'] = keys.openrouterApiKey
       if (keys.glmApiKey)          headers['X-Glm-Api-Key'] = keys.glmApiKey
       if (keys.geminiApiKey)       headers['X-Gemini-Api-Key'] = keys.geminiApiKey
+      if (keys.cerebrasApiKey)     headers['X-Cerebras-Api-Key'] = keys.cerebrasApiKey
+      if (keys.mistralApiKey)      headers['X-Mistral-Api-Key'] = keys.mistralApiKey
+      if (keys.siliconflowApiKey)  headers['X-Siliconflow-Api-Key'] = keys.siliconflowApiKey
     }
   } catch { /* ignore */ }
   return headers
@@ -208,6 +211,9 @@ export async function callProviderBrain(
   if (settings.openrouterApiKey)  headers['X-Openrouter-Api-Key'] = settings.openrouterApiKey
   if (settings.glmApiKey)         headers['X-Glm-Api-Key'] = settings.glmApiKey
   if (settings.geminiApiKey)      headers['X-Gemini-Api-Key'] = settings.geminiApiKey
+  if (settings.cerebrasApiKey)    headers['X-Cerebras-Api-Key'] = settings.cerebrasApiKey
+  if (settings.mistralApiKey)     headers['X-Mistral-Api-Key'] = settings.mistralApiKey
+  if (settings.siliconflowApiKey) headers['X-Siliconflow-Api-Key'] = settings.siliconflowApiKey
 
   const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
     method: 'POST',
