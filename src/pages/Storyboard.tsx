@@ -182,11 +182,11 @@ export function Storyboard() {
   const [veoBrainModel, setVeoBrainModel] = useState<string>('gemini-2.0-flash')
 
   // Video polling refs
-  const videoPollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({})
+  const videoPollingRefs = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   // Dashscope polling refs (image + video async tasks)
-  const dashscopePollingRefs = useRef<Record<string, ReturnType<typeof setInterval>>>({})
+  const dashscopePollingRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   // GLM polling refs (video async tasks)
-  const glmPollingRefs = useRef<Record<string, ReturnType<typeof setInterval>>>({})
+  const glmPollingRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   // Ref for activeSessionId to avoid stale closures in polling callbacks
   const activeSessionIdRef = useRef<string | null>(null)
 
@@ -242,9 +242,9 @@ export function Storyboard() {
   // Cleanup polling intervals on unmount
   useEffect(() => {
     return () => {
-      Object.values(videoPollingRefs.current).forEach(clearInterval)
-      Object.values(dashscopePollingRefs.current).forEach(clearInterval)
-      Object.values(glmPollingRefs.current).forEach(clearInterval)
+      Object.values(videoPollingRefs.current).forEach(clearTimeout)
+      Object.values(dashscopePollingRefs.current).forEach(clearTimeout)
+      Object.values(glmPollingRefs.current).forEach(clearTimeout)
     }
   }, [])
 
@@ -490,7 +490,7 @@ export function Storyboard() {
   // --- Cancel video polling ---
   const handleCancelVideo = useCallback((sceneNum: number) => {
     if (videoPollingRefs.current[sceneNum]) {
-      clearInterval(videoPollingRefs.current[sceneNum])
+      clearTimeout(videoPollingRefs.current[sceneNum])
       delete videoPollingRefs.current[sceneNum]
     }
     setVideoPollDisplayCounts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })
@@ -500,16 +500,15 @@ export function Storyboard() {
   // --- Video polling ---
   const pollVideoStatus = useCallback((sceneNum: number, jobId: string) => {
     if (videoPollingRefs.current[sceneNum]) {
-      clearInterval(videoPollingRefs.current[sceneNum])
+      clearTimeout(videoPollingRefs.current[sceneNum])
     }
     let pollCount = 0
-    const interval = setInterval(async () => {
+    const poll = async () => {
       pollCount++
       setVideoPollDisplayCounts(prev => ({ ...prev, [sceneNum]: pollCount }))
 
       // Timeout after 90 polls (12 min)
       if (pollCount > 90) {
-        clearInterval(interval)
         delete videoPollingRefs.current[sceneNum]
         setVideoPollDisplayCounts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })
         updateAsset(sceneNum, { videoStatus: 'error', videoError: 'Timed out after 12 min' })
@@ -520,7 +519,6 @@ export function Storyboard() {
       try {
         const result = await checkVideoStatus(jobId)
         if (result.status === 'done' && result.video_url) {
-          clearInterval(interval)
           delete videoPollingRefs.current[sceneNum]
           setVideoPollDisplayCounts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })
           updateAsset(sceneNum, { videoStatus: 'done', videoUrl: result.video_url, videoJobId: jobId })
@@ -531,8 +529,8 @@ export function Storyboard() {
             video_url: result.video_url,
             video_model: 'nova_reel',
           }).catch(console.error)
+          return
         } else if (result.status === 'failed') {
-          clearInterval(interval)
           delete videoPollingRefs.current[sceneNum]
           setVideoPollDisplayCounts(prev => { const n = { ...prev }; delete n[sceneNum]; return n })
           updateAsset(sceneNum, {
@@ -541,27 +539,30 @@ export function Storyboard() {
             videoJobId: jobId,
           })
           setPageToast({ msg: `Scene ${sceneNum} video failed`, type: 'error' })
+          return
         }
       } catch {
         // Network error — keep polling
       }
-    }, 8000)
-    videoPollingRefs.current[sceneNum] = interval
+      
+      const nextInterval = Math.min(8000 + (pollCount * 1000), 20000)
+      videoPollingRefs.current[sceneNum] = setTimeout(poll, nextInterval)
+    }
+    videoPollingRefs.current[sceneNum] = setTimeout(poll, 8000)
   }, [updateAsset, saveSceneAsset])
 
   const startDashscopePolling = useCallback((sceneNum: number, taskId: string, type: 'image' | 'video') => {
     const key = `${type}_${sceneNum}_${taskId}`
     if (dashscopePollingRefs.current[key]) {
-      clearInterval(dashscopePollingRefs.current[key])
+      clearTimeout(dashscopePollingRefs.current[key])
     }
     const intervalMs = type === 'image' ? 5000 : 8000
     const maxPolls = type === 'image' ? 60 : 90
     let pollCount = 0
 
-    const interval = setInterval(async () => {
+    const poll = async () => {
       pollCount++
       if (pollCount > maxPolls) {
-        clearInterval(interval)
         delete dashscopePollingRefs.current[key]
         const errMsg = `Dashscope ${type} timed out`
         if (type === 'image') {
@@ -580,7 +581,6 @@ export function Storyboard() {
         const data = await res.json() as { status: string; url?: string; message?: string }
 
         if (data.status === 'done' && data.url) {
-          clearInterval(interval)
           delete dashscopePollingRefs.current[key]
           if (type === 'image') {
             updateAsset(sceneNum, { imageStatus: 'done', imageUrl: data.url })
@@ -599,8 +599,8 @@ export function Storyboard() {
               video_url: data.url,
             }).catch(console.error)
           }
+          return
         } else if (data.status === 'error') {
-          clearInterval(interval)
           delete dashscopePollingRefs.current[key]
           if (type === 'image') {
             updateAsset(sceneNum, { imageStatus: 'error', imageError: data.message || 'Dashscope error' })
@@ -608,26 +608,29 @@ export function Storyboard() {
             updateAsset(sceneNum, { videoStatus: 'error', videoError: data.message || 'Dashscope error' })
           }
           setPageToast({ msg: `Scene ${sceneNum} ${type} failed: ${data.message}`, type: 'error' })
+          return
         }
         // status === 'processing' → keep polling
       } catch {
         // Network error — keep polling
       }
-    }, intervalMs)
 
-    dashscopePollingRefs.current[key] = interval
+      const nextInterval = Math.min(intervalMs + (pollCount * 1000), 20000)
+      dashscopePollingRefs.current[key] = setTimeout(poll, nextInterval)
+    }
+
+    dashscopePollingRefs.current[key] = setTimeout(poll, intervalMs)
   }, [updateAsset, saveSceneAsset]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const startGlmPolling = useCallback((sceneNum: number, taskId: string) => {
     const key = `video_${sceneNum}_${taskId}`
-    if (glmPollingRefs.current[key]) clearInterval(glmPollingRefs.current[key])
+    if (glmPollingRefs.current[key]) clearTimeout(glmPollingRefs.current[key])
     let pollCount = 0
     const maxPolls = 90 // 90 × 8s = 12 min
 
-    const interval = setInterval(async () => {
+    const poll = async () => {
       pollCount++
       if (pollCount > maxPolls) {
-        clearInterval(interval)
         delete glmPollingRefs.current[key]
         updateAsset(sceneNum, { videoStatus: 'error', videoError: 'CogVideoX timed out after 12 min' })
         return
@@ -639,7 +642,6 @@ export function Storyboard() {
         const data = await res.json() as { status: string; url?: string; message?: string }
 
         if (data.status === 'done' && data.url) {
-          clearInterval(interval)
           delete glmPollingRefs.current[key]
           updateAsset(sceneNum, { videoStatus: 'done', videoUrl: data.url })
           toast.success(`Scene ${sceneNum} video ready (CogVideoX)!`)
@@ -649,17 +651,21 @@ export function Storyboard() {
             video_url: data.url,
             video_model: 'cogvideox-2',
           }).catch(console.error)
+          return
         } else if (data.status === 'error') {
-          clearInterval(interval)
           delete glmPollingRefs.current[key]
           updateAsset(sceneNum, { videoStatus: 'error', videoError: data.message || 'CogVideoX error' })
+          return
         }
       } catch {
         // Network error — keep polling
       }
-    }, 8000)
+      
+      const nextInterval = Math.min(8000 + (pollCount * 1000), 20000)
+      glmPollingRefs.current[key] = setTimeout(poll, nextInterval)
+    }
 
-    glmPollingRefs.current[key] = interval
+    glmPollingRefs.current[key] = setTimeout(poll, 8000)
   }, [updateAsset, saveSceneAsset]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerateImage = async (scene: Record<string, unknown>) => {

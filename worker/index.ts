@@ -115,6 +115,8 @@ export function extractCredentials(request: Request, env: Env): Credentials {
   }
 }
 
+let seenUsersCache = new Set<string>()
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 
@@ -146,7 +148,15 @@ export default {
         Object.entries(corsHeaders).forEach(([k, v]) => finalHeaders.set(k, v))
         return new Response(response.body, { status: 401, headers: finalHeaders })
       }
-      await ensureUser(env.DB, clerkUser)
+      // Use an in-memory cache to prevent hammering D1 on every request
+      if (!seenUsersCache.has(clerkUser.id)) {
+        await ensureUser(env.DB, clerkUser)
+        seenUsersCache.add(clerkUser.id)
+        // Keep the set from growing infinitely
+        if (seenUsersCache.size > 1000) {
+          seenUsersCache.clear()
+        }
+      }
     }
 
     // Optional auth for generation routes (for credit deduction)
@@ -383,7 +393,7 @@ export default {
       // ── Project routes ────────────────────────────────────────────────────
       else if (path.startsWith('/api/project/')) {
         const { handleProjectRequest } = await import('./project')
-        response = await handleProjectRequest(request, env, url, ctx, creds as any)
+        response = await handleProjectRequest(request, env, url, ctx)
       }
       // ── Storage routes ────────────────────────────────────────────────────
       else if (path.startsWith('/api/storage/')) {

@@ -213,30 +213,18 @@ export async function handleGlmVideoStatus(
 
 // ─── Shared R2 upload helper ─────────────────────────────────────────────────
 
+const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
+
 async function downloadAndUploadToR2(sourceUrl: string, ext: string, env: Env): Promise<string> {
   const res = await fetch(sourceUrl)
   if (!res.ok) throw new Error(`Failed to download from GLM: ${res.status}`)
 
-  const buffer = await res.arrayBuffer()
   const fileName = `glm/${Date.now()}_output.${ext}`
   const contentType = ext === 'mp4' ? 'video/mp4' : 'image/jpeg'
-  const bucket = env.R2_BUCKET_NAME || 'igome-story-storage'
-  const r2Endpoint = `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucket}/${fileName}`
 
-  const { signRequest } = await import('./lib/aws-signature')
-  const r2Headers = await signRequest({
-    method: 'PUT',
-    url: r2Endpoint,
-    region: 'auto',
-    service: 's3',
-    accessKeyId: env.R2_ACCESS_KEY_ID || '',
-    secretAccessKey: env.R2_SECRET_ACCESS_KEY || '',
-    body: buffer,
-    headers: { 'Content-Type': contentType },
+  await env.STORY_STORAGE.put(fileName, res.body, {
+    httpMetadata: { contentType },
   })
 
-  const r2Res = await fetch(r2Endpoint, { method: 'PUT', headers: r2Headers, body: buffer })
-  if (!r2Res.ok) throw new Error('R2 upload failed')
-
-  return `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucket}/${fileName}`
+  return `${WORKER_URL}/api/storage/file/${fileName}`
 }

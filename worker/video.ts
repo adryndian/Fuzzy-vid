@@ -156,8 +156,30 @@ export async function handleVideoStatus(
       const s3Uri = statusData.outputDataConfig?.s3OutputDataConfig?.s3Uri || ''
       const match = s3Uri.match(/s3:\/\/[^/]+\/(.+)/)
       const outputKey = match ? match[1] : ''
-      const videoUrl = outputKey ? `${WORKER_URL}/api/storage/file/${outputKey}/output.mp4` : ''
-      return Response.json({ status: 'done', video_url: videoUrl })
+      
+      if (outputKey) {
+        const s3Key = `${outputKey}/output.mp4`
+        const s3Endpoint = `https://igome-story-storage.s3.${region}.amazonaws.com/${s3Key}`
+
+        const s3Req = new Request(s3Endpoint, { method: 'GET' })
+        const s3Signer = new AwsV4Signer(
+          { awsAccessKeyId: creds.awsAccessKeyId, awsSecretKey: creds.awsSecretAccessKey },
+          region,
+          's3'
+        )
+        const signedS3Req = await s3Signer.sign(s3Req)
+        const s3Res = await fetch(signedS3Req)
+
+        if (s3Res.ok) {
+          // Upload to R2
+          await env.STORY_STORAGE.put(s3Key, s3Res.body, {
+             httpMetadata: { contentType: 'video/mp4' },
+          })
+          const videoUrl = `${WORKER_URL}/api/storage/file/${s3Key}`
+          return Response.json({ status: 'done', video_url: videoUrl })
+        }
+      }
+      return Response.json({ status: 'error', message: 'Failed to transfer from S3' })
     }
 
     if (statusData.status === 'Failed') {
@@ -331,7 +353,29 @@ export async function handleVideoRequest(
         if (res.ok) {
           const statusData = await res.json() as { status: string; failureMessage?: string }
           if (statusData.status === 'Completed') {
-            const videoUrl = `${WORKER_URL}/api/storage/file/${jobData.outputKey}/output.mp4`
+            const s3Key = `${jobData.outputKey}/output.mp4`
+            const s3Endpoint = `https://igome-story-storage.s3.${region}.amazonaws.com/${s3Key}`
+
+            const s3Req = new Request(s3Endpoint, { method: 'GET' })
+            const s3Signer = new AwsV4Signer(
+              { awsAccessKeyId: creds.awsAccessKeyId, awsSecretKey: creds.awsSecretAccessKey },
+              region,
+              's3'
+            )
+            const signedS3Req = await s3Signer.sign(s3Req)
+            const s3Res = await fetch(signedS3Req)
+
+            if (!s3Res.ok) {
+               console.error('Failed to download from S3:', await s3Res.text())
+               return Response.json({ status: 'processing', message: 'Transferring from S3 to R2...' })
+            }
+
+            // Upload to R2
+            await env.STORY_STORAGE.put(s3Key, s3Res.body, {
+               httpMetadata: { contentType: 'video/mp4' },
+            })
+
+            const videoUrl = `${WORKER_URL}/api/storage/file/${s3Key}`
             await env.JOB_STATUS.put(jobId, JSON.stringify({
               ...jobData,
               status: 'done',

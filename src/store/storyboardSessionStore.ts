@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
+import { get, set, del } from 'idb-keyval'
 import type { SceneAssets, SceneAssetsMap } from '../types/schema'
 import { defaultSceneAssets } from '../types/schema'
 
@@ -34,14 +35,26 @@ interface StoryboardSessionState {
 
 const MAX_SESSIONS = 5
 
+const idbStorage: StateStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    return (await get(name)) || null
+  },
+  setItem: async (name: string, value: string): Promise<void> => {
+    await set(name, value)
+  },
+  removeItem: async (name: string): Promise<void> => {
+    await del(name)
+  },
+}
+
 export const useStoryboardSessionStore = create<StoryboardSessionState>()(
   persist(
-    (set, get) => ({
+    (set_store, get_store) => ({
       sessions: {},
 
       createSession: (params) => {
         const id = nanoid(8)
-        set((state) => {
+        set_store((state) => {
           const sessions = { ...state.sessions }
           // Prune oldest if over limit
           const ids = Object.keys(sessions).sort(
@@ -64,7 +77,7 @@ export const useStoryboardSessionStore = create<StoryboardSessionState>()(
       },
 
       updateAsset: (id, sceneNum, update) =>
-        set((state) => {
+        set_store((state) => {
           const session = state.sessions[id]
           if (!session) return state
           const current = session.assets[sceneNum] || defaultSceneAssets()
@@ -83,7 +96,7 @@ export const useStoryboardSessionStore = create<StoryboardSessionState>()(
         }),
 
       updateSession: (id, partial) =>
-        set((state) => {
+        set_store((state) => {
           const session = state.sessions[id]
           if (!session) return state
           return {
@@ -95,12 +108,15 @@ export const useStoryboardSessionStore = create<StoryboardSessionState>()(
         }),
 
       removeSession: (id) =>
-        set((state) => {
+        set_store((state) => {
           const next = { ...state.sessions }
           delete next[id]
           return { sessions: next }
         }),
     }),
-    { name: 'fuzzy_storyboard_sessions' }
+    { 
+      name: 'fuzzy_storyboard_sessions',
+      storage: createJSONStorage(() => idbStorage)
+    }
   )
 )
