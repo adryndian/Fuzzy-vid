@@ -26,6 +26,7 @@ dist-ssr
 .mcp.json
 .env.local
 .env
+.env.mcp
 
 # MCP configs with secrets
 .idx/mcp.json
