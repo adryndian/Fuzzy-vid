@@ -1,5 +1,9 @@
 # Fuzzy-vid — Complete Architecture Reference
 
+# Version 3.9 — Updated 2026-03-08
+
+---
+
 ## 1. Project Overview
 
 AI-powered short video production app. Users describe a story; the app generates a full storyboard with AI-written scenes, then generates images, videos, and narration per scene.
@@ -7,12 +11,14 @@ AI-powered short video production app. Users describe a story; the app generates
 | Layer | Technology | URL |
 |---|---|---|
 | Frontend | React 18 + Vite + TypeScript | https://fuzzystuf.pages.dev |
-| Backend | Cloudflare Worker (plain fetch, no framework) | https://fuzzy-vid-worker.officialdian21.workers.dev |
+| Backend | Cloudflare Worker (TypeScript) | https://fuzzy-vid-worker.officialdian21.workers.dev |
 | Storage | Cloudflare R2 (`igome-story-storage`) | via Worker proxy |
-| AI Brain | AWS Bedrock — Claude Sonnet 4.6 + Llama 4 Maverick | us-east-1 |
-| AI Image | AWS Bedrock — Nova Canvas + Titan V2 | configurable |
-| AI Video | AWS Bedrock — Nova Reel (async) | us-east-1 fixed |
-| AI Audio | AWS Polly + ElevenLabs | Polly: us-west-2 |
+| DB | Cloudflare D1 (`fuzzy-short-db`) | 5 tables (auth required routes) |
+| Auth | Clerk (Email OTP + Google OAuth) | pk_test_ for .pages.dev |
+| Brain AI | AWS Bedrock + Dashscope SG + Gemini + Groq + OpenRouter + ZhipuAI GLM | 6 providers, 29+ models |
+| Image AI | AWS Bedrock (Nova Canvas, SD 3.5) + Dashscope (Qwen-Image, Wanx) + ZhipuAI GLM (CogView) | |
+| Video AI | AWS Bedrock Nova Reel (async) + Dashscope Wan2.1/2.6 (async) | |
+| Audio | AWS Polly + ElevenLabs | |
 
 ---
 
@@ -20,91 +26,58 @@ AI-powered short video production app. Users describe a story; the app generates
 
 ```
 /
-├── src/                          # React frontend
-│   ├── main.tsx                  # Entry point, QueryClient + Router setup
-│   ├── App.tsx                   # Route definitions
-│   ├── index.css                 # Global reset + iOS Liquid Glass variables
-│   ├── styles/glass.css          # Glass morphism component styles
+├── src/                              # React frontend
+│   ├── main.tsx                      # Entry point — ClerkProvider + ThemeProvider + Router
+│   ├── App.tsx                       # Routes: / /storyboard /settings /dashboard /auth
+│   ├── index.css                     # Global reset
 │   ├── pages/
-│   │   ├── Home.tsx              # Main form: title, story, config, generate
-│   │   ├── Storyboard.tsx        # Per-scene workspace with image/video/audio
-│   │   ├── Settings.tsx          # API key management UI
-│   │   └── History.tsx           # Saved storyboard list
+│   │   ├── Home.tsx                  # Story input form, 6-provider brain selector, generate
+│   │   ├── Storyboard.tsx            # Per-scene workspace: image/video/audio/Veo prompts
+│   │   ├── Settings.tsx              # API keys (6 providers), dark mode, test buttons
+│   │   ├── Dashboard.tsx             # Cloud storyboard list, local history, credits badge
+│   │   └── Auth.tsx                  # Clerk SignIn/SignUp (routing="hash")
 │   ├── components/
-│   │   ├── GenerationOverlay.tsx # Animated overlay during brain generation
-│   │   ├── GenTaskBar.tsx        # Bottom bar for minimized sessions
-│   │   ├── ErrorBoundary.tsx
-│   │   ├── forms/
-│   │   │   └── StoryInputForm.tsx
-│   │   ├── glass/                # iOS Liquid Glass primitives
-│   │   │   ├── GlassBadge.tsx
-│   │   │   ├── GlassButton.tsx
-│   │   │   ├── GlassCard.tsx
-│   │   │   ├── GlassInput.tsx
-│   │   │   └── GlassModal.tsx
-│   │   ├── layout/
-│   │   │   ├── AppLayout.tsx
-│   │   │   ├── Header.tsx
-│   │   │   └── ProjectHeader.tsx
-│   │   ├── scene/
-│   │   │   ├── SceneCard.tsx     # Collapsible scene card, editable prompts
-│   │   │   ├── SceneWorkspace.tsx
-│   │   │   └── tabs/
-│   │   │       ├── ImageTab.tsx
-│   │   │       ├── VideoTab.tsx
-│   │   │       └── AudioTab.tsx
-│   │   ├── storyboard/
-│   │   │   ├── ProgressBar.tsx
-│   │   │   └── StoryboardGrid.tsx
-│   │   ├── skeletons/
-│   │   │   ├── AudioWaveformSkeleton.tsx
-│   │   │   ├── ImageSkeleton.tsx
-│   │   │   ├── StoryboardGridSkeleton.tsx
-│   │   │   └── VideoProgressBar.tsx
-│   │   └── ui/
-│   │       ├── badge.tsx
-│   │       ├── button.tsx
-│   │       ├── SegmentedControl.tsx
-│   │       ├── tabs.tsx
-│   │       └── Toaster.tsx
-│   ├── hooks/
-│   │   ├── useBrainGenerate.ts   # TanStack Query mutation for /api/brain/generate
-│   │   ├── useImageGenerate.ts   # Mutation + polling for image generation
-│   │   ├── useVideoGenerate.ts   # Mutation + polling for video generation
-│   │   ├── useAudioGenerate.ts   # Mutation for audio TTS
-│   │   ├── useElapsedTimer.ts    # ms timer for generation overlay
-│   │   └── useNotify.ts          # Toast wrapper
-│   ├── store/                    # Zustand state management
-│   │   ├── storyboardSessionStore.ts  # persisted — sessions with assets
-│   │   ├── genTaskStore.ts            # in-memory — brain task tracking
-│   │   ├── costStore.ts               # in-memory — session cost tracking
-│   │   ├── historyStore.ts            # persisted — saved storyboard list
-│   │   ├── projectStore.ts            # in-memory — active project + scene
-│   │   └── settingsStore.ts           # settings (mirror of localStorage)
+│   │   ├── BottomNav.tsx             # Fixed 3-tab nav (Home/Dashboard/Settings), rounded top
+│   │   ├── GenTaskBar.tsx            # Minimized brain generation sessions bar
+│   │   ├── VeoPromptSection.tsx      # Per-scene Veo 3.1 prompt UI, sub-tone, copy/regen
+│   │   └── ErrorBoundary.tsx
 │   ├── lib/
-│   │   ├── api.ts                # Worker endpoint wrappers + credential injection
-│   │   ├── costEstimate.ts       # Per-model cost estimation functions
-│   │   └── utils.ts              # Generic helpers
+│   │   ├── api.ts                    # Worker fetch calls; exports WORKER_URL, getApiHeaders(userId?)
+│   │   ├── theme.tsx                 # ThemeProvider, useTheme(), tk(isDark) token function
+│   │   ├── providerModels.ts         # 29 brain models x 6 providers, getModelsByProvider/getModelById/hasRequiredKey
+│   │   ├── userApi.ts                # useUserApi() hook — Clerk JWT calls for D1 routes
+│   │   ├── costEstimate.ts           # Per-model cost estimation, timeAgo()
+│   │   └── veoSubtones.ts            # Frontend mirror of veo-subtones.ts (8 sub-tones)
+│   ├── store/
+│   │   ├── storyboardSessionStore.ts # persisted — multi-session with assets (max 5)
+│   │   ├── genTaskStore.ts           # in-memory — brain task tracking
+│   │   ├── costStore.ts              # in-memory — session cost tracking
+│   │   └── historyStore.ts           # persisted — local storyboard history
 │   └── types/
-│       └── schema.ts             # Shared types: ProjectSchema, Scene, VideoJob, etc.
+│       └── schema.ts                 # AppSettings, SceneAssets, VideoJob, buildApiHeaders()
 │
-├── worker/                       # Cloudflare Worker backend
-│   ├── index.ts                  # Router, CORS, extractCredentials, Env interface
-│   ├── brain.ts                  # Storyboard generation + VO rewrite
-│   ├── image.ts                  # Nova Canvas + Titan V2 + enhance-prompt
-│   ├── video.ts                  # Nova Reel async-invoke + ARN polling
-│   ├── audio.ts                  # Polly + ElevenLabs TTS
-│   ├── project.ts                # Project CRUD routes
-│   ├── storage.ts                # R2 file serve + presign + test
-│   └── lib/
-│       ├── aws-signature.ts      # AwsV4Signer class + signRequest function
-│       └── cors.ts               # CORS header constants
+├── worker/                           # Cloudflare Worker backend
+│   ├── index.ts                      # Router, extractCredentials(), CORS, requireAwsKeys/requireDashscopeKey
+│   ├── brain.ts                      # Bedrock storyboard gen, buildBrainPrompts()
+│   ├── image.ts                      # Nova Canvas + SD 3.5 + enhance-prompt (Bedrock)
+│   ├── video.ts                      # Nova Reel async-invoke + ARN polling (Bedrock)
+│   ├── audio.ts                      # AWS Polly + ElevenLabs TTS
+│   ├── dashscope.ts                  # ALL Qwen/Wanx/Wan2.1/2.6 (Dashscope Singapore)
+│   ├── handlers/
+│   │   ├── brain-provider.ts         # /api/brain/provider — Gemini/Groq/OpenRouter/GLM
+│   │   └── regenerate-veo-prompt.ts  # /api/brain/regenerate-veo-prompt
+│   ├── lib/
+│   │   ├── aws-signature.ts          # signRequest() + buildCanonicalUri() — CRITICAL
+│   │   ├── providers.ts              # PROVIDERS registry, callProvider(), getProviderForModel()
+│   │   ├── brain-system-prompt.ts    # buildBrainSystemPrompt() + buildBrainUserPrompt() (8 tones)
+│   │   ├── veo-subtones.ts           # VEO_SUBTONES (8), TONE_TO_SUBTONES, isVeoTone()
+│   │   └── auth.ts                   # verifyClerkJWT (JWKS cached 1hr), ensureUser (D1 upsert)
+│   └── db.ts                         # D1 operations, AES-GCM key encryption, CREDIT_COSTS
 │
-├── wrangler.toml                 # Worker config: R2, KV, ASSETS bindings
-├── vite.config.ts                # Vite build config
-├── tsconfig.app.json             # Frontend TypeScript config
-├── worker/tsconfig.json          # Worker TypeScript config
-└── package.json
+├── wrangler.toml                     # Worker config: R2, KV, D1, ASSETS bindings
+├── vite.config.ts
+├── tsconfig.app.json
+└── worker/tsconfig.json
 ```
 
 ---
@@ -115,70 +88,88 @@ AI-powered short video production app. Users describe a story; the app generates
 
 | Page | Route | Responsibility |
 |---|---|---|
-| `Home` | `/` | Story input form, AI model selection, aspect ratio, duration slider, trigger brain generation |
-| `Storyboard` | `/storyboard?id=SESSION_ID` | Per-scene generation workspace: view scenes, generate image/video/audio, rewrite VO |
-| `Settings` | `/settings` | AWS keys, ElevenLabs key, region selection per service |
-| `History` | `/history` | List of saved storyboards from `historyStore` |
+| `Home` | `/` | Story input form, 6-provider brain selector, tone/style/model pickers, generate |
+| `Storyboard` | `/storyboard?id=SESSION_ID` | Per-scene generation workspace: image/video/audio/Veo prompt per scene |
+| `Settings` | `/settings` | API keys for all 6 providers, dark mode toggle, test buttons |
+| `Dashboard` | `/dashboard` | Cloud storyboard list (D1) + local history (historyStore), credits badge |
+| `Auth` | `/auth` | Clerk SignIn/SignUp with hash routing |
 
 ### Component Hierarchy
 
 ```
-AppLayout
-├── Header (nav: Home / Settings / History)
-│   └── GenTaskBar (bottom bar, minimized sessions with Resume button)
-└── <Outlet>
-    ├── Home
-    │   ├── StoryInputForm
-    │   ├── SegmentedControl (aspect ratio)
-    │   └── GenerationOverlay (animated steps during brain generate)
-    ├── Storyboard
-    │   ├── ProjectHeader (title, metadata)
-    │   ├── ProgressBar
-    │   └── [SceneCard × N]
-    │       ├── ImageTab  → useImageGenerate → /api/image/generate
-    │       ├── VideoTab  → useVideoGenerate → /api/video/start + /api/video/status/:id
-    │       └── AudioTab  → useAudioGenerate → /api/audio/generate
-    ├── Settings (GlassCard, GlassInput per key)
-    └── History (list of HistoryItem)
+App.tsx
+├── ClerkProvider
+└── ThemeProvider
+    ├── Auth (public route)
+    └── (protected routes — auth guard in App.tsx)
+        ├── Home
+        │   └── GenTaskBar (fixed bottom bar for minimized sessions)
+        ├── Storyboard
+        │   ├── [SceneCard × N]
+        │   │   ├── Image section (generate, preview, download)
+        │   │   ├── Video section (generate async, poll, download)
+        │   │   ├── Audio section (Polly/ElevenLabs, history)
+        │   │   └── VeoPromptSection (Veo 3.1 prompt, sub-tone, copy/regen)
+        │   └── Scene Navigation Bar (mobile, above BottomNav)
+        ├── Settings
+        └── Dashboard
+        └── BottomNav (fixed, all protected pages)
 ```
 
-### Glass UI Components
+### Theme System (src/lib/theme.tsx)
 
-All components use inline styles (no Tailwind). The design is iOS 26 Liquid Glass light theme:
-- `GlassCard` — `background: rgba(255,255,255,0.72)`, `backdropFilter: blur(20px) saturate(180%)`
-- `GlassButton` — primary orange `#F05A25`, secondary white glass
-- `GlassInput` — glass background, border on focus
-- `GlassBadge` — small label with pill shape
-- `GlassModal` — fullscreen overlay for image lightbox / video preview
+`ThemeProvider` wraps app in `main.tsx`. Provides `isDark` + `toggleTheme` via context.
+`useTheme()` — hook to read theme in any component.
+`tk(isDark)` — returns token object (15 tokens) for current mode.
 
-### Custom Hooks
+Tokens: `pageBg, cardBg, cardBorder, cardShadow, headerBg, navBg, navBorder,
+         textPrimary, textSecondary, textTertiary, inputBg, inputBorder,
+         pillInactive, sectionBg, labelColor`
 
-| Hook | Pattern | Notes |
-|---|---|---|
-| `useBrainGenerate` | TanStack Query `useMutation` | Posts to `/api/brain/generate`, sets project in `projectStore` |
-| `useImageGeneration(sceneId)` | mutation + polling query | Polls `/api/image/status/:jobId` every 5s until done/failed |
-| `useVideoGeneration(sceneId)` | mutation + polling query | Polls `/api/video/status/:jobId` every 5s until done/failed |
-| `useAudioGenerate` | `useMutation` only | Synchronous — no polling needed |
+Persisted to `localStorage('fuzzy_theme')`.
 
-### API Layer (`src/lib/api.ts`)
+Rules:
+- ALL page components use `const { isDark } = useTheme()` + `const t = tk(isDark)`
+- `dropdownStyle` must be defined INSIDE the component (after `tk()`) — never at module level
+- `.map(t => ...)` iterators must NOT shadow outer `t = tk(isDark)` — rename to `tn`
+- `select option` bg: use `<style>` JSX tag (inline styles can't target option elements)
 
-Credential injection pattern — all API calls inject credentials from `localStorage`:
+### Brain Model Selector (Home.tsx)
 
+1. Provider pill row: `aws / dashscope / gemini / groq / openrouter / glm`
+2. `<select>` dropdown showing models for the active provider
+3. Info bar: providerEmoji, providerLabel, speedLabel, bestFor
+
+Constants (module-level, outside component):
+- `PROVIDER_ORDER`, `PROVIDER_META`, `MODEL_GROUPS = getModelsByProvider()`
+- `brainModel: string` (default `'gemini-2.0-flash'`) — NOT a union type
+
+Submit routing:
+- `aws` → `/api/brain/generate`
+- `dashscope` → `/api/dashscope/brain`
+- all others → `/api/brain/provider`
+
+### API Layer (src/lib/api.ts)
+
+`WORKER_URL` exported constant — imported by all pages and VeoPromptSection.
+
+`getApiHeaders(userId?)` — reads `localStorage('fuzzy_settings_{userId}')`, returns:
 ```typescript
-function getApiHeaders(): Record<string, string> {
-  const stored = localStorage.getItem('fuzzy_short_settings')
-  const keys = stored ? JSON.parse(stored) : {}
-  return {
-    ...(keys.awsAccessKeyId && { 'X-AWS-Access-Key-Id': keys.awsAccessKeyId }),
-    ...(keys.awsSecretAccessKey && { 'X-AWS-Secret-Access-Key': keys.awsSecretAccessKey }),
-    ...(keys.imageRegion && { 'X-Image-Region': keys.imageRegion }),
-    ...(keys.audioRegion && { 'X-Audio-Region': keys.audioRegion }),
-    ...(keys.elevenLabsApiKey && { 'X-ElevenLabs-Key': keys.elevenLabsApiKey }),
-  }
+{
+  'X-AWS-Access-Key-Id': settings.awsAccessKeyId,
+  'X-AWS-Secret-Access-Key': settings.awsSecretAccessKey,
+  'X-Brain-Region': settings.brainRegion,
+  'X-Image-Region': settings.imageRegion,
+  'X-Dashscope-Api-Key': settings.dashscopeApiKey,
+  'X-Gemini-Api-Key': settings.geminiApiKey,
+  'X-Groq-Api-Key': settings.groqApiKey,
+  'X-Openrouter-Api-Key': settings.openrouterApiKey,
+  'X-Glm-Api-Key': settings.glmApiKey,
 }
 ```
 
-Exported functions: `generateImage`, `checkVideoStatus`, `generateVideo`, `startVideoJob`, `pollVideoStatus`, `enhancePrompt`, `rewriteVO`, `generateAudio`
+IMPORTANT: localStorage key is `fuzzy_settings_{userId}` — NOT `fuzzy_short_settings`.
+Always pass `userId` from `useUser()` hook when calling `getApiHeaders()`.
 
 ---
 
@@ -191,22 +182,22 @@ interface StoryboardSession {
   id: string           // nanoid(8)
   rawJson: string      // raw storyboard JSON from brain
   title: string
-  imageModel: 'nova_canvas' | 'titan_v2'
+  imageModel: string   // any valid image model ID (widened from union)
   audioEngine: 'polly' | 'elevenlabs'
   audioVoice: string
   language: string
   assets: SceneAssetsMap   // Record<sceneNumber, SceneAssets>
-  isMinimized: boolean     // true = session running in background
+  isMinimized: boolean
   createdAt: string
 }
 ```
 
 - Max 5 sessions — oldest pruned on create
-- URL uses `?id=SESSION_ID` for routing
-- `updateAsset(id, sceneNum, partial)` — merges per-scene asset state
-- `updateSession(id, partial)` — updates session fields (e.g. `isMinimized`)
+- URL uses `?id=SESSION_ID`
+- `updateAssetInStore(id, sceneNum, partial)` — merges per-scene asset state
+- `updateSession(id, partial)` — updates session fields
 
-### `genTaskStore` — in-memory only
+### `genTaskStore` — in-memory
 
 ```typescript
 interface GenTask {
@@ -221,512 +212,451 @@ interface GenTask {
 }
 ```
 
-Tracks active brain generation tasks. Used by `GenTaskBar` to show minimized sessions.
+Used by `GenTaskBar` to show minimized brain generation sessions.
 
-### `costStore` — in-memory only
+### `costStore` — in-memory
 
-```typescript
-interface CostEntry {
-  service: string
-  model: string
-  cost: number
-  timestamp: string
-}
-// sessionTotal: number — running sum
-```
-
-Cost added after each generation action. Cleared on page reload (not persisted).
+Per-session cost tracking. Cleared on reload.
 
 ### `historyStore` — persisted (`fuzzy-short-history`)
 
 ```typescript
 interface HistoryItem {
-  id: string
-  title: string
-  platform: string
-  art_style: string
-  language: string
-  brain_model: string
-  scenes_count: number
-  created_at: string
-  storyboard_data: string  // raw JSON of the full storyboard
+  id: string; title: string; platform: string
+  art_style: string; language: string; brain_model: string
+  scenes_count: number; created_at: string
+  storyboard_data: string  // raw JSON of full storyboard
 }
 ```
 
-### `projectStore` — in-memory (devtools enabled)
-
-```typescript
-// project: ProjectSchema | null
-// activeSceneId: number | null
-// setProject, setActiveSceneId, updateScene(sceneId, partial), getScene(sceneId)
-```
-
-Holds the currently active project during the Storyboard session. Not persisted.
-
 ---
 
-## 5. Type System (`src/types/schema.ts`)
+## 5. Type System (src/types/schema.ts)
 
-### Core Enums
+### AppSettings
 
 ```typescript
-type ArtStyle    = 'cinematic_realistic' | 'anime_stylized' | 'comic_book' | 'oil_painting' | 'watercolor' | 'pixel_art' | '3d_render'
-type AspectRatio = '9_16' | '16_9' | '1_1' | '4_5'
-type BrainModel  = 'gemini' | 'llama4_maverick' | 'claude_sonnet'
-type ImageModel  = 'gemini' | 'nova_canvas' | 'titan_v2'
-type VideoModel  = 'nova_reel' | 'runway_gen4' | 'runway_gen4_turbo'
-type AudioModel  = 'polly' | 'gemini_tts' | 'elevenlabs'
-type AssetStatus = 'pending' | 'generating' | 'done' | 'approved' | 'failed'
+interface AppSettings {
+  awsAccessKeyId: string; awsSecretAccessKey: string
+  brainRegion: string; imageRegion: string
+  dashscopeApiKey: string
+  geminiApiKey: string
+  groqApiKey: string
+  openrouterApiKey: string
+  glmApiKey: string
+  elevenLabsApiKey: string
+}
+
+buildApiHeaders(settings, userId?): Record<string, string>
+// localStorage key: fuzzy_settings_{userId}
 ```
 
-### Key Interfaces
+### SceneAssets
 
 ```typescript
 interface SceneAssets {
   imageUrl?: string; imageStatus: GenerationStatus; imageError?: string
   enhancedPrompt?: string
   videoUrl?: string; videoJobId?: string; videoStatus: GenerationStatus; videoError?: string
+  videoPrompt?: VideoPromptData; customVideoPrompt?: string
   audioUrl?: string; audioStatus: GenerationStatus; audioError?: string
   audioHistory: AudioHistoryItem[]
 }
 
 type SceneAssetsMap = Record<number, SceneAssets>  // keyed by scene number
+```
 
+### VideoJob
+
+```typescript
 interface VideoJob {
-  jobId: string           // invocationArn (ARN-based) or KV short-key (legacy)
-  sceneNumber: number
-  projectId: string
-  startedAt: number       // Date.now()
-  status: 'processing' | 'done' | 'error'
-  videoUrl?: string
-  durationSeconds: number
-}
-```
-
-### VideoJob Persistence (localStorage)
-
-```typescript
-videoJobKey(projectId, sceneNum) → `video_job_${projectId}_${sceneNum}`
-saveVideoJob(job)    // localStorage.setItem
-loadVideoJob(id, n)  // localStorage.getItem + parse
-clearVideoJob(id, n) // localStorage.removeItem
-```
-
-### Duration Helpers
-
-```typescript
-redistributeDurations(sceneCount, totalTarget): SceneDuration[]
-// Calculates perScene = clamp(round(total/count), 2, 6) for each scene
-```
-
-### Settings
-
-```typescript
-interface AppSettings {
-  geminiApiKey: string
-  awsAccessKeyId: string; awsSecretAccessKey: string
-  brainRegion: 'us-east-1' | 'us-west-2' | 'ap-southeast-1'
-  imageRegion: 'us-east-1' | 'us-west-2' | 'ap-southeast-1'
-  audioRegion: 'us-east-1' | 'us-west-2' | 'ap-southeast-1'
-  videoRegion: 'us-east-1'   // always fixed
-  elevenLabsApiKey: string; runwayApiKey: string
+  jobId: string; sceneNumber: number; projectId: string
+  startedAt: number; status: 'processing' | 'done' | 'error'
+  videoUrl?: string; durationSeconds: number
 }
 
-buildApiHeaders(settings): Record<string, string>  // converts to X-* headers
-SETTINGS_STORAGE_KEY = 'fuzzy_short_settings'
+videoJobKey(projectId, sceneNum)  // localStorage key
+saveVideoJob(job) / loadVideoJob(id, n) / clearVideoJob(id, n)
+```
+
+### VideoPromptData
+
+```typescript
+interface VideoPromptData {
+  sub_tone: string; camera_locked: boolean; camera_instruction: string
+  starting_frame: string; temporal_action: string; physics_detail: string
+  human_element: string; full_veo_prompt: string  // max 200 chars
+}
 ```
 
 ---
 
 ## 6. Worker Backend Architecture
 
-### `worker/index.ts` — Router
+### `worker/index.ts` — Router + Auth
 
 **Env bindings:**
 ```typescript
 interface Env {
-  JOB_STATUS: KVNamespace          // video job polling state
-  STORY_STORAGE: R2Bucket          // image/audio/video file storage
-  ASSETS: { fetch: typeof fetch }  // SPA static files (ASSETS binding)
-  GEMINI_API_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
-  R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
-  RUNWAY_API_KEY, ELEVENLABS_API_KEY, ENVIRONMENT: string
+  JOB_STATUS: KVNamespace        // video job polling state
+  R2_BUCKET_NAME: string         // 'igome-story-storage'
+  DB: D1Database                 // Cloudflare D1 (users, api_keys, storyboards, scene_assets, usage_log)
+  ASSETS: { fetch: typeof fetch } // SPA static files
+  GEMINI_API_KEY: string          // env fallback for Gemini
+  R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_PUBLIC_URL: string
+  CLERK_SECRET_KEY, CLERK_JWKS_URL: string
 }
 ```
 
-**Route table:**
+**Route table (order matters — specific before catch-all):**
 
-| Method | Path | Handler |
-|---|---|---|
-| POST | `/api/brain/rewrite-vo` | `handleRewriteVO` |
-| POST | `/api/brain/generate` | `handleBrainRequest` |
-| POST | `/api/image/enhance-prompt` | `handleEnhancePrompt` |
-| POST | `/api/image/generate` | `handleImageRequest` |
-| POST | `/api/video/start` | `handleVideoStart` |
-| GET  | `/api/video/status/:jobId` | `handleVideoStatus` |
-| POST | `/api/video/generate` | `handleVideoRequest` (legacy) |
-| POST | `/api/audio/generate` | `handleAudioRequest` |
-| * | `/api/project/*` | `handleProjectRequest` |
-| GET  | `/api/storage/file/:key` | `handleStorageRequest` |
-| GET  | `/api/storage/test` | `handleStorageRequest` |
-| GET  | `/api/storage/presign` | `handleStorageRequest` |
-| GET  | `/api/health` | inline `{ status: 'ok' }` |
-| * | non-/api/* | ASSETS fallback (SPA index.html) |
+| Method | Path | Handler | Auth |
+|---|---|---|---|
+| POST | `/api/brain/provider` | `brain-provider.ts` | none (provider key in headers) |
+| POST | `/api/brain/regenerate-veo-prompt` | `regenerate-veo-prompt.ts` | none |
+| POST | `/api/brain/rewrite-vo` | `brain.ts` | requireAwsKeys |
+| POST | `/api/brain/regenerate-video-prompt` | `brain.ts` | requireAwsKeys |
+| POST | `/api/brain/generate` | `brain.ts` | requireAwsKeys |
+| POST | `/api/image/generate` | `image.ts` | requireAwsKeys |
+| POST | `/api/image/enhance-prompt` | `image.ts` | requireAwsKeys |
+| POST | `/api/video/start` | `video.ts` | requireAwsKeys |
+| GET | `/api/video/status/:jobId` | `video.ts` | requireAwsKeys |
+| POST | `/api/audio/generate` | `audio.ts` | requireAwsKeys |
+| POST | `/api/dashscope/brain` | `dashscope.ts` | requireDashscopeKey |
+| POST | `/api/dashscope/image/start` | `dashscope.ts` | requireDashscopeKey |
+| POST | `/api/dashscope/video/start` | `dashscope.ts` | requireDashscopeKey |
+| GET | `/api/dashscope/task/:taskId` | `dashscope.ts` | none |
+| GET | `/api/user/*` | `db.ts` handlers | Clerk JWT |
+| GET/POST/DELETE | `/api/storyboards/*` | `db.ts` handlers | Clerk JWT |
+| GET | `/api/health` | inline | none |
+| * | non-`/api/*` | ASSETS (SPA) | none |
 
-**Credential extraction** — header-first, env fallback:
+**Credential extraction:**
 ```typescript
 extractCredentials(request, env): Credentials
-// X-AWS-Access-Key-Id || env.AWS_ACCESS_KEY_ID
-// X-Brain-Region      || 'us-east-1'
-// X-Image-Region      || 'us-east-1'
-// X-Audio-Region      || 'us-west-2'
-// videoRegion         = 'us-east-1' (hardcoded — Nova Reel only in us-east-1)
+// awsAccessKeyId: h.get('X-AWS-Access-Key-Id') — NO env fallback (security)
+// geminiApiKey: h.get('X-Gemini-Api-Key') || h.get('X-Gemini-Key') (backward compat)
+// dashscopeApiKey: h.get('X-Dashscope-Api-Key')
+// groqApiKey: h.get('X-Groq-Api-Key'), openrouterApiKey: ..., glmApiKey: ...
 ```
 
 ### `worker/brain.ts`
 
-**POST `/api/brain/generate`** — Storyboard generation
+POST `/api/brain/generate` — AWS Bedrock only (requireAwsKeys).
+POST `/api/brain/rewrite-vo` → `{ rewritten_text, char_count, char_limit, fits }`
+POST `/api/brain/regenerate-video-prompt` → regenerates `video_prompt` for one scene.
 
-Request body:
-```typescript
-{
-  title: string, story: string, platform: string,
-  brain_model: 'claude_sonnet' | 'llama4_maverick' | 'gemini',
-  language: 'id' | 'en', art_style: string, total_scenes: number,
-  aspect_ratio: string, resolution: string,
-  total_duration: number, scene_durations: number[]
-}
-```
+VO char limits: `id = 15 chars/sec`, `en = 18 chars/sec`
 
-- `gemini` and `claude_sonnet` both route to Claude Sonnet 4.6 (Gemini is down)
-- `llama4_maverick` uses Llama 4 chat template format
-- Response: raw JSON string (AI-generated storyboard, stripped of markdown fences)
-- Duration-aware prompting: `getVoCharLimit(durationSeconds, language)` → ID=15 chars/s, EN=18 chars/s
+### `worker/handlers/brain-provider.ts`
 
-**POST `/api/brain/rewrite-vo`** — VO rewrite to fit duration
+POST `/api/brain/provider` — handles Gemini, Groq, OpenRouter, GLM.
 
-```typescript
-// Request: { original_text, duration_seconds, language, scene_context, art_style }
-// Response: { rewritten_text, char_count, char_limit, fits }
-```
+Two modes based on request body:
+- **MODE A** (`body.story` set, `body.system_prompt` NOT set): storyboard generation.
+  Strips `<think>...</think>` + markdown fences, parses JSON, returns storyboard directly.
+  Response format matches `/api/brain/generate` — `scenes` at top level.
+- **MODE B** (`body.system_prompt` set): raw prompt. Returns `{ content, provider, model }`.
+  Used by Settings test buttons.
 
 ### `worker/image.ts`
 
-**POST `/api/image/generate`** — Synchronous image generation
-
-- Nova Canvas: `amazon.nova-canvas-v1:0` — standard dimensions
-- Titan V2: `amazon.titan-image-generator-v2:0` — preset dimensions only
+POST `/api/image/generate` — Nova Canvas (`us-east-1`) or SD 3.5 (`us-west-2`).
+POST `/api/image/enhance-prompt` — Claude Sonnet enhancement, fallback to basic concatenation.
 
 Dimension maps:
 ```
 Nova Canvas:  9:16→720×1280  16:9→1280×720  1:1→1024×1024  4:5→896×1120
-Titan V2:     9:16→768×1280  16:9→1280×768  1:1→1024×1024  4:5→896×1152
+SD 3.5:       9:16→768×1280  16:9→1280×768  1:1→1024×1024  4:5→864×1080
 ```
 
-Bedrock body:
-```typescript
-{ taskType: 'TEXT_IMAGE', textToImageParams: { text, negativeText }, imageGenerationConfig: { numberOfImages:1, height, width, cfgScale:8.0, seed } }
-```
-
-Returns base64 → decoded → uploaded to R2 → returns `{ image_url }` pointing to `/api/storage/file/...`
-
-**POST `/api/image/enhance-prompt`** — Claude-powered prompt enhancement
-
-Uses Claude Sonnet 4.6 to add cinematography terms, lighting, camera specs. Falls back to `${rawPrompt}, ${artStyle}, cinematic lighting, 8k UHD` on error.
+REMOVED: `amazon.titan-image-generator-v2:0` (deprecated, no longer in code).
 
 ### `worker/video.ts`
 
-Nova Reel is always `us-east-1`, model `amazon.nova-reel-v1:0`, fixed `durationSeconds: 6`.
+Nova Reel: `us-east-1` ONLY, model `amazon.nova-reel-v1:0`, async.
 
-**POST `/api/video/start`** (new flow) — Returns `invocationArn` as `job_id`:
-```typescript
-// Request: { prompt, image_url?, scene_number, project_id, aspect_ratio, duration_seconds }
-// Body: { modelInput: { taskType:'TEXT_VIDEO', textToVideoParams:{text}, videoGenerationConfig:{durationSeconds:6, fps:24, dimension, seed} }, outputDataConfig:{s3OutputDataConfig:{s3Uri}} }
-// Response: { job_id: invocationArn, scene_number, status:'processing' }
-```
+POST `/api/video/start` — StartAsyncInvoke, returns `{ job_id: invocationArn, status: 'processing' }`.
+GET `/api/video/status/:jobId` — polls GetAsyncInvoke. ARN path must use `encodeURIComponent(arn)` WITHOUT `.replace(/%3A/gi, ':')`.
 
-**GET `/api/video/status/:jobId`** (unified) — Routes by jobId type:
-- `arn:aws:*` → polls Bedrock `GET /async-invoke/{encodedArn}` directly
-- Other → KV short-key lookup (legacy `generateVideo` flow)
-
-ARN encoding for URL: `encodeURIComponent(arn).replace(/%3A/gi, ':')` — keep colons literal.
-
-KV polling flow: tracks `errorCount`; after 5 consecutive Bedrock errors → marks job `failed`.
-
-Status mapping:
-```
-Bedrock "Completed" → { status: 'done', video_url }
-Bedrock "Failed"    → { status: 'error', message }
-Bedrock "InProgress"→ { status: 'processing' }
-```
-
-**POST `/api/video/generate`** (legacy) — Creates KV job, returns `job_id` (short key).
+Status: `InProgress → processing`, `Completed → done + video_url`, `Failed → error`.
+On complete: download from S3 → upload to R2 → return public URL.
+Error tracking: `errorCount` in KV; 5 consecutive errors → marks job `failed`.
 
 ### `worker/audio.ts`
 
-**POST `/api/audio/generate`**
-
+POST `/api/audio/generate`
 ```typescript
-// Request: { text, language, scene_number, project_id, engine?:'polly'|'elevenlabs', voice? }
-// Response: { audio_url }  (R2 path proxied via /api/storage/file/)
+{ text, language, scene_number, project_id, engine?:'polly'|'elevenlabs', voice? }
+→ { audio_url }
 ```
 
-**Polly:**
-- Endpoint: `https://polly.{audioRegion}.amazonaws.com/v1/speech`
-- Default voice: `Ruth`; generative engine for `Ruth`, `Danielle`; neural for others
-- Language code: `id-ID` | `en-US`
+Polly: endpoint `https://polly.{audioRegion}.amazonaws.com/v1/speech`
+Voices (id-ID): Marlene, Andika (neural)
+Voices (en-US): Ruth, Danielle (generative), Joanna, Kimberly, Salli, Matthew, Joey, etc. (neural)
 
-**ElevenLabs:**
-- Model: `eleven_multilingual_v2`
-- Voice map: `Adam`, `Rachel`, `Antoni`, `Bella` → resolved voice IDs
-- Language fallback: `id` → Arnold voice ID, `en` → Bella voice ID
+ElevenLabs: model `eleven_multilingual_v2`, 9 voices (Bella, Adam, Rachel, etc.)
 
-Both return `ArrayBuffer` → uploaded to R2 as `audio/mpeg`.
+### `worker/dashscope.ts`
 
-### `worker/storage.ts`
+Brain: POST `/compatible-mode/v1/chat/completions` (OpenAI-compat)
+Image: POST `/api/v1/services/aigc/text2image/image-synthesis` (async, X-DashScope-Async: enable)
+Video: POST `/api/v1/services/aigc/video-generation/video-synthesis` (async)
+Poll: GET `/api/v1/tasks/{task_id}` (shared for image + video)
 
-| Route | Action |
-|---|---|
-| `GET /api/storage/file/:key` | Serve R2 object with `Cache-Control: public, max-age=86400` |
-| `GET /api/storage/test` | Test R2 connectivity via S3-compatible list |
-| `GET /api/storage/presign?key=...` | Generate presigned URL for R2 object |
+CRITICAL image parameter rule:
+- `qwen-image-2.0-pro`, `qwen-image-2.0`: only `{ size, n, negative_prompt }` — NO `prompt_extend`, NO `watermark`
+- `wanx2.1-t2i-turbo`, `wan2.6-image`: also add `prompt_extend: true, watermark: false`
+- `wan2.6-image` uses messages[] input format (not `{ prompt }`)
 
-R2 is accessed via Cloudflare ASSETS binding (native) for direct reads; S3-compatible API (signed with AwsV4Signer, region `'auto'`, service `'s3'`) for test/presign.
+On SUCCEEDED: download URL → re-upload to R2 (Dashscope URLs expire in 24h).
 
-### `worker/lib/aws-signature.ts`
+### `worker/lib/aws-signature.ts` — CRITICAL
 
-**`AwsV4Signer` class:**
-- `sign(request: Request): Promise<Request>` — adds `x-amz-date`, `Authorization`, optional session token
-- `createCanonicalRequest` — uses `encodeURIPath` for path normalization
-
-**Critical `encodeURIPath` implementation:**
+**`buildCanonicalUri` MUST use `encodeURIComponent(decoded)` ONLY:**
 ```typescript
-function encodeURIPath(path: string): string {
-  return decodeURIComponent(path)
-    .split('/')
-    .map(segment =>
-      encodeURIComponent(segment)
-        .replace(/[!*'()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-        .replace(/%2F/gi, '/')   // keep slash literal
-        .replace(/%3A/gi, ':')   // keep colon literal — CRITICAL for ARN paths
-    )
-    .join('/')
+function buildCanonicalUri(rawUrl: string): string {
+  const pathname = new URL(rawUrl).pathname
+  return pathname.split('/').map(segment => {
+    let decoded: string
+    try { decoded = decodeURIComponent(segment) } catch { decoded = segment }
+    return encodeURIComponent(decoded)  // ":" → "%3A" — REQUIRED by AWS SigV4
+    // NEVER add .replace(/%3A/gi, ':') — this was the old bug
+  }).join('/')
 }
 ```
 
-**`signRequest(params)` function** — convenience wrapper, used by `brain.ts` (older code):
-```typescript
-signRequest({ method, url, region, service, accessKeyId, secretAccessKey, body, headers }): Promise<Headers>
+`signRequest(params)` — convenience wrapper, always calls `buildCanonicalUri(url)`.
+ARN in video.ts URL path: also `encodeURIComponent(arn)` WITHOUT `.replace` — literal colons cause `UnknownOperationException`.
+
+### `worker/db.ts` — D1 Operations
+
+5 tables: `users`, `api_keys`, `storyboards`, `scene_assets`, `usage_log`
+API keys encrypted at rest with AES-GCM.
+`CREDIT_COSTS = { brain:20, image:10, video:50, audio:5, enhance:2 }`
+500 free credits on first login via `ensureUser()`.
+
+### `worker/lib/auth.ts` — Clerk JWT
+
+`verifyClerkJWT(token, env)` — JWKS fetched from `CLERK_JWKS_URL`, cached 1 hour.
+`ensureUser(userId, db)` — upsert user, grant credits on first login.
+
+---
+
+## 6. AI Models & API Formats
+
+### AWS Bedrock Brain — Claude Sonnet 4.6
+
+```
+Model: us.anthropic.claude-sonnet-4-6
+Endpoint: POST https://bedrock-runtime.{region}.amazonaws.com/model/{modelId}/invoke
+Body: { anthropic_version:"bedrock-2023-05-31", max_tokens:8192, system, messages:[{role:"user",content}] }
+Response: data.content[0].text
+```
+
+### AWS Bedrock Image — Nova Canvas
+
+```
+Model: amazon.nova-canvas-v1:0  (literal colon in fetch URL, %3A in canonical URI only)
+Region: us-east-1 (or user-configured)
+Body: { taskType:'TEXT_IMAGE', textToImageParams:{text,negativeText}, imageGenerationConfig:{numberOfImages:1,height,width,cfgScale:8.0,seed} }
+Response: { images: string[] }  — base64 PNG → decoded → uploaded to R2
+```
+
+### AWS Bedrock Video — Nova Reel (async)
+
+```
+Model: amazon.nova-reel-v1:0  Region: us-east-1 ONLY
+StartAsyncInvoke: POST /model/{modelId}/async-invoke
+GetAsyncInvoke:   GET  /async-invoke/{encodeURIComponent(arn)}
+Body: { modelInput:{taskType:'TEXT_VIDEO', textToVideoParams:{text}, videoGenerationConfig:{durationSeconds,fps:24,dimension,seed}},
+        outputDataConfig:{s3OutputDataConfig:{s3Uri}} }
+```
+
+### Dashscope Brain (Qwen)
+
+```
+Base: https://dashscope-intl.aliyuncs.com
+Auth: Authorization: Bearer {apiKey}
+POST /compatible-mode/v1/chat/completions
+Body: { model, messages:[{role,content}], max_tokens }
+Models: qwen3-max, qwen-plus, qwen-flash, qwen-turbo, qwq-plus
+```
+
+### Dashscope Image (async)
+
+```
+POST /api/v1/services/aigc/text2image/image-synthesis
+Header: X-DashScope-Async: enable
+Body (qwen-image-2.0-pro, qwen-image-2.0, wanx2.1-t2i-turbo): { model, input:{prompt}, parameters:{size,n,negative_prompt} }
+  + for wanx: also parameters.prompt_extend=true, parameters.watermark=false
+Body (wan2.6-image ONLY): { model, input:{messages:[{role:'user',content:[{text:prompt}]}]}, parameters:{...} }
+Response: { output:{task_id} }
+Size uses * separator: 9:16→768*1280  16:9→1280*768  1:1→1024*1024  4:5→864*1080
+```
+
+### Dashscope Video (async)
+
+```
+POST /api/v1/services/aigc/video-generation/video-synthesis
+Header: X-DashScope-Async: enable
+i2v body: { model, input:{prompt, img_url}, parameters:{size,duration} }
+t2v body: { model, input:{prompt}, parameters:{size,duration} }  — NEVER send img_url for t2v
+Models: wan2.6-i2v-flash, wanx2.1-i2v-turbo, wan2.6-t2v-flash, wan2.1-t2v-turbo
+Size uses * separator: 9:16→720*1280  16:9→1280*720  1:1→960*960  4:5→864*1080
+```
+
+### GLM Image — CogView
+
+```
+Endpoint: POST https://open.bigmodel.cn/api/paas/v4/images/generations
+Auth: Authorization: Bearer {glmApiKey}
+Body: { model:'cogview-3-flash', prompt:string, size:'1024x1024'|'720x1280'|'1280x720' }
+Response: { data:[{url:string}] }  — synchronous (no polling needed)
+VALID MODEL: cogview-3-flash  (cogview-4-flash does NOT exist — returns "模型不存在")
+```
+
+### Google Gemini (via /api/brain/provider)
+
+```
+Header: X-Gemini-Api-Key (env GEMINI_API_KEY as fallback)
+Models: gemini-2.0-flash (default, FREE), gemini-2.0-flash-lite, gemini-1.5-flash, gemini-2.5-pro-exp-03-25
+Always unlocked — env fallback exists.
+```
+
+### Groq (via /api/brain/provider)
+
+```
+Header: X-Groq-Api-Key
+Models: llama-3.3-70b-versatile, llama-3.1-8b-instant, gemma2-9b-it, mixtral-8x7b-32768
+Rate limit: 30 req/min free tier
+```
+
+### OpenRouter (via /api/brain/provider)
+
+```
+Header: X-Openrouter-Api-Key
+Models: google/gemma-3-27b-it:free, meta-llama/llama-3.3-70b-instruct:free,
+        deepseek/deepseek-r1:free, deepseek/deepseek-v3-0324:free, mistralai/mistral-7b-instruct:free
+```
+
+### ZhipuAI GLM (via /api/brain/provider)
+
+```
+Header: X-Glm-Api-Key
+Models: glm-4-flash, glm-4-flash-250414, glm-z1-flash (reasoning), glm-4.6v
+glm-z1-flash outputs <think>...</think> blocks — stripped before JSON.parse in worker
 ```
 
 ---
 
-## 7. AI Models & API Formats
-
-### Claude Sonnet 4.6 (via Bedrock)
-
-```
-Model ID:  us.anthropic.claude-sonnet-4-6
-Endpoint:  POST https://bedrock-runtime.{region}.amazonaws.com/model/{modelId}/invoke
-```
-
-```typescript
-// Request body
-{
-  anthropic_version: "bedrock-2023-05-31",
-  max_tokens: 8192,
-  system: systemPrompt,
-  messages: [{ role: "user", content: prompt }]
-}
-// Response
-data.content[0].text
-```
-
-### Llama 4 Maverick (via Bedrock)
-
-```
-Model ID:  us.meta.llama4-maverick-17b-instruct-v1:0
-Endpoint:  POST https://bedrock-runtime.{region}.amazonaws.com/model/{modelId}/invoke
-```
-
-```typescript
-// Request body — chat template format
-{
-  prompt: "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
-    + systemPrompt
-    + "<|eot_id|><|start_header_id|>user<|end_header_id|>\n"
-    + userPrompt
-    + "<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
-  max_gen_len: 8192,
-  temperature: 0.7
-}
-// Response
-data.generation
-```
-
-### Nova Canvas (Image)
-
-```
-Model ID:  amazon.nova-canvas-v1:0
-Region:    configurable (imageRegion)
-```
-
-```typescript
-{
-  taskType: 'TEXT_IMAGE',
-  textToImageParams: { text: string, negativeText: string },
-  imageGenerationConfig: { numberOfImages: 1, height, width, cfgScale: 8.0, seed }
-}
-// Response: { images: string[] }  — base64 PNG
-```
-
-### Nova Reel (Video, async)
-
-```
-Model ID:  amazon.nova-reel-v1:0
-Region:    us-east-1 ONLY
-Duration:  6 seconds ONLY (v1:0 constraint)
-```
-
-```typescript
-// StartAsyncInvoke — POST /model/{modelId}/async-invoke
-{
-  modelInput: {
-    taskType: 'TEXT_VIDEO',
-    textToVideoParams: { text: string },
-    videoGenerationConfig: { durationSeconds: 6, fps: 24, dimension: '720x1280'|'1280x720', seed }
-  },
-  outputDataConfig: { s3OutputDataConfig: { s3Uri: 's3://igome-story-storage/...' } }
-}
-// Response: { invocationArn: string }
-
-// GetAsyncInvoke — GET /async-invoke/{encodedArn}
-// Response: { status: 'InProgress'|'Completed'|'Failed', failureMessage?, outputDataConfig? }
-```
-
-### Polly (Audio TTS)
-
-```
-Endpoint:  POST https://polly.{audioRegion}.amazonaws.com/v1/speech
-```
-
-```typescript
-{
-  Engine: 'generative' | 'neural',  // generative for Ruth/Danielle, neural otherwise
-  LanguageCode: 'en-US' | 'id-ID',
-  OutputFormat: 'mp3',
-  Text: string,
-  TextType: 'text',
-  VoiceId: string
-}
-// Response: binary MP3 ArrayBuffer
-```
-
----
-
-## 8. Data Flow
+## 7. Data Flow
 
 ```
 Home.tsx
-  └─ User fills: title, story, platform, brainModel, language, artStyle,
-                 aspectRatio, scenes count, totalDuration, scene durations
-  └─ POST /api/brain/generate → brain.ts
-       └─ Claude Sonnet 4.6 → raw JSON storyboard
-       └─ Response parsed, session created in storyboardSessionStore
+  └─ User fills: title, story, platform, tone, brainModel, language, artStyle,
+                 aspectRatio, scenes count, image/video model defaults
+  └─ POST /api/brain/generate (aws) | /api/dashscope/brain (dashscope) | /api/brain/provider (others)
+       └─ AI generates storyboard JSON with scenes, video_prompt per scene (Veo tones)
+       └─ Response parsed, session created in storyboardSessionStore (nanoid ID)
+       └─ saveStoryboard() to D1 (non-blocking)
        └─ navigate('/storyboard?id=SESSION_ID')
 
 Storyboard.tsx (per scene)
-  ├─ ImageTab
-  │   └─ POST /api/image/enhance-prompt → enhanced prompt
-  │   └─ POST /api/image/generate → Nova Canvas → R2 → image_url
+  ├─ Image: POST /api/image/generate (Bedrock) | /api/dashscope/image/start (Dashscope)
+  │   └─ Dashscope: poll GET /api/dashscope/task/:taskId until SUCCEEDED
+  │   └─ Nova Canvas: synchronous → R2 → image_url
   │
-  ├─ VideoTab
-  │   └─ POST /api/video/start → Nova Reel async-invoke → invocationArn
-  │   └─ GET  /api/video/status/{arn} (poll every ~10s) → done → video_url
-  │   └─ video_url = /api/storage/file/projects/{id}/scene_{n}/video_{ts}/output.mp4
+  ├─ Video: POST /api/video/start (Nova Reel) | /api/dashscope/video/start (Wan)
+  │   └─ Returns job_id/task_id → saved to localStorage video_job_{projectId}_{sceneNum}
+  │   └─ Poll every 10s, timeout 10min
+  │   └─ On done: video downloaded → uploaded to R2 → R2 public URL
   │
-  └─ AudioTab
-      └─ POST /api/audio/generate → Polly|ElevenLabs → R2 → audio_url
-      └─ Optional: POST /api/brain/rewrite-vo → rewritten VO text
+  ├─ Audio: POST /api/audio/generate → Polly | ElevenLabs → R2 → audio_url
+  │   └─ Optional rewrite: POST /api/brain/rewrite-vo → rewritten VO text
+  │
+  └─ Veo Prompt (VeoPromptSection): POST /api/brain/regenerate-veo-prompt
+      └─ Supports all providers (headers forwarded)
+      └─ Strips <think> blocks for reasoning models
+      └─ Copy button: copies JSON when raw view active, plain text when breakdown view
 
-Storage layer
-  └─ All assets stored in R2 bucket: igome-story-storage
-  └─ R2 keys: projects/{project_id}/scene_{n}/{img|video|audio}_{timestamp}.{ext}
-  └─ Served via: GET /api/storage/file/{key}
+Auth-protected D1 routes:
+  GET/PUT /api/user/profile    <- credits, preferences
+  GET/POST /api/user/keys      <- encrypted API keys (AES-GCM)
+  GET /api/user/usage          <- credit usage log
+  GET/POST/DELETE /api/storyboards/*   <- cloud storyboard CRUD
+  POST /api/storyboards/:id/scenes     <- upsert scene asset
 ```
+
+---
+
+## 8. Queue Mode (Minimize/Resume)
+
+1. User clicks "Minimize" → `updateSession(id, { isMinimized: true })` + `navigate('/')`
+2. `GenTaskBar` renders fixed bar for all minimized sessions (shows progress)
+3. User clicks "Resume" → `updateSession(id, { isMinimized: false })` + `navigate('/storyboard?id=ID')`
+4. On Storyboard mount: video polling auto-restarts for any `videoStatus: 'generating'` assets
+5. `activeSessionIdRef` (useRef) in Storyboard.tsx — avoids stale closures in polling callbacks
 
 ---
 
 ## 9. Critical Rules & Patterns
 
-### AWS Sig V4 Colon Encoding (CRITICAL)
+### AWS Sig V4 Canonical URI — THE #1 BUG SOURCE
 
-ARN contains colons (e.g. `arn:aws:bedrock:us-east-1:123:async-invoke/xyz`). These MUST remain literal in the canonical URI path — never `%3A`.
+`:` MUST be `%3A` in the canonical URI. NEVER use `.replace(/%3A/gi, ':')`.
 
 ```typescript
-// In encodeURIPath (aws-signature.ts)
-.replace(/%3A/gi, ':')  // keep colon literal
+// CORRECT in buildCanonicalUri (aws-signature.ts)
+return encodeURIComponent(decoded)  // ":" encodes to "%3A" — AWS requires this
 
-// In handleVideoStatus (video.ts) when building status URL
-const arnForUrl = encodeURIComponent(jobId).replace(/%3A/gi, ':')
+// WRONG — old bug that caused Nova Canvas signature failures
+return encodeURIComponent(decoded).replace(/%3A/gi, ':')  // NEVER DO THIS
 ```
+
+Same rule for ARN in video.ts URL path:
+```typescript
+const arnForUrl = encodeURIComponent(arn)  // CORRECT
+// NOT: encodeURIComponent(arn).replace(/%3A/gi, ':')  // WRONG
+```
+
+### No env.AWS_ACCESS_KEY_ID Fallback (Security)
+
+`extractCredentials()` does NOT fall back to `env.AWS_ACCESS_KEY_ID` for generation routes.
+All routes call `requireAwsKeys(creds)` → 401 if keys not supplied by user.
 
 ### Named Exports Only
 
 ```typescript
-// CORRECT
-export function Home() { ... }
-
-// WRONG — never do this
-export default function Home() { ... }
+export function Home() { ... }   // CORRECT
+export default function Home() { ... }  // WRONG
 ```
 
 ### Inline Styles Only
 
-No Tailwind classes in JSX. All styles via `style={{ }}` or CSS variables in `glass.css`.
+No Tailwind. All styles via `style={{ }}` using `tk(isDark)` tokens.
 
 ### CORS Headers
 
-Applied in `index.ts` wrapper to ALL responses:
-```typescript
-'Access-Control-Allow-Origin': '*'
-'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
-'Access-Control-Allow-Headers': 'Content-Type, X-Gemini-Key, X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key, X-Brain-Region, X-Image-Region, X-Audio-Region, X-ElevenLabs-Key, X-Runway-Key, X-R2-Account-Id, X-R2-Access-Key-Id, X-R2-Secret-Access-Key, X-R2-Bucket'
-```
+Applied to ALL Worker responses. Includes all `X-*` header names.
 
-OPTIONS preflight handled first in fetch handler.
+### Video Prompt Priority (Storyboard.tsx)
 
-### Video Region Fixed
+`customVideoPrompt || videoPrompt.full_prompt || editedPrompts[sceneNum] || image_prompt`
 
-`videoRegion` is always `'us-east-1'` — hardcoded in `extractCredentials`, not user-configurable. Nova Reel is only available in us-east-1.
+### localStorage Keys
 
-### Credential Passthrough Pattern
-
-User keys stored in `localStorage('fuzzy_short_settings')` → injected as `X-*` headers on every API call → Worker reads from headers first, falls back to Wrangler env secrets.
-
-### Duration-Aware VO Prompting
-
-```typescript
-function getVoCharLimit(durationSeconds: number, language: string): number {
-  const charsPerSecond = language === 'id' ? 15 : 18
-  return Math.floor(durationSeconds * charsPerSecond)
-}
-```
-
-Used in: brain system prompt, scene-level char limit, rewrite-vo endpoint.
-
-### Queue Mode (Minimize/Resume)
-
-1. User clicks "Minimize" on Storyboard → `updateSession(id, { isMinimized: true })` + `navigate('/')`
-2. `GenTaskBar` renders at bottom of `AppLayout` for all minimized sessions
-3. User clicks "Resume" → `updateSession(id, { isMinimized: false })` + `navigate('/storyboard?id=ID')`
-4. On Storyboard mount: video polling auto-restarts for any `videoStatus: 'generating'` assets
+- User settings: `fuzzy_settings_{userId}` (NOT `fuzzy_short_settings`)
+- Video jobs: `video_job_{projectId}_{sceneNum}`
+- Sessions: `fuzzy_storyboard_sessions` (Zustand persist)
+- History: `fuzzy-short-history` (Zustand persist)
+- Theme: `fuzzy_theme`
 
 ---
 
 ## 10. Infrastructure & Deployment
 
-### Wrangler Bindings (`wrangler.toml`)
+### Wrangler Bindings (wrangler.toml)
 
 ```toml
 name = "fuzzy-vid-worker"
@@ -735,83 +665,125 @@ compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
 [[r2_buckets]]
-binding = "STORY_STORAGE"
+binding = "STORY_STORAGE"  # legacy binding
 bucket_name = "igome-story-storage"
 
 [[kv_namespaces]]
 binding = "JOB_STATUS"
 id = "fc732a268ca9435b8de8e50f34a35365"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "fuzzy-short-db"
+database_id = "YOUR_DATABASE_ID"
+
 [assets]
 binding = "ASSETS"
-not_found_handling = "single-page-application"   # SPA fallback
+not_found_handling = "single-page-application"
 ```
 
-### Wrangler Secrets
+### Worker Secrets (wrangler secret put)
 
-| Secret | Status | Usage |
-|---|---|---|
-| `GEMINI_API_KEY` | set | Gemini Brain (currently unused, API down) |
-| `AWS_SECRET_ACCESS_KEY` | set | Bedrock + Polly auth |
-| `ELEVENLABS_API_KEY` | set | ElevenLabs TTS |
-| `R2_ACCESS_KEY_ID` | set | R2 S3-compatible API |
-| `R2_ACCOUNT_ID` | set | R2 account |
-| `R2_SECRET_ACCESS_KEY` | set | R2 S3-compatible API |
-| `AWS_ACCESS_KEY_ID` | verify | Bedrock + Polly auth |
+| Secret | Usage |
+|---|---|
+| `GEMINI_API_KEY` | Gemini fallback if user provides no key |
+| `R2_ACCESS_KEY_ID` | R2 S3-compatible API |
+| `R2_SECRET_ACCESS_KEY` | R2 S3-compatible API |
+| `R2_ACCOUNT_ID` | R2 account ID |
+| `R2_BUCKET_NAME` | `igome-story-storage` |
+| `R2_PUBLIC_URL` | `https://pub-xxx.r2.dev` |
+| `CLERK_SECRET_KEY` | Clerk server-side verification |
+| `CLERK_JWKS_URL` | `https://[slug].clerk.accounts.dev/.well-known/jwks.json` |
+| `AWS_ACCESS_KEY_ID` | R2 ops only — NOT used in extractCredentials for generation |
+| `AWS_SECRET_ACCESS_KEY` | R2 ops only |
+
+### Auth — Clerk
+
+Use `pk_test_` keys for `.pages.dev` domains — `pk_live_` requires a real custom domain.
+Set `VITE_CLERK_PUBLISHABLE_KEY` in `.env.local` AND Cloudflare Pages environment variables.
+`CLERK_JWKS_URL` must match the key's domain.
 
 ### Deploy Commands
 
 ```bash
+# TypeScript check (must be 0 errors)
+npx tsc --noEmit
+
+# Build frontend
+npm run build
+
 # Deploy Worker
 wrangler deploy
 
-# Build + Deploy Frontend (auto-deploys via Cloudflare Pages on push)
-npm run build
-git add .
+# Push frontend (Cloudflare Pages auto-deploys on push to main)
+git add src/... worker/...   # specific files only — never git add -A
 git commit -m "feat/fix: description"
 git push origin main
 
-# Test worker endpoint
-curl -X POST https://fuzzy-vid-worker.officialdian21.workers.dev/api/brain/generate \
-  -H "Content-Type: application/json" \
-  -H "X-AWS-Access-Key-Id: YOUR_KEY" \
-  -H "X-AWS-Secret-Access-Key: YOUR_SECRET" \
-  -H "X-Brain-Region: us-east-1" \
-  -d '{"title":"test","story":"test story","platform":"youtube_shorts","brain_model":"claude_sonnet","language":"id","art_style":"cinematic_realistic","total_scenes":3,"total_duration":30}'
-
-# Verify build before commit
-npm run build 2>&1 | tail -20
+# Live Worker logs
+wrangler tail
 ```
 
 ### Regional Strategy
 
-| Service | Region | Rationale |
+| Service | Region | Notes |
 |---|---|---|
-| Bedrock Brain (Claude/Llama) | `us-east-1` default | User-configurable |
-| Bedrock Image (Nova Canvas / Titan V2) | `us-east-1` default | User-configurable |
-| Nova Reel Video | `us-east-1` **fixed** | Only region with Nova Reel |
-| Polly Audio | `us-west-2` default | User-configurable |
+| Bedrock Brain | `us-east-1` default | User-configurable |
+| Bedrock Image — Nova Canvas | `us-east-1` default | User-configurable |
+| Bedrock Image — SD 3.5 | `us-west-2` ONLY | Hard requirement |
+| Nova Reel Video | `us-east-1` ONLY | Hard requirement |
+| Polly Audio | User-configurable | Default varies |
+| Dashscope | Singapore (auto) | No region param needed |
 | R2 | `auto` | Cloudflare-managed |
 
 ---
 
-## 11. Cost Estimates
+## 11. Common Errors & Fixes
 
-| Service | Model | Rate | Notes |
-|---|---|---|---|
-| Brain | Claude Sonnet 4.6 | $0.003/1K input + $0.015/1K output | ~$0.005–0.01 per storyboard |
-| Brain | Llama 4 Maverick | ~$0.0002/1K tokens | Very cheap |
-| Brain | Gemini | Free (tier) | Currently API down |
-| Image | Nova Canvas | ~$0.04 per image | Per scene |
-| Image | Titan V2 | ~$0.008 per image | Cheaper but smaller resolution options |
-| Video | Nova Reel | ~$0.80 per 6s clip | Main cost driver |
-| Audio | Polly (neural) | $0.004/1K chars | Very cheap |
-| Audio | Polly (generative) | Higher | Ruth, Danielle voices |
-| Audio | ElevenLabs | $0.18/1K chars | High quality |
+**"signature does not match"**
+→ `buildCanonicalUri` in `aws-signature.ts`: ensure `encodeURIComponent(decoded)` with NO `.replace(/%3A/gi, ':')`
+→ `:` MUST be `%3A` in canonical URI
 
-Typical 5-scene production cost estimate:
-- Brain: ~$0.01
-- Images (Nova Canvas × 5): ~$0.20
-- Videos (Nova Reel × 5): ~$4.00
-- Audio (Polly × 5): ~$0.02
-- **Total: ~$4.23 per video**
+**Nova Reel "UnknownOperationException"**
+→ `video.ts` ARN path: use `encodeURIComponent(arn)` WITHOUT `.replace(/%3A/gi, ':')`.
+→ Literal colons in URL path break AWS routing to `GetAsyncInvoke`.
+
+**"url error, please check url！" (Dashscope image)**
+→ `prompt_extend: true` (boolean) was passed to `qwen-image-2.0-pro` or `qwen-image-2.0`.
+→ These models treat `prompt_extend` as a URL string field — boolean causes "url error".
+→ Fix: skip `prompt_extend` and `watermark` for `isQwenImage` models.
+
+**"模型不存在" (GLM image)**
+→ `cogview-4-flash` does not exist. Use `cogview-3-flash`.
+
+**GLM/Groq/OpenRouter storyboard generates then redirects to homepage**
+→ `brain-provider.ts` was returning `{ content: "..." }` instead of parsed JSON.
+→ Fixed in v3.8: MODE A (`body.story` set) returns storyboard JSON directly.
+
+**"AWS credentials required" on non-AWS brain routes**
+→ `getModelById(brainModel)?.provider` must return `'gemini'/'groq'/'glm'/'openrouter'`
+→ Check `providerModels.ts` model definition and Home.tsx routing logic.
+
+**Clerk "failed_to_load_clerk_js"**
+→ Using `pk_live_` key on `.pages.dev` — switch to `pk_test_` (development key).
+
+---
+
+## 12. Cost Estimates
+
+| Service | Model | Rate |
+|---|---|---|
+| Brain | Claude Sonnet 4.6 | ~$0.005–0.01 per storyboard |
+| Brain | Gemini 2.0 Flash | Free (default) |
+| Brain | Groq Llama 3.3 | Free |
+| Brain | GLM-4-Flash | Unlimited free |
+| Image | Nova Canvas | ~$0.04 per image |
+| Image | SD 3.5 | ~$0.065 per image |
+| Image | Qwen Image 2.0 Pro | ~$0.02 per image |
+| Image | CogView-3-Flash | Free |
+| Video | Nova Reel (6s) | ~$0.80 per clip |
+| Video | Wan 2.6 | ~$0.10–0.20 per clip |
+| Audio | Polly neural | $0.004/1K chars |
+| Audio | ElevenLabs | $0.18/1K chars |
+
+D1 credit costs: brain=20, image=10, video=50, audio=5, enhance=2
