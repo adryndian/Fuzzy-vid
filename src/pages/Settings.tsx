@@ -252,7 +252,7 @@ export function Settings() {
             style={{
               position: 'absolute', right: '12px', top: '50%',
               transform: 'translateY(-50%)', background: 'none',
-              border: 'none', color: 'rgba(60,60,67,0.4)',
+              border: 'none', color: 'var(--text-tertiary)',
               cursor: 'pointer', fontSize: '15px', padding: '2px',
             }}>
             {showKey[fieldKey] ? '🙈' : '👁️'}
@@ -464,7 +464,7 @@ export function Settings() {
   // ─── Render ────────────────────────────────────────────────
   return (
     <div style={s.page}>
-      <style>{`select option { background: ${isDark ? '#2c2c2e' : '#f2f2f7'}; color: ${isDark ? '#f2f2f7' : '#1d1d1f'}; }`}</style>
+      <style>{`select option { background: var(--card-bg); color: var(--text-primary); }`}</style>
 
       {/* Sticky Header */}
       <div style={s.header}>

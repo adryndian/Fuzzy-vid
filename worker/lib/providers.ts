@@ -304,6 +304,50 @@ export async function callProvider(
     ? modelId.split(':').slice(1).join(':')
     : modelId
 
+  // Native Gemini API integration
+  if (provider.id === 'gemini') {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModelId}:generateContent?key=${apiKey}`
+    const systemMessage = messages.find(m => m.role === 'system')?.content || ''
+    const userMessages = messages.filter(m => m.role !== 'system')
+
+    const body: Record<string, unknown> = {
+      contents: userMessages.map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.content }]
+      })),
+      generationConfig: {
+        temperature: options?.temperature ?? 0.7,
+        maxOutputTokens: options?.max_tokens ?? 4096,
+        responseMimeType: options?.response_format?.type === 'json_object' ? 'application/json' : 'text/plain',
+      }
+    }
+    
+    if (systemMessage) {
+      body.systemInstruction = {
+        parts: [{ text: systemMessage }]
+      }
+    }
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+
+    if (!res.ok) {
+      const errText = await res.text()
+      throw new Error(`Gemini API error ${res.status}: ${errText.slice(0, 200)}`)
+    }
+
+    const data = await res.json() as {
+      candidates?: { content: { parts: { text: string }[] } }[]
+      error?: { message: string }
+    }
+
+    if (data.error) throw new Error(`Gemini: ${data.error.message}`)
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  }
+
   const body: Record<string, unknown> = {
     model: cleanModelId,
     messages,

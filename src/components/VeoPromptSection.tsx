@@ -113,7 +113,7 @@ export default function VeoPromptSection({
             border: '0.5px solid rgba(52,199,89,0.3)',
           }}>Ready ✓</span>
         )}
-        <span style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)' }}>
+        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
           {expanded ? '▲' : '▼'}
         </span>
       </button>
@@ -129,7 +129,7 @@ export default function VeoPromptSection({
           {/* Sub-tone selector — only shown when multiple options exist */}
           {availableSubTones.length > 1 && (
             <div style={{ marginBottom: '10px' }}>
-              <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(60,60,67,0.5)', marginBottom: '6px' }}>
+              <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--label-color)', marginBottom: '6px' }}>
                 SUB-TONE
               </div>
               <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
@@ -167,7 +167,7 @@ export default function VeoPromptSection({
                 background: 'rgba(0,0,0,0.03)', borderRadius: '10px',
                 padding: '10px', marginBottom: '8px',
                 fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: '11px',
-                color: '#1d1d1f', lineHeight: 1.5,
+                color: 'var(--text-primary)', lineHeight: 1.5,
               }}>
                 {veoPrompt.full_veo_prompt}
               </div>
@@ -182,7 +182,7 @@ export default function VeoPromptSection({
                         background: 'rgba(0,122,255,0.08)', padding: '2px 6px',
                         borderRadius: '5px', flexShrink: 0,
                       }}>📷 CAMERA</span>
-                      <span style={{ fontSize: '10px', color: 'rgba(60,60,67,0.7)' }}>
+                      <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
                         {veoPrompt.camera_instruction}
                       </span>
                     </div>
@@ -194,7 +194,7 @@ export default function VeoPromptSection({
                         background: 'rgba(255,107,53,0.08)', padding: '2px 6px',
                         borderRadius: '5px', flexShrink: 0,
                       }}>⏱️ ACTION</span>
-                      <span style={{ fontSize: '10px', color: 'rgba(60,60,67,0.7)' }}>
+                      <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
                         {veoPrompt.temporal_action}
                       </span>
                     </div>
@@ -206,7 +206,7 @@ export default function VeoPromptSection({
                         background: 'rgba(52,199,89,0.08)', padding: '2px 6px',
                         borderRadius: '5px', flexShrink: 0,
                       }}>🌊 PHYSICS</span>
-                      <span style={{ fontSize: '10px', color: 'rgba(60,60,67,0.7)' }}>
+                      <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
                         {veoPrompt.physics_detail}
                       </span>
                     </div>
@@ -218,7 +218,7 @@ export default function VeoPromptSection({
                         background: 'rgba(175,82,222,0.08)', padding: '2px 6px',
                         borderRadius: '5px', flexShrink: 0,
                       }}>👤 HUMAN</span>
-                      <span style={{ fontSize: '10px', color: 'rgba(60,60,67,0.7)' }}>
+                      <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
                         {veoPrompt.human_element}
                       </span>
                     </div>
@@ -232,7 +232,7 @@ export default function VeoPromptSection({
                   background: 'rgba(0,0,0,0.04)',
                   border: '0.5px solid rgba(0,0,0,0.08)',
                   borderRadius: '10px', padding: '9px',
-                  fontSize: '10px', color: '#1d1d1f', lineHeight: '1.6',
+                  fontSize: '10px', color: 'var(--text-primary)', lineHeight: '1.6',
                   overflow: 'auto', margin: '0 0 8px',
                   fontFamily: 'ui-monospace, SFMono-Regular, monospace',
                 }}>
@@ -276,7 +276,7 @@ export default function VeoPromptSection({
                   padding: '8px 10px', borderRadius: '10px',
                   background: showRaw ? 'rgba(118,118,128,0.12)' : 'rgba(118,118,128,0.06)',
                   border: '0.5px solid rgba(118,118,128,0.15)',
-                  color: 'rgba(60,60,67,0.5)', fontSize: '10px', cursor: 'pointer',
+                  color: 'var(--label-color)', fontSize: '10px', cursor: 'pointer',
                 }}>
                   {showRaw ? '{ }' : '📊'}
                 </button>
@@ -285,7 +285,7 @@ export default function VeoPromptSection({
           ) : (
             /* No veo_prompt yet */
             <div style={{ textAlign: 'center', padding: '12px 0' }}>
-              <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.5)', margin: '0 0 10px' }}>
+              <p style={{ fontSize: '11px', color: 'var(--label-color)', margin: '0 0 10px' }}>
                 No Veo prompt yet. Regenerate to create one.
               </p>
               <button onClick={handleRegenerate} disabled={regenerating} style={{

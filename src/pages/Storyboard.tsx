@@ -1147,7 +1147,7 @@ export function Storyboard() {
         <div style={{
           width: '56px', height: '56px', borderRadius: '8px',
           overflow: 'hidden', flexShrink: 0,
-          background: 'rgba(118,118,128,0.1)',
+          background: 'var(--input-bg)',
         }}>
           {hasImage ? (
             <img src={sceneAsset.imageUrl!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1206,7 +1206,7 @@ export function Storyboard() {
             color: '#ff6b35', fontSize: '12px', fontWeight: 700, flexShrink: 0,
           }}>{sceneNum}</div>
           <div style={{ flex: 1 }}>
-            <div style={{ color: '#1d1d1f', fontSize: '13px', fontWeight: 600 }}>
+            <div style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>
               Scene {sceneNum}
             </div>
             <div style={{ color: '#007aff', fontSize: '10px' }}>
@@ -1217,8 +1217,8 @@ export function Storyboard() {
             {scene.mood && (
               <span style={{
                 padding: '2px 7px', borderRadius: '20px',
-                background: 'rgba(118,118,128,0.1)',
-                color: 'rgba(60,60,67,0.6)', fontSize: '10px',
+                background: 'var(--input-bg)',
+                color: 'var(--text-secondary)', fontSize: '10px',
               }}>{scene.mood as string}</span>
             )}
             {/* Status summary badges when collapsed */}
@@ -1242,9 +1242,9 @@ export function Storyboard() {
               style={{
                 padding: '3px 8px',
                 borderRadius: '8px',
-                border: '0.5px solid rgba(0,0,0,0.1)',
+                border: 'var(--nav-border)',
                 background: 'rgba(255,255,255,0.8)',
-                color: 'rgba(60,60,67,0.6)',
+                color: 'var(--text-secondary)',
                 fontSize: '11px', fontWeight: 500,
                 cursor: 'pointer',
               }}
@@ -1261,12 +1261,12 @@ export function Storyboard() {
             {/* Image Prompt — editable textarea or JSON view */}
             <div style={{ marginBottom: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                <p style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>
+                <p style={{ color: 'var(--label-color)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>
                   Image Prompt
                 </p>
                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                   {/* Text / JSON toggle */}
-                  <div style={{ display: 'flex', borderRadius: '8px', overflow: 'hidden', border: '0.5px solid rgba(0,0,0,0.1)' }}>
+                  <div style={{ display: 'flex', borderRadius: '8px', overflow: 'hidden', border: 'var(--nav-border)' }}>
                     <button
                       onClick={() => setPromptView(prev => ({ ...prev, [sceneNum]: 'text' }))}
                       style={{
@@ -1312,7 +1312,7 @@ export function Storyboard() {
                       : '0.5px solid rgba(0,0,0,0.08)',
                     borderRadius: '10px',
                     padding: '7px 9px',
-                    color: '#1d1d1f',
+                    color: 'var(--text-primary)',
                     fontSize: '12px',
                     lineHeight: '1.5',
                     resize: 'vertical',
@@ -1329,7 +1329,7 @@ export function Storyboard() {
                   borderRadius: '10px',
                   padding: '9px',
                   fontSize: '10px',
-                  color: '#1d1d1f',
+                  color: 'var(--text-primary)',
                   lineHeight: '1.6',
                   overflow: 'auto',
                   margin: 0,
@@ -1370,7 +1370,7 @@ export function Storyboard() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <span style={{ fontSize: '13px' }}>🖼️</span>
-                  <span style={{ color: '#1d1d1f', fontSize: '12px', fontWeight: 600 }}>Image</span>
+                  <span style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 600 }}>Image</span>
                 </div>
                 {statusBadge(sceneAsset.imageStatus, 'Image')}
               </div>
@@ -1398,7 +1398,7 @@ export function Storyboard() {
                       alignItems: 'center', justifyContent: 'center', gap: '8px',
                     }}>
                       <span style={{ fontSize: '24px', animation: 'pulse-ring 1.5s infinite', display: 'block' }}>🖼️</span>
-                      <span style={{ color: 'rgba(60,60,67,0.6)', fontSize: '11px', fontWeight: 600 }}>Generating image...</span>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600 }}>Generating image...</span>
                       <div style={{ width: '60%', height: '3px', background: 'rgba(118,118,128,0.15)', borderRadius: '2px', overflow: 'hidden' }}>
                         <div style={{ height: '100%', borderRadius: '2px', background: 'linear-gradient(90deg, #ff6b35, #ff8c00)', animation: 'progress-bar 3s ease-out forwards' }} />
                       </div>
@@ -1490,7 +1490,7 @@ export function Storyboard() {
                 </select>
               </div>
               {actionBtn('Generate Image', () => handleGenerateImage(scene), sceneAsset.imageStatus, !hasApiKeys, '#ff6b35')}
-              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
+              <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '5px' }}>
                 Est. {formatCost(estimateImageCost(imageModel))}
               </div>
               {sceneAsset.enhancedPrompt && (
@@ -1504,7 +1504,7 @@ export function Storyboard() {
                   <p style={{ color: '#007aff', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: '0 0 3px' }}>
                     ✨ AI Enhanced Prompt
                   </p>
-                  <p style={{ color: 'rgba(60,60,67,0.6)', fontSize: '10px', lineHeight: '1.5', margin: 0 }}>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '10px', lineHeight: '1.5', margin: 0 }}>
                     {sceneAsset.enhancedPrompt}
                   </p>
                 </div>
@@ -1561,17 +1561,17 @@ export function Storyboard() {
                       {hasVideoPrompt ? (
                         <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'rgba(52,199,89,0.12)', color: '#34c759', fontSize: '10px', fontWeight: 600 }}>✓ Ready</span>
                       ) : (
-                        <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'rgba(118,118,128,0.1)', color: 'rgba(60,60,67,0.4)', fontSize: '10px' }}>Using image prompt</span>
+                        <span style={{ padding: '1px 6px', borderRadius: '10px', background: 'var(--input-bg)', color: 'var(--text-tertiary)', fontSize: '10px' }}>Using image prompt</span>
                       )}
                     </div>
-                    <span style={{ color: 'rgba(60,60,67,0.4)', fontSize: '11px' }}>{isExpanded ? '▲' : '▼'}</span>
+                    <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>{isExpanded ? '▲' : '▼'}</span>
                   </div>
 
                   {isExpanded && (
                     <div style={{ padding: '0 10px 10px', borderTop: '0.5px solid rgba(0,122,255,0.08)' }}>
                       {/* Text/JSON tab toggle */}
                       <div style={{ display: 'flex', gap: '4px', marginTop: '8px', marginBottom: '8px' }}>
-                        <div style={{ display: 'flex', borderRadius: '8px', overflow: 'hidden', border: '0.5px solid rgba(0,0,0,0.1)' }}>
+                        <div style={{ display: 'flex', borderRadius: '8px', overflow: 'hidden', border: 'var(--nav-border)' }}>
                           <button
                             onClick={() => setVideoPromptView(prev => ({ ...prev, [sceneNum]: 'text' }))}
                             style={{
@@ -1615,19 +1615,19 @@ export function Storyboard() {
                           )}
                           {videoPrompt && videoPrompt.subject_action && (
                             <div style={{ marginBottom: '6px' }}>
-                              <div style={{ color: 'rgba(60,60,67,0.4)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Subject Action</div>
+                              <div style={{ color: 'var(--text-tertiary)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Subject Action</div>
                               <div style={{ color: 'rgba(60,60,67,0.65)', fontSize: '11px', lineHeight: '1.4' }}>{videoPrompt.subject_action}</div>
                             </div>
                           )}
                           {videoPrompt && videoPrompt.atmosphere && (
                             <div style={{ marginBottom: '8px' }}>
-                              <div style={{ color: 'rgba(60,60,67,0.4)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Atmosphere</div>
+                              <div style={{ color: 'var(--text-tertiary)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>Atmosphere</div>
                               <div style={{ color: 'rgba(60,60,67,0.65)', fontSize: '11px', lineHeight: '1.4' }}>{videoPrompt.atmosphere}</div>
                             </div>
                           )}
                           <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-                              <span style={{ color: 'rgba(60,60,67,0.4)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Full Prompt (editable)</span>
+                              <span style={{ color: 'var(--text-tertiary)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Full Prompt (editable)</span>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                 <span style={{ fontSize: '10px', fontWeight: 600, color: (customVideoPromptVal.length) > 200 ? '#ff3b30' : 'rgba(60,60,67,0.4)' }}>
                                   {customVideoPromptVal.length}/200
@@ -1727,7 +1727,7 @@ export function Storyboard() {
                   <span style={{ color: thm.textPrimary, fontSize: '12px', fontWeight: 600 }}>Video</span>
                 </div>
                 {!canGenVideo
-                  ? <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '10px' }}>Generate image first</span>
+                  ? <span style={{ color: 'var(--text-tertiary)', fontSize: '10px' }}>Generate image first</span>
                   : statusBadge(sceneAsset.videoStatus, 'Video', isVideoPolling)
                 }
               </div>
@@ -1785,7 +1785,7 @@ export function Storyboard() {
                       <span style={{ fontSize: '16px', animation: 'spin 3s linear infinite', display: 'inline-block' }}>🎬</span>
                       <div>
                         <div style={{ color: '#007aff', fontSize: '12px', fontWeight: 600 }}>Generating video...</div>
-                        <div style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>
+                        <div style={{ color: 'var(--label-color)', fontSize: '10px' }}>
                           Takes 2-5 min · {pollCount > 0 ? `~${pollCount * 8}s elapsed` : 'starting...'}
                         </div>
                       </div>
@@ -1812,7 +1812,7 @@ export function Storyboard() {
                       }} />
                     ))}
                   </div>
-                  <div style={{ color: 'rgba(60,60,67,0.4)', fontSize: '10px' }}>
+                  <div style={{ color: 'var(--text-tertiary)', fontSize: '10px' }}>
                     Polling every 8s{pollCount > 0 ? ` · checked ${pollCount}×` : ''}
                   </div>
                 </div>
@@ -1827,7 +1827,7 @@ export function Storyboard() {
               {/* Duration slider */}
               <div style={{ marginBottom: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>⏱ Duration</span>
+                  <span style={{ color: 'var(--label-color)', fontSize: '10px' }}>⏱ Duration</span>
                   <span style={{ color: '#007aff', fontSize: '10px', fontWeight: 700 }}>{sceneDurations[sceneNum] || 6}s</span>
                 </div>
                 <input
@@ -1837,8 +1837,8 @@ export function Storyboard() {
                   style={{ width: '100%', accentColor: '#007aff', height: '3px' }}
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>2s</span>
-                  <span style={{ color: 'rgba(60,60,67,0.3)', fontSize: '9px' }}>6s</span>
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: '9px' }}>2s</span>
+                  <span style={{ color: 'var(--text-tertiary)', fontSize: '9px' }}>6s</span>
                 </div>
               </div>
 
@@ -1874,7 +1874,7 @@ export function Storyboard() {
                 if (curVidModel.provider === 'bedrock') {
                   return (
                     <div style={{ marginBottom: '7px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', flexShrink: 0 }}>Seed</span>
+                      <span style={{ color: 'var(--label-color)', fontSize: '10px', flexShrink: 0 }}>Seed</span>
                       <input
                         type="number"
                         placeholder="Random"
@@ -1885,11 +1885,11 @@ export function Storyboard() {
                         }))}
                         style={{
                           width: '90px',
-                          background: 'rgba(118,118,128,0.1)',
-                          border: '0.5px solid rgba(0,0,0,0.1)',
+                          background: 'var(--input-bg)',
+                          border: 'var(--nav-border)',
                           borderRadius: '8px',
                           padding: '3px 7px',
-                          color: '#1d1d1f',
+                          color: 'var(--text-primary)',
                           fontSize: '11px',
                           outline: 'none',
                           fontFamily: 'inherit',
@@ -1909,7 +1909,7 @@ export function Storyboard() {
                           onChange={e => setPromptExtend(prev => ({ ...prev, [sceneNum]: e.target.checked }))}
                           style={{ accentColor: '#007aff' }}
                         />
-                        <span style={{ color: 'rgba(60,60,67,0.6)', fontSize: '10px' }}>Prompt Extend</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '10px' }}>Prompt Extend</span>
                       </label>
                     </div>
                   )
@@ -1917,7 +1917,7 @@ export function Storyboard() {
                 if (curVidModel.provider === 'glm') {
                   return (
                     <div style={{ marginBottom: '7px' }}>
-                      <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px' }}>
+                      <span style={{ color: 'var(--label-color)', fontSize: '10px' }}>
                         CogVideoX-2 · 5s or 10s · Image optional (I2V/T2V)
                       </span>
                     </div>
@@ -1937,7 +1937,7 @@ export function Storyboard() {
                   '#007aff'
                 )
               })()}
-              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
+              <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '5px' }}>
                 Est. {formatCost(estimateVideoCost())}
               </div>
             </div>
@@ -2079,7 +2079,7 @@ export function Storyboard() {
                     { label: 'Style', value: elStyle, set: setElStyle },
                   ] as const).map(({ label, value, set }) => (
                     <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ color: 'rgba(60,60,67,0.5)', fontSize: '10px', width: '60px', flexShrink: 0 }}>{label}</span>
+                      <span style={{ color: 'var(--label-color)', fontSize: '10px', width: '60px', flexShrink: 0 }}>{label}</span>
                       <input
                         type="range" min={0} max={1} step={0.05}
                         value={value}
@@ -2099,7 +2099,7 @@ export function Storyboard() {
                 !hasApiKeys,
                 '#af52de'
               )}
-              <div style={{ fontSize: '10px', color: 'rgba(60,60,67,0.4)', marginTop: '5px' }}>
+              <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '5px' }}>
                 Est. {narration ? formatCost(estimateAudioCost(audioEngine, narration.length)) : '<$0.01'}
               </div>
             </div>
@@ -2111,7 +2111,7 @@ export function Storyboard() {
                   padding: '3px 8px', borderRadius: '20px',
                   background: 'rgba(118,118,128,0.08)',
                   border: 'none',
-                  color: 'rgba(60,60,67,0.5)', fontSize: '11px',
+                  color: 'var(--label-color)', fontSize: '11px',
                 }}>📷 {scene.camera_angle as string}</span>
               )}
               {scene.transition && (
@@ -2119,7 +2119,7 @@ export function Storyboard() {
                   padding: '3px 8px', borderRadius: '20px',
                   background: 'rgba(118,118,128,0.08)',
                   border: 'none',
-                  color: 'rgba(60,60,67,0.5)', fontSize: '11px',
+                  color: 'var(--label-color)', fontSize: '11px',
                 }}>{(scene.transition as string).replace(/_/g, ' ')}</span>
               )}
             </div>
@@ -2338,7 +2338,7 @@ export function Storyboard() {
                   >
                     <div style={{
                       width: '44px', height: '44px', borderRadius: '6px',
-                      overflow: 'hidden', background: 'rgba(118,118,128,0.12)',
+                      overflow: 'hidden', background: 'var(--pill-inactive)',
                       flexShrink: 0,
                     }}>
                       {thumbImg ? (
@@ -2446,7 +2446,7 @@ export function Storyboard() {
           <span style={{ fontSize: '18px' }}>⚠️</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: '#ff3b30' }}>API Keys Required</div>
-            <div style={{ fontSize: '11px', color: 'rgba(60,60,67,0.6)', marginTop: '2px' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
               Add your AWS or Dashscope keys in Settings to generate images and videos
             </div>
           </div>
@@ -2503,7 +2503,7 @@ export function Storyboard() {
                 {svc}: {formatCost(total)}
               </button>
             ))}
-            <span style={{ marginLeft: 'auto', color: 'rgba(60,60,67,0.4)', fontSize: '10px' }}>
+            <span style={{ marginLeft: 'auto', color: 'var(--text-tertiary)', fontSize: '10px' }}>
               {costExpanded ? '▲ collapse' : '▼ details'}
             </span>
           </div>
@@ -2547,7 +2547,7 @@ export function Storyboard() {
                   }}>
                     {entry.service}
                   </span>
-                  <span style={{ color: 'rgba(60,60,67,0.5)', flex: 1 }}>
+                  <span style={{ color: 'var(--label-color)', flex: 1 }}>
                     {entry.model}
                   </span>
                   <span style={{ color: thm.textPrimary, fontWeight: 600 }}>
@@ -2588,14 +2588,14 @@ export function Storyboard() {
               {(productionNotes.color_palette as string[] || []).map((c: string, i: number) => (
                 <span key={i} style={{
                   padding: '2px 8px', borderRadius: '20px',
-                  background: 'rgba(118,118,128,0.1)',
+                  background: 'var(--input-bg)',
                   border: 'none',
                   color: thm.textPrimary, fontSize: '11px',
                 }}>{c}</span>
               ))}
             </div>
             {productionNotes.music_tone && (
-              <p style={{ color: 'rgba(60,60,67,0.5)', fontSize: '12px', margin: 0 }}>
+              <p style={{ color: 'var(--label-color)', fontSize: '12px', margin: 0 }}>
                 🎵 {productionNotes.music_tone as string}
               </p>
             )}
@@ -2675,7 +2675,7 @@ export function Storyboard() {
         </div>
       )}
 
-      <style>{`select option { background: ${isDark ? '#2c2c2e' : '#f2f2f7'}; color: ${isDark ? '#f2f2f7' : '#1d1d1f'}; }`}</style>
+      <style>{`select option { background: var(--card-bg); color: var(--text-primary); }`}</style>
     </div>
   )
 }

@@ -22,7 +22,7 @@ export function Auth() {
         <h1 style={{
           fontSize: '28px',
           fontWeight: 800,
-          color: '#1d1d1f',
+          color: 'var(--text-primary)',
           margin: '0 0 6px',
           letterSpacing: '-0.02em',
         }}>
@@ -30,7 +30,7 @@ export function Auth() {
         </h1>
         <p style={{
           fontSize: '14px',
-          color: 'rgba(60,60,67,0.6)',
+          color: 'var(--text-secondary)',
           margin: 0,
         }}>
           AI-powered video storyboard generator
@@ -80,7 +80,7 @@ export function Auth() {
       <p style={{
         marginTop: '20px',
         fontSize: '14px',
-        color: 'rgba(60,60,67,0.6)',
+        color: 'var(--text-secondary)',
         textAlign: 'center',
       }}>
         {mode === 'sign-in' ? "Don't have an account? " : 'Already have an account? '}

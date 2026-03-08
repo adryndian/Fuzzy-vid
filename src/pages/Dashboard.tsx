@@ -179,17 +179,17 @@ export function Dashboard() {
         {/* Usage summary */}
         {usage && (
           <div style={{ ...s.card, marginBottom: '16px' }}>
-            <p style={{ fontSize: '11px', color: 'rgba(60,60,67,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: '0 0 10px' }}>
+            <p style={{ fontSize: '11px', color: 'var(--label-color)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: '0 0 10px' }}>
               Credit Usage
             </p>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {usage.summary.map(item => (
                 <span key={item.service} style={{
-                  background: 'rgba(118,118,128,0.1)',
+                  background: 'var(--input-bg)',
                   borderRadius: '8px',
                   padding: '4px 10px',
                   fontSize: '12px',
-                  color: '#1d1d1f',
+                  color: 'var(--text-primary)',
                 }}>
                   {item.service}: <strong>{item.total}</strong>
                 </span>

@@ -451,7 +451,7 @@ export function Home() {
           border-color: rgba(0,122,255,0.5) !important;
           background: ${isDark ? 'rgba(60,60,67,0.4)' : 'rgba(255,255,255,0.9)'} !important;
         }
-        select option { background: ${isDark ? '#2c2c2e' : '#f2f2f7'}; color: ${isDark ? '#f2f2f7' : '#1d1d1f'}; }
+        select option { background: var(--card-bg); color: var(--text-primary); }
         .adv-section { overflow: hidden; transition: max-height 0.3s ease; }
       `}</style>
 
