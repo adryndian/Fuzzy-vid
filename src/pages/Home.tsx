@@ -79,7 +79,7 @@ function buildSteps(current: number): GenStep[] {
 
 export function Home() {
   const navigate = useNavigate()
-  const { isDark } = useTheme()
+  const { isDark, toggle } = useTheme()
   const t = tk(isDark)
 
   const dropdownStyle: React.CSSProperties = {
@@ -455,11 +455,25 @@ export function Home() {
       `}</style>
 
       {/* Compact Header */}
-      <div style={{ textAlign: 'center', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-        <span style={{ fontSize: '24px' }}>🎬</span>
-        <h1 style={{ fontSize: '22px', fontWeight: 800, color: t.textPrimary, letterSpacing: '-0.02em', margin: 0 }}>
+      <div style={{ textAlign: 'center', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between', width: '100%' }}>
+        <button
+          onClick={() => toggle()}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '24px',
+            padding: '4px',
+            borderRadius: '8px',
+            color: t.textPrimary,
+          }}
+        >
+          {isDark ? '🌙' : '☀️'}
+        </button>
+        <h1 style={{ fontSize: '22px', fontWeight: 800, color: t.textPrimary, letterSpacing: '-0.02em', margin: 0, flex: 1, textAlign: 'center' }}>
           Fuzzy <span style={{ color: '#ff6b35' }}>Short</span>
         </h1>
+        <div style={{ width: '24px' }} /> {/* Spacer for alignment */}
       </div>
 
       {/* Main Glass Card */}

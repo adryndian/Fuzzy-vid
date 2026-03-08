@@ -1,0 +1,193 @@
+// Template: Firebase Security Rules
+// Usage: Copy to firestore.rules → customize match blocks for your collections
+// Test with: firebase emulators:start → Firebase Emulator UI → Rules Playground
+// Deploy with: firebase deploy --only firestore:rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // Helper Functions — reuse across rules
+    // ==========================================
+
+    // Is the user authenticated?
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Is the user the owner of this resource?
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+
+    // Is the requesting user an admin? (set via Firebase Admin SDK)
+    function isAdmin() {
+      return isAuth() && request.auth.token.admin == true;
+    }
+
+    // Is the user's email verified?
+    function isVerified() {
+      return isAuth() && request.auth.token.email_verified == true;
+    }
+
+    // Is the incoming data field present and not null?
+    function hasField(field) {
+      return field in request.resource.data && request.resource.data[field] != null;
+    }
+
+    // Does the incoming data match expected types for a user document?
+    function isValidUserData() {
+      return request.resource.data.keys().hasOnly(['name', 'bio', 'avatarUrl', 'updatedAt'])
+        && (!('name' in request.resource.data) || request.resource.data.name is string)
+        && (!('bio' in request.resource.data) || request.resource.data.bio is string);
+    }
+
+    // ==========================================
+    // Users Collection
+    // ==========================================
+    match /users/{userId} {
+      // Any authenticated user can read public profiles
+      allow read: if isAuth();
+
+      // Users can only create their own document
+      allow create: if isOwner(userId)
+        && hasField('name')
+        && hasField('email');
+
+      // Users can only update their own document
+      // They cannot change their email or uid
+      allow update: if isOwner(userId)
+        && isValidUserData()
+        && !('email' in request.resource.data)  // email is immutable
+        && !('uid' in request.resource.data);
+
+      // Never allow deletes from client
+      allow delete: if false;
+
+      // Subcollection: private user data — only the user themselves
+      match /private/{document} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ==========================================
+    // Posts Collection
+    // ==========================================
+    match /posts/{postId} {
+      // Anyone can read published posts; drafts only readable by author
+      allow read: if resource.data.status == 'published'
+        || (isAuth() && resource.data.authorId == request.auth.uid);
+
+      // Authenticated verified users can create posts
+      allow create: if isVerified()
+        && request.resource.data.authorId == request.auth.uid
+        && hasField('title')
+        && hasField('content')
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 200;
+
+      // Only the author can update
+      allow update: if isAuth()
+        && resource.data.authorId == request.auth.uid
+        && request.resource.data.authorId == resource.data.authorId; // cannot transfer ownership
+
+      // Only the author can delete
+      allow delete: if isAuth()
+        && resource.data.authorId == request.auth.uid;
+
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isVerified()
+          && request.resource.data.authorId == request.auth.uid;
+        allow update: if isAuth()
+          && resource.data.authorId == request.auth.uid;
+        allow delete: if isAuth()
+          && (resource.data.authorId == request.auth.uid
+            || get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid);
+      }
+    }
+
+    // ==========================================
+    // Admin Collection — admin SDK writes only
+    // ==========================================
+    match /admin/{document=**} {
+      allow read: if isAdmin();
+      allow write: if false; // Write only via Firebase Admin SDK (backend)
+    }
+
+    // ==========================================
+    // Notifications — user reads own only
+    // ==========================================
+    match /notifications/{notificationId} {
+      allow read: if isAuth()
+        && resource.data.userId == request.auth.uid;
+      allow create: if false;  // Created only by backend/Cloud Functions
+      allow update: if isAuth()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['read', 'readAt']); // can only mark as read
+      allow delete: if isAuth()
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // ==========================================
+    // Rate-limited writes — prevent abuse
+    // Example: user can only create 10 posts/day
+    // (requires a counter document to track)
+    // ==========================================
+    // match /rateLimits/{userId} {
+    //   allow read: if isOwner(userId);
+    //   allow write: if false; // managed by Cloud Functions
+    // }
+
+    // ==========================================
+    // Public/Config data — read-only from client
+    // ==========================================
+    match /config/{document} {
+      allow read: if true;
+      allow write: if false; // Write only via Admin SDK
+    }
+
+    // ==========================================
+    // DENY ALL — catch-all safety net
+    // Any collection not explicitly matched above will be denied.
+    // Firestore denies by default, but this makes it explicit.
+    // ==========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// ==========================================
+// Storage Rules (storage.rules)
+// ==========================================
+//
+// service firebase.storage {
+//   match /b/{bucket}/o {
+//
+//     // User avatars — owner read/write, others read
+//     match /avatars/{userId}/{allPaths=**} {
+//       allow read: if true;
+//       allow write: if request.auth != null
+//         && request.auth.uid == userId
+//         && request.resource.size < 5 * 1024 * 1024  // 5MB max
+//         && request.resource.contentType.matches('image/.*');
+//     }
+//
+//     // Post images — authenticated write, public read
+//     match /posts/{postId}/{allPaths=**} {
+//       allow read: if true;
+//       allow write: if request.auth != null
+//         && request.resource.size < 10 * 1024 * 1024  // 10MB max
+//         && request.resource.contentType.matches('image/.*');
+//     }
+//
+//     // Deny everything else
+//     match /{allPaths=**} {
+//       allow read, write: if false;
+//     }
+//   }
+// }

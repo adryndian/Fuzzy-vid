@@ -7,7 +7,6 @@ import { useTheme, tk } from '../lib/theme'
 const TABS = [
   { path: '/',          icon: '🎬', label: 'Create'   },
   { path: '/dashboard', icon: '📋', label: 'Projects'  },
-  { path: '/settings',  icon: '⚙️', label: 'Settings' },
 ]
 
 export function BottomNav() {
@@ -297,7 +296,47 @@ export function BottomNav() {
           )}
         </button>
 
-        {/* Dark mode toggle */}
+        {/* Settings button */}
+        <button
+          onClick={() => navigate('/settings')}
+          style={{
+            flex: 1,
+            padding: '10px 0 7px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '3px',
+            position: 'relative',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          <span style={{ fontSize: '21px', lineHeight: 1 }}>⚙️</span>
+          <span style={{
+            fontSize: '10px',
+            fontWeight: pathname === '/settings' ? 700 : 400,
+            color: pathname === '/settings' ? '#ff6b35' : t.textSecondary,
+            letterSpacing: '-0.01em',
+          }}>
+            Settings
+          </span>
+          {pathname === '/settings' && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '32px',
+              height: '2px',
+              borderRadius: '0 0 2px 2px',
+              background: '#ff6b35',
+            }} />
+          )}
+        </button>
+
+        {/* Dark mode toggle button */}
         <button
           onClick={toggle}
           style={{
@@ -310,12 +349,20 @@ export function BottomNav() {
             flexDirection: 'column',
             alignItems: 'center',
             gap: '3px',
+            position: 'relative',
             WebkitTapHighlightColor: 'transparent',
           }}
         >
-          <span style={{ fontSize: '19px', lineHeight: 1 }}>{isDark ? '☀️' : '🌙'}</span>
-          <span style={{ fontSize: '10px', color: t.textSecondary, letterSpacing: '-0.01em' }}>
-            {isDark ? 'Light' : 'Dark'}
+          <span style={{ fontSize: '21px', lineHeight: 1 }}>
+            {isDark ? '🌙' : '☀️'}
+          </span>
+          <span style={{
+            fontSize: '10px',
+            fontWeight: 400,
+            color: t.textSecondary,
+            letterSpacing: '-0.01em',
+          }}>
+            Theme
           </span>
         </button>
       </nav>

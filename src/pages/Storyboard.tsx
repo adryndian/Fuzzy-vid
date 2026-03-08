@@ -47,7 +47,7 @@ interface PreviewModal {
 
 export function Storyboard() {
   const navigate = useNavigate()
-  const { isDark } = useTheme()
+  const { isDark, toggle } = useTheme()
   const thm = tk(isDark)
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('id')
@@ -2254,6 +2254,21 @@ export function Storyboard() {
               )}
             </div>
           </div>
+
+          <button
+            onClick={() => toggle()}
+            style={{
+              flexShrink: 0,
+              padding: '6px 12px', borderRadius: '10px',
+              border: '0.5px solid rgba(118,118,128,0.2)',
+              background: 'rgba(118,118,128,0.1)',
+              color: thm.textPrimary,
+              fontSize: '12px', fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {isDark ? '🌙' : '☀️'}
+          </button>
 
           <button
             onClick={handleSave}
