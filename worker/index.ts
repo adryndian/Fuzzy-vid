@@ -407,7 +407,7 @@ export default {
         response = await handleGlmVideoStatus(request, env, taskId, creds)
       }
       // ── AUDIO ROUTES ────────────────────────────────────────────────
-      if (path === '/api/audio/generate' && request.method === 'POST') {
+      else if (path === '/api/audio/generate' && request.method === 'POST') {
         const denied = requireAwsKeys(creds)
         if (denied) { response = denied }
         else {
