@@ -1,6 +1,6 @@
 # Fuzzy Short — Gemini CLI Project Instructions
 
-# Version 3.9 — Updated 2026-03-08
+# Version 4.0 — Updated 2026-03-08
 
 # READ THIS COMPLETELY before starting any task
 
@@ -194,13 +194,15 @@ glm-4.6v            <- latest GLM model, fast + multilingual (FREE)  [added v3.8
 Note: Reasoning models (glm-z1-flash, deepseek-r1) output <think>...</think> blocks
 before JSON. Both brain-provider.ts and regenerate-veo-prompt.ts strip these automatically.
 
-### ZhipuAI GLM — Image (route: /api/image/generate, provider: glm)
+### ZhipuAI GLM — Image (route: /api/glm/image/generate, provider: glm)
 
-cogview-3-flash  <- FREE, fast image generation (CogView-3 Flash)  [valid as of v3.9]
+cogview-3-flash  <- FREE, fast image generation (only valid free model)  [confirmed v4.0]
 
-IMPORTANT: cogview-4-flash does NOT exist on ZhipuAI API — returns "模型不存在" error.
+CRITICAL: cogview-4 and cogview-4-flash do NOT exist on ZhipuAI API → "模型不存在" error.
 Only cogview-3-flash is valid as a free GLM image model.
 cogview-4 (paid) and cogview-4-plus (paid) exist but are NOT integrated.
+worker/glm.ts default: body.image_model || 'cogview-3-flash'  (NOT cogview-4)
+IMAGE_MODELS in Home.tsx and Storyboard.tsx: only cogview-3-flash listed (cogview-4 removed)
 
 GLM image endpoint: https://open.bigmodel.cn/api/paas/v4/images/generations
 Auth: Authorization: Bearer {glmApiKey}
@@ -445,13 +447,41 @@ RULES:
   - TONES.map(t => ...) SHADOWS the outer t = tk(isDark) — rename iterator: TONES.map(tn => ...)
     Same for any .map() that uses 't' as iterator name inside a component with t = tk(isDark)
 
-### Navigation (v3.9)
+### Navigation (v4.0)
 
 BottomNav component (src/components/BottomNav.tsx):
-  3 tabs: Home / Dashboard / Settings
-  Position: fixed, bottom: 0, height ~65px
-  Style: borderRadius: '24px 24px 0 0' (rounded top corners)
+  5 buttons: Create / Projects / Settings / Queue / Dark toggle
+  All buttons: flex: 1, padding: '10px 0 7px' (uniform alignment)
+  Position: fixed, bottom: 0, zIndex: 200
+  Style: borderRadius: '20px 20px 0 0', t.navBg + blur backdrop
   Uses useTheme() internally — no theme props needed
+
+  Queue button (4th slot):
+    Icon: ⏳ when runningTasks > 0, 📥 otherwise
+    Badge: count of runningTasks + minimizedSessions (orange when running, green when idle)
+    Tap: opens Queue popup panel above nav bar
+    Disabled (opacity 0.4): when no tasks and no minimized sessions
+    Active indicator bar (orange, top): shown when queueOpen === true
+
+  CRITICAL — variable shadowing rule in BottomNav:
+    runningTasks = tasks.filter(task => task.status === 'running').length
+    NEVER use 't' as iterator name here — 't' = tk(isDark) is already defined in scope.
+    Always use 'task' as the filter iterator to avoid shadowing.
+
+  Queue popup panel:
+    Position: fixed, bottom: 70px, left: 50%, transform: translateX(-50%)
+    zIndex: 199 (below nav at 200, above page content)
+    Width: calc(100vw - 32px), max 340px, min 280px
+    Background: dark rgba(18,18,22,0.97) / light rgba(250,250,252,0.97) per isDark
+    borderRadius: 18px, backdropFilter: blur(24px) saturate(180%)
+    Backdrop overlay (zIndex 198): transparent full-screen tap-to-dismiss div
+    Contents:
+      Header: "QUEUE" label + ✕ close button
+      Minimized sessions: blue pill, Resume button → navigate + unminimize, ✕ remove
+      Running/done/error tasks: colored pill, View button (done), ✕ remove
+
+  GenTaskBar component: REMOVED from App.tsx (merged into BottomNav Queue popup)
+  GenTaskBar.tsx: file still exists but is no longer rendered anywhere
 
 Scene Navigation Bar (Storyboard.tsx, mobile-only):
   Condition: !isDesktop && scenes.length > 1
@@ -742,10 +772,15 @@ After deploy, hard-refresh browser (Cmd+Shift+R / Ctrl+F5) to bypass CDN cache.
 27. dropdownStyle defined INSIDE component function (after tk() call) — never at module-level
 28. Map iterator shadowing: never use 't' as iterator name in components where t = tk(isDark)
 29. Dashscope qwen-image-2.0-pro / qwen-image-2.0: omit prompt_extend and watermark params entirely
-30. GLM image model: cogview-3-flash (NOT cogview-4-flash — that model does not exist)
+30. GLM image model: cogview-3-flash ONLY (cogview-4 and cogview-4-flash do not exist on ZhipuAI)
 31. GLM image API: synchronous (no polling), response: { data: [{ url }] }
 32. VeoPromptSection copy button: when showRaw=true copy full JSON, when false copy full_veo_prompt plain text
 33. Mobile paddingBottom in Storyboard.tsx: 130px (not 80px) — accounts for BottomNav + scene nav bar
+34. BottomNav Queue badge: uses tasks.filter(task => ...) NOT tasks.filter(t => ...) — 't' is reserved for tk(isDark) tokens
+35. GenTaskBar is removed from App.tsx — queue is now in BottomNav Queue popup (zIndex 199)
+36. Expand/Collapse button in scene cards: background var(--input-bg), color var(--text-primary) — never hardcode rgba(255,255,255,0.8)
+37. Dashscope video fallback model: wan2.6-i2v-flash (NOT wan2.1-i2v-plus — that ID is invalid)
+38. Duration slider removed from video output display card in Storyboard.tsx (sceneDurations state still used internally)
 
 -----
 
@@ -806,9 +841,26 @@ Header name mismatch (Gemini key not forwarded)
 -> Worker extractCredentials accepts both for backward compat: X-Gemini-Api-Key || X-Gemini-Key
 
 "模型不存在" (ZhipuAI GLM image — model not found)
--> cogview-4-flash does NOT exist on ZhipuAI API. Use cogview-3-flash.
+-> cogview-4 and cogview-4-flash do NOT exist on ZhipuAI API. Use cogview-3-flash.
 -> cogview-4 (paid) and cogview-4-plus (paid) exist but are NOT integrated in this app.
+-> worker/glm.ts must default to cogview-3-flash, not cogview-4.
 -> Always verify GLM image model IDs against the list above before using.
+
+Queue badge always shows 0 even when tasks are running (BottomNav)
+-> Root cause: tasks.filter(t => t.status === 'running') — 't' shadows t = tk(isDark).
+   The filter receives the tk() token object as 't', its .status is undefined, so count is always 0.
+-> Fix: rename filter iterator to 'task': tasks.filter(task => task.status === 'running').length
+-> RULE: never use 't' as an iterator variable in BottomNav or any component where t = tk(isDark).
+
+Expand/Collapse button invisible or unreadable (Storyboard.tsx scene cards)
+-> Root cause: background hardcoded as rgba(255,255,255,0.8) — white in dark mode blends with light text.
+-> Fix: background: 'var(--input-bg)', color: 'var(--text-primary)', fontWeight: 600
+-> All interactive buttons in scene cards must use CSS variable backgrounds, never hardcoded white.
+
+Dashscope video "Model not exist" or invalid model error
+-> Old fallback model wan2.1-i2v-plus is no longer valid.
+-> Fix: use wan2.6-i2v-flash as default fallback in handleDashscopeVideoStart().
+-> Valid video model IDs: wan2.6-i2v-flash, wanx2.1-i2v-turbo, wan2.6-t2v-flash, wan2.1-t2v-turbo
 
 Dark mode: some cards/inputs still appearing white after switching themes
 -> dropdownStyle was defined at module level (outside component), so it couldn't access tk(isDark).
@@ -828,6 +880,106 @@ AWSCompromisedKeyQuarantineV3
 -----
 
 ## CHANGELOG
+
+### v4.0 (2026-03-08) — Queue Merged into BottomNav + Bug Fixes
+
+Commits: 41be06e, 0d7bdcf, 9b4e8cc
+
+#### Feature 1 — GenTaskBar merged into BottomNav Queue popup (41be06e)
+
+Problem: GenTaskBar was a separate fixed bar sitting above BottomNav at bottom: 65px.
+It duplicated navigation real estate and caused layout shifts on mobile.
+
+Fix: Merged queue display into BottomNav as a 4th tab button "Queue".
+
+Changes:
+  src/components/BottomNav.tsx:
+    - Added Queue button (4th slot) with ⏳/📥 icon and task count badge
+    - Badge color: orange (#ff6b35) when runningTasks > 0, green (#34c759) when idle
+    - Tap opens inline popup panel (zIndex 199) positioned above the nav bar
+    - Popup contains: QUEUE header, minimized sessions (Resume/✕), brain tasks (View/✕)
+    - Backdrop overlay (zIndex 198) dismisses popup on tap
+    - Added Dark mode toggle as 5th button (was previously in BottomNav, preserved)
+    - All 5 buttons now use flex: 1 + padding: '10px 0 7px' for uniform alignment
+    - Spin animation for running tasks defined in inline <style> tag
+
+  src/App.tsx:
+    - Removed <GenTaskBar /> render and its import
+    - GenTaskBar.tsx file still exists but is no longer used
+
+#### Fix 2 — BottomNav uniform button alignment (0d7bdcf)
+
+Problem: Queue button used padding: '10px 12px 7px' (fixed horizontal padding)
+and Dark toggle used padding: '10px 14px 7px', while the 3 nav tabs used flex: 1.
+This caused uneven spacing and misalignment across the 5 buttons.
+
+Fix: All 5 buttons now have flex: 1 and padding: '10px 0 7px'.
+  Queue button: added flex: 1, changed padding to '10px 0 7px'
+  Dark toggle:  added flex: 1, changed padding to '10px 0 7px'
+
+#### Fix 3 — Duration slider removed from video output display (41be06e)
+
+Removed the ⏱ Duration slider block (input type="range" min=2 max=6) from the
+video section of each scene card in Storyboard.tsx.
+
+sceneDurations state is still maintained internally (used for video start payload),
+but the UI slider is no longer shown to users.
+The "Generate Video (Xs)" button label still shows the current duration.
+
+#### Fix 4 — GLM image model cogview-4 invalid → cogview-3-flash (41be06e)
+
+Problem: IMAGE_MODELS in Home.tsx and Storyboard.tsx listed cogview-4 as a valid
+option. ZhipuAI API returns "模型不存在" (model not found) for cogview-4.
+worker/glm.ts defaulted to cogview-4 when no model ID was supplied.
+
+Fix:
+  src/pages/Home.tsx:       Removed cogview-4 entry from IMAGE_MODELS array
+  src/pages/Storyboard.tsx: Removed cogview-4, kept only cogview-3-flash with correct
+                             label "CogView-3 Flash" and desc "Free & fast"
+  worker/glm.ts:            Changed default from 'cogview-4' to 'cogview-3-flash'
+
+#### Fix 5 — Dashscope video invalid fallback model (41be06e)
+
+Problem: handleDashscopeVideoStart() in worker/dashscope.ts used
+`body.video_model || 'wan2.1-i2v-plus'` as the model fallback.
+wan2.1-i2v-plus is an old invalid model ID — was replaced by wan2.6-i2v-flash.
+
+Fix: Changed fallback to 'wan2.6-i2v-flash' (current valid best-quality i2v model).
+
+#### Fix 6 — Queue badge variable shadowing (9b4e8cc)
+
+Problem: In BottomNav.tsx, the queue badge count used:
+  const runningTasks = tasks.filter(t => t.status === 'running').length
+The filter iterator 't' shadowed the outer 't = tk(isDark)' token object.
+Inside the filter, 't' was the tk() object (not a task), so 't.status' was
+undefined and the filter always returned 0 — badge never showed during generation.
+
+Fix: Renamed filter iterator from 't' to 'task':
+  const runningTasks = tasks.filter(task => task.status === 'running').length
+
+RULE: Never use 't' as a variable name inside any component where t = tk(isDark).
+
+#### Fix 7 — Expand/Collapse button unreadable contrast (9b4e8cc)
+
+Problem: The Expand/Collapse button in Storyboard.tsx scene card headers used:
+  background: 'rgba(255,255,255,0.8)'  <- hardcoded white
+  color: 'var(--text-secondary)'        <- light in dark mode
+In dark mode both background and text were near-white → button invisible.
+
+Fix: Changed to theme-aware CSS variables:
+  background: 'var(--input-bg)'    <- dark-aware (rgba(118,118,128,0.28) in dark)
+  color: 'var(--text-primary)'     <- always readable (#f2f2f7 in dark, #1d1d1f in light)
+  fontWeight: 600                   <- slightly bolder for readability
+
+File size reference (as of v4.0):
+  Home.tsx:       ~938 lines
+  Storyboard.tsx: ~2662 lines
+  Settings.tsx:   ~470 lines
+  BottomNav.tsx:  ~324 lines
+  dashscope.ts:   ~355 lines
+  glm.ts:         ~230 lines
+
+-----
 
 ### v3.9 (2026-03-08) — UI Revamp + Dark Mode + Bug Fixes
 
@@ -1177,10 +1329,12 @@ Quick health check commands:
   # Check TypeScript
   npx tsc --noEmit 2>&1 | grep -c error
 
-File size reference (as of v3.9):
-  Home.tsx:       ~900 lines
-  Storyboard.tsx: ~1400 lines
-  Settings.tsx:   ~700 lines
-  dashscope.ts:   ~368 lines
+File size reference (as of v4.0):
+  Home.tsx:       ~938 lines
+  Storyboard.tsx: ~2662 lines
+  Settings.tsx:   ~470 lines
+  BottomNav.tsx:  ~324 lines
+  dashscope.ts:   ~355 lines
+  glm.ts:         ~230 lines
   brain.ts:       ~200 lines
   index.ts:       ~350 lines

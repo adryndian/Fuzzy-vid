@@ -1,6 +1,6 @@
 # Fuzzy Short — Claude Code Project Instructions
 
-# Version 3.3 — Updated March 2026
+# Version 4.0 — Updated 2026-03-08
 
 # READ THIS COMPLETELY before starting any task
 
@@ -22,34 +22,55 @@ GitHub: https://github.com/[your-repo]/Fuzzy-vid
 Frontend:  React + TypeScript + Vite → deployed to Cloudflare Pages
 Backend:   Cloudflare Worker (TypeScript) → fuzzy-vid-worker
 Storage:   Cloudflare R2 → igome-story-storage bucket
-Brain AI:  AWS Bedrock (Claude, Llama) + Dashscope Singapore (Qwen)
-Image AI:  AWS Bedrock (Nova Canvas, SD 3.5) + Dashscope (Wanx)
-Video AI:  AWS Bedrock Nova Reel (async) + Dashscope Wan2.1 (async)
-Audio:     AWS Polly
+Brain AI:  AWS Bedrock (Claude Sonnet 4.6, Llama 4) +
+           Dashscope SG (Qwen3-Max, Qwen-Plus, Qwen-Flash, QwQ-Plus) +
+           Google Gemini (2.0 Flash, 2.5 Pro) +
+           Groq (Llama 3.3 70B, Llama 3.1 8B, Gemma 2 9B, Mixtral 8x7B) +
+           OpenRouter (DeepSeek R1/V3, Gemma 3, Llama 3.3, Mistral 7B) +
+           ZhipuAI GLM (glm-4-flash, glm-4-flash-250414, glm-z1-flash, glm-4.6v)
+Image AI:  AWS Bedrock (Nova Canvas, SD 3.5) + Dashscope (Wanx/Qwen-Image) + ZhipuAI GLM (CogView-3-Flash)
+Video AI:  AWS Bedrock Nova Reel (async) + Dashscope Wan2.6/2.1 (async) + ZhipuAI GLM CogVideoX-2 (async)
+Audio:     AWS Polly + ElevenLabs
 
 -----
 
 ## FILE STRUCTURE
 
 src/
-pages/
-Home.tsx         ← story input form, model selectors, generate button
-Storyboard.tsx   ← scene cards, generate image/video/audio per scene
-Settings.tsx     ← API keys, preferences
-lib/
-api.ts           ← all fetch calls to Worker
-types/
-schema.ts        ← types, VideoJob, SceneAssets, helpers
+  pages/
+    Home.tsx           ← story input form, provider pill + dropdown brain selector, tone selector
+    Storyboard.tsx     ← per-scene cards, image/video/audio gen, Gen All Veo button, scene nav bar
+    Settings.tsx       ← API keys (6 providers), test buttons, checkmark indicators, dark mode
+    Dashboard.tsx      ← storyboard list, credits badge, tone pills
+  lib/
+    api.ts             ← all Worker fetch calls; exports WORKER_URL, getApiHeaders()
+    providerModels.ts  ← 29 brain models x 6 providers; getModelsByProvider/getModelById/hasRequiredKey
+    theme.tsx          ← ThemeProvider context, useTheme() hook, tk(isDark) token function
+  types/
+    schema.ts          ← AppSettings, VideoJob, SceneAssets, buildApiHeaders()
+  components/
+    VeoPromptSection.tsx ← per-scene Veo 3.1 prompt UI, sub-tone selector, copy/regen
+    BottomNav.tsx        ← 5-button bottom nav (Create/Projects/Settings/Queue/Dark), Queue popup
+  store/
+    genTaskStore.ts           ← Zustand store for brain generation tasks (running/done/error)
+    storyboardSessionStore.ts ← Zustand + IndexedDB store for session state + minimized sessions
 
 worker/
-index.ts           ← route handler, credentials extraction
-brain.ts           ← storyboard generation (Bedrock)
-image.ts           ← Nova Canvas + SD 3.5 (Bedrock)
-video.ts           ← Nova Reel async polling (Bedrock)
-audio.ts           ← AWS Polly
-dashscope.ts       ← ALL Qwen/Wanx/Wan2.1 (Dashscope Singapore)
-lib/
-aws-signature.ts ← HMAC signing — CRITICAL, see rules below
+  index.ts                        ← route handler, extractCredentials(), CORS headers
+  brain.ts                        ← storyboard gen (Bedrock), buildBrainSystemPrompt/UserPrompt()
+  image.ts                        ← Nova Canvas + SD 3.5 (Bedrock)
+  video.ts                        ← Nova Reel async polling (Bedrock)
+  audio.ts                        ← AWS Polly
+  dashscope.ts                    ← ALL Qwen/Wanx/Wan2.6 (Dashscope Singapore)
+  glm.ts                          ← ZhipuAI GLM image (CogView-3-Flash sync) + video (CogVideoX-2 async)
+  handlers/
+    brain-provider.ts             ← /api/brain/provider — universal OpenAI-compat handler
+    regenerate-veo-prompt.ts      ← /api/brain/regenerate-veo-prompt — per-scene Veo gen
+  lib/
+    aws-signature.ts              ← HMAC SigV4 signing — CRITICAL RULE below
+    providers.ts                  ← provider registry, callProvider(), getProviderForModel()
+    brain-system-prompt.ts        ← buildBrainSystemPrompt() + buildBrainUserPrompt() (8 tones)
+    veo-subtones.ts               ← VEO_SUBTONES (8 sub-tones), TONE_TO_SUBTONES, isVeoTone()
 
 -----
 
@@ -140,10 +161,14 @@ wanx2.1-t2i-plus   ← removed, replaced by qwen-image-2.0-pro
 
 ### Dashscope Singapore — Video (ALL async)
 
-wan2.1-i2v-plus    ← image→video best quality
-wan2.1-i2v-turbo   ← image→video fast
-wan2.1-t2v-plus    ← text→video best quality
+wan2.6-i2v-flash   ← image→video best quality  [updated v4.0]
+wanx2.1-i2v-turbo  ← image→video fast
+wan2.6-t2v-flash   ← text→video best quality   [updated v4.0]
 wan2.1-t2v-turbo   ← text→video fast
+
+REMOVED (invalid):
+wan2.1-i2v-plus    ← no longer valid, replaced by wan2.6-i2v-flash
+wan2.1-t2v-plus    ← no longer valid, replaced by wan2.6-t2v-flash
 
 -----
 
@@ -214,9 +239,13 @@ POST /api/video/start                      ← Nova Reel async start
 GET  /api/video/status/:jobId              ← Nova Reel poll
 
 POST /api/dashscope/brain         ← Qwen brain (all models)
-POST /api/dashscope/image/start   ← Wanx image async start
-POST /api/dashscope/video/start   ← Wan2.1 video async start
+POST /api/dashscope/image/start   ← Wanx/Qwen image async start
+POST /api/dashscope/video/start   ← Wan2.6/2.1 video async start
 GET  /api/dashscope/task/:taskId  ← Dashscope poll (image + video)
+
+POST /api/glm/image/generate      ← CogView-3-Flash sync image (requireGlmKey)
+POST /api/glm/video/start         ← CogVideoX-2 async video start (requireGlmKey)
+GET  /api/glm/video/status/:taskId ← CogVideoX-2 poll
 
 POST /api/audio/generate          ← AWS Polly
 
@@ -236,14 +265,20 @@ POST /api/storyboards/:id/scenes  ← upsert scene asset (auth required)
 
 ## REQUEST HEADERS
 
-AWS Bedrock requests:
-X-AWS-Access-Key-Id: from localStorage settings.awsAccessKeyId
-X-AWS-Secret-Access-Key: from localStorage settings.awsSecretAccessKey
-X-Brain-Region: us-east-1 (for Claude/Llama)
-X-Image-Region: us-east-1 (for Nova Canvas) or us-west-2 (for SD 3.5)
+All headers built from localStorage key: fuzzy_settings_{userId}
+getApiHeaders(userId?) in src/lib/api.ts — always pass userId from useUser() hook.
 
-Dashscope requests:
-X-Dashscope-Api-Key: from localStorage settings.dashscopeApiKey
+AWS Bedrock:
+  X-AWS-Access-Key-Id       ← settings.awsAccessKeyId
+  X-AWS-Secret-Access-Key   ← settings.awsSecretAccessKey
+  X-Brain-Region            ← settings.brainRegion (default: us-east-1)
+  X-Image-Region            ← settings.imageRegion (default: us-east-1)
+
+Dashscope:  X-Dashscope-Api-Key   ← settings.dashscopeApiKey
+Gemini:     X-Gemini-Api-Key      ← settings.geminiApiKey
+Groq:       X-Groq-Api-Key        ← settings.groqApiKey
+OpenRouter: X-Openrouter-Api-Key  ← settings.openrouterApiKey
+GLM:        X-Glm-Api-Key         ← settings.glmApiKey
 
 -----
 
@@ -269,38 +304,52 @@ Dev key JWKS: https://[app-slug].clerk.accounts.dev/.well-known/jwks.json
 
 -----
 
-## UI DESIGN SYSTEM — iOS 26 Liquid Glass
+## UI DESIGN SYSTEM — iOS 26 Liquid Glass + Dark Mode
 
-Background: linear-gradient(145deg, #f2f2f7 0%, #e5e5ea 50%, #f2f2f7 100%)
+Theme system: src/lib/theme.tsx
+  ThemeProvider wraps app in App.tsx — sets CSS variables on document.documentElement
+  useTheme() returns { isDark, toggle }
+  tk(isDark) returns CONSTANT_TOKENS — all values are var(--token-name) references
+  Persists to localStorage('fuzzy_theme')
 
-Glass Card:
-background: rgba(255,255,255,0.75)
-backdropFilter: blur(40px) saturate(200%)
-WebkitBackdropFilter: blur(40px) saturate(200%)
-border: 0.5px solid rgba(255,255,255,0.9)
-borderRadius: 22px
-boxShadow: 0 2px 24px rgba(0,0,0,0.07), 0 0 0 0.5px rgba(255,255,255,0.6) inset
+NEVER hardcode light-only colors in components. Always use var(--token) or t.token.
 
-Colors:
-Text primary:   #1d1d1f
-Text secondary: rgba(60,60,67,0.6)
-Text tertiary:  rgba(60,60,67,0.3)
-Accent orange:  #ff6b35  (generate buttons)
-Accent blue:    #007aff  (iOS system blue, video)
-Accent green:   #34c759  (success, download)
-Accent purple:  #af52de  (audio)
-Accent red:     #ff3b30  (errors)
-Accent qwen:    #ff8c00  (Qwen model tag badge)
+CSS Variables (set by ThemeProvider on :root):
+  --text-primary    light: #1d1d1f            dark: #f2f2f7
+  --text-secondary  light: rgba(60,60,67,0.6) dark: rgba(235,235,245,0.6)
+  --text-tertiary   light: rgba(60,60,67,0.3) dark: rgba(235,235,245,0.3)
+  --card-bg         light: rgba(255,255,255,0.75) dark: rgba(44,44,46,0.92)
+  --card-border     light: 0.5px solid rgba(255,255,255,0.9) dark: 0.5px solid rgba(255,255,255,0.1)
+  --input-bg        light: rgba(118,118,128,0.1) dark: rgba(118,118,128,0.28)
+  --nav-bg          light: rgba(242,242,247,0.94) dark: rgba(22,22,24,0.97)
+  --nav-border      light: 0.5px solid rgba(0,0,0,0.1) dark: 0.5px solid rgba(255,255,255,0.1)
+  --header-bg       light: rgba(242,242,247,0.92) dark: rgba(22,22,24,0.97)
+  --pill-inactive   light: rgba(118,118,128,0.12) dark: rgba(255,255,255,0.07)
+  --label-color     light: rgba(60,60,67,0.6) dark: rgba(235,235,245,0.5)
+
+Accent colors (same in both modes):
+  Orange: #ff6b35 → #ff4500 gradient (generate buttons)
+  Blue:   #007aff (iOS system blue, video)
+  Green:  #34c759 (success, download)
+  Purple: #af52de (audio)
+  Red:    #ff3b30 (errors)
+  Qwen:   #ff8c00 (Qwen model tag badge)
 
 Tag Badges:
-AWS:  background rgba(0,122,255,0.15), color #007aff
-Qwen: background rgba(255,140,0,0.15), color #ff8c00
+  AWS:  background rgba(0,122,255,0.15), color #007aff
+  Qwen: background rgba(255,140,0,0.15), color #ff8c00
 
-Button (active):
-background: linear-gradient(135deg, #ff6b35, #ff4500)
-borderRadius: 16px
-boxShadow: 0 4px 20px rgba(255,107,53,0.4)
-color: white
+Button (active/generate):
+  background: linear-gradient(135deg, #ff6b35, #ff4500)
+  borderRadius: 16px
+  boxShadow: 0 4px 20px rgba(255,107,53,0.4)
+  color: white
+
+RULES:
+  - dropdownStyle must be defined INSIDE component after tk() call — never at module level
+  - Map iterators must NOT use 't' when t = tk(isDark) is in scope (rename to tn, tab, task, etc.)
+  - select <option> elements need a <style> JSX tag for dark bg (inline styles can't target options)
+  - Interactive buttons use var(--input-bg) background + var(--text-primary) color (never hardcoded white)
 
 -----
 
@@ -381,122 +430,245 @@ wrangler secret put SECRET_NAME
 
 ## CODING RULES
 
-1. TypeScript strict — 0 errors before deploy (npx tsc –noEmit)
-1. ALWAYS use buildCanonicalUri() in aws-signature.ts — never url.pathname directly
-1. buildCanonicalUri: encodeURIComponent(decoded) ONLY — NO .replace(/%3A/gi, ‘:’)
-1. video.ts ARN path: encodeURIComponent(arn) WITHOUT .replace — colons must be %3A
-1. NEVER send img_url to Dashscope t2i models (text-to-image)
-1. NEVER use invalid model IDs — check this file’s model list first
-1. NEVER commit API keys — all keys via wrangler secrets or localStorage
-1. After EVERY change: npm run build must show 0 errors
-1. Dashscope poll URLs expire 24h — always re-upload to R2
+1.  TypeScript strict — 0 errors before deploy (npx tsc --noEmit)
+2.  ALWAYS use buildCanonicalUri() in aws-signature.ts — never url.pathname directly
+3.  buildCanonicalUri: encodeURIComponent(decoded) ONLY — NO .replace(/%3A/gi, ':')
+4.  video.ts ARN path: encodeURIComponent(arn) WITHOUT .replace — colons must be %3A
+5.  NEVER send img_url to Dashscope t2i models (text-to-image)
+6.  NEVER use invalid model IDs — check this file's model list first
+7.  NEVER commit API keys — all keys via wrangler secrets or localStorage
+8.  After EVERY change: npm run build must show 0 errors
+9.  Dashscope poll URLs expire 24h — always re-upload to R2
 10. Nova Reel: us-east-1 ONLY, SD 3.5: us-west-2 ONLY
 11. Dashscope size uses * separator: 768*1280 not 768x1280
 12. video_prompt.full_prompt max 200 chars — starts with camera movement
 13. customVideoPrompt overrides videoPrompt.full_prompt when sending to Nova Reel / Wan2.1
 14. Video Prompt section default: collapsed (videoPromptExpanded state)
 15. NEVER use env.AWS_ACCESS_KEY_ID as fallback in extractCredentials (security)
-16. All generation routes call requireAwsKeys(creds) or requireDashscopeKey(creds) → 401 if missing
-17. localStorage user settings key: fuzzy_settings_{userId} NOT ‘fuzzy_short_settings’
+16. All generation routes call requireAwsKeys / requireDashscopeKey / requireGlmKey → 401 if missing
+17. localStorage user settings key: fuzzy_settings_{userId} NOT 'fuzzy_short_settings'
 18. getApiHeaders(userId?) — always pass userId from useUser() in all page components
+19. brainModel state is string (not union type) since v3.7 — default 'gemini-2.0-flash'
+20. Brain routing: aws->/api/brain/generate, dashscope->/api/dashscope/brain, else->/api/brain/provider
+21. Gemini header is X-Gemini-Api-Key (not X-Gemini-Key) — standardized v3.8
+22. brain-provider.ts MODE A (body.story) returns JSON directly — NOT { content: "..." }
+23. Strip <think>...</think> from reasoning model outputs before JSON.parse
+24. VeoPromptSection must receive apiHeaders prop from getApiHeaders(user?.id)
+25. hasRequiredKey(model, userSettings) from providerModels.ts — use for UI key gating
+26. Dark mode: ALL page components use useTheme() + tk(isDark) — never hardcode light-only colors
+27. dropdownStyle defined INSIDE component function (after tk() call) — never at module-level
+28. Map iterator shadowing: NEVER use 't' as iterator name in components where t = tk(isDark)
+    This applies to ALL .filter(), .map(), .forEach() etc inside themed components
+29. Dashscope qwen-image-2.0-pro / qwen-image-2.0: omit prompt_extend and watermark params entirely
+30. GLM image model: cogview-3-flash ONLY (cogview-4 and cogview-4-flash do NOT exist on ZhipuAI)
+31. GLM image API: synchronous (no polling), response: { data: [{ url }] }
+32. Mobile paddingBottom in Storyboard.tsx: 130px — accounts for BottomNav + scene nav bar
+33. BottomNav Queue badge: use tasks.filter(task => ...) NOT tasks.filter(t => ...) — 't' is reserved for tk(isDark)
+34. GenTaskBar is removed from App.tsx — queue lives in BottomNav Queue popup (zIndex 199)
+35. Expand/Collapse buttons in scene cards: background var(--input-bg), color var(--text-primary) — never rgba(255,255,255,0.8)
+36. Dashscope video default model: wan2.6-i2v-flash (NOT wan2.1-i2v-plus — that ID is invalid)
+37. Duration slider removed from video output display — sceneDurations state still used internally for video start payload
+
+-----
+
+## BOTTOM NAVIGATION — STRUCTURE (v4.0)
+
+src/components/BottomNav.tsx — 5 buttons, all flex: 1, padding: '10px 0 7px'
+
+Button layout (left to right):
+  1. Create    (🎬) → navigate('/')
+  2. Projects  (📋) → navigate('/dashboard')
+  3. Settings  (⚙️) → navigate('/settings')
+  4. Queue     (⏳/📥) → opens queue popup panel
+  5. Dark/Light (☀️/🌙) → toggles theme
+
+Queue button details:
+  - runningTasks: tasks.filter(task => task.status === 'running').length
+    !! iterator MUST be 'task' not 't' — 't' shadows t = tk(isDark) !!
+  - totalIndicator: runningTasks + minimizedSessions.length
+  - Badge: orange when running, green when tasks done/pending
+  - Popup: zIndex 199, positioned bottom: 70px above nav
+  - Backdrop overlay: zIndex 198, transparent, tap to dismiss
+
+Queue popup contents:
+  - Minimized sessions: blue pill, Resume → navigate + updateSession({isMinimized:false}), ✕ → removeSession
+  - Brain tasks: colored by status (running=orange, done=green, error=red)
+    done + has sessionId/resultJson → View button → navigate to storyboard
+
+GenTaskBar.tsx: file exists but NOT rendered (removed from App.tsx in v4.0)
 
 -----
 
 ## COMMON ERRORS & FIXES
 
-Error: “signature does not match” / canonical URI mismatch
-Fix: aws-signature.ts → buildCanonicalUri must use encodeURIComponent(segment) WITHOUT .replace(/%3A/gi, ':')
-     AWS SigV4 requires “:” to be “%3A” in the canonical URI, not a literal colon.
+"signature does not match" / canonical URI mismatch
+-> aws-signature.ts: buildCanonicalUri must use encodeURIComponent(decoded) WITHOUT .replace(/%3A/gi, ':')
+-> ":" MUST be "%3A" in canonical URI — the .replace was the old bug
 
-Error: Nova Reel “UnknownOperationException” from GetAsyncInvoke
-Fix: video.ts arnForUrl must be encodeURIComponent(arn) WITHOUT .replace(/%3A/gi, ':')
-     AWS needs fully-encoded ARN path to route to GetAsyncInvoke correctly.
+Nova Reel "UnknownOperationException"
+-> video.ts ARN path: use encodeURIComponent(arn) WITHOUT .replace(/%3A/gi, ':')
+-> Literal colons in URL path break AWS routing to GetAsyncInvoke
 
-Error: “Model not exist” from Dashscope image
-Fix: Use qwen-image-2.0-pro, qwen-image-2.0, wan2.6-image, or wanx2.1-t2i-turbo.
-     wanx-v1 is NOT valid on dashscope-intl.aliyuncs.com.
-     wanx2.1-t2i-plus removed — replaced by qwen-image-2.0-pro.
-     wan2.6-image uses messages[] format in input (not { prompt }).
+"Model not exist" (Dashscope image)
+-> Wrong model ID. Valid: qwen-image-2.0-pro, qwen-image-2.0, wan2.6-image, wanx2.1-t2i-turbo
+-> wanx-v1 does not exist on dashscope-intl. wanx2.1-t2i-plus removed.
 
-Error: “url error, please check url” from Dashscope image
-Fix: Remove img_url from t2i requests. Only i2v models need img_url.
+"url error, please check url" (Dashscope image — qwen-image models)
+-> prompt_extend: true passed to qwen-image-2.0-pro / qwen-image-2.0 (these treat it as URL string)
+-> Fix: skip prompt_extend and watermark for isQwenImage models
 
-Error: “AWS credentials required” (401 from Worker)
-Fix: User must provide keys in Settings. Worker no longer falls back to env.AWS_ACCESS_KEY_ID.
-     All generation routes call requireAwsKeys(creds) — 401 if no header supplied.
+"url error, please check url" (Dashscope image — wrong input)
+-> img_url sent to t2i model. Remove img_url from t2i requests. Only i2v needs img_url.
 
-Error: “Clerk: Failed to load Clerk” / failed_to_load_clerk_js
-Fix: Publishable key domain doesn't resolve. Use pk_test_ (dev keys) for .pages.dev.
-     pk_live_ requires a real custom domain — .pages.dev cannot host Clerk subdomains.
-     Update VITE_CLERK_PUBLISHABLE_KEY in .env.local + Cloudflare Pages env vars.
-     Update CLERK_JWKS_URL secret: https://[slug].clerk.accounts.dev/.well-known/jwks.json
+"InvalidParameter" from Dashscope wan2.6 image
+-> Use messages[] format: input: { messages: [{role:'user', content:[{text:prompt}]}] }
 
-Error: “API Usage Billing” in Claude Code header
-Fix: This is normal in v2.x — check ~/.claude/settings.json has env.CLAUDE_CODE_USE_BEDROCK = “1”
+"AWS credentials required" (401 from Worker)
+-> User must provide AWS keys in Settings. Worker no longer falls back to env.AWS_ACCESS_KEY_ID.
 
-Error: AWSCompromisedKeyQuarantineV3
-Fix: Go to AWS IAM → Users → Xklaa-pmpt → Permissions → Detach quarantine policy
-Then create new key. Never share keys in chat or screenshots.
+"模型不存在" (ZhipuAI GLM image — model not found)
+-> cogview-4 and cogview-4-flash do NOT exist. Use cogview-3-flash only.
+-> worker/glm.ts default must be 'cogview-3-flash' not 'cogview-4'
+
+Queue badge always shows 0 even when tasks are running (BottomNav)
+-> tasks.filter(t => ...) shadows t = tk(isDark) — filter gets token object, .status is undefined
+-> Fix: tasks.filter(task => task.status === 'running').length
+
+Expand/Collapse button invisible in dark mode (Storyboard scene cards)
+-> background: rgba(255,255,255,0.8) hardcoded white blends with light-colored text in dark mode
+-> Fix: background: 'var(--input-bg)', color: 'var(--text-primary)', fontWeight: 600
+
+Dashscope video "Model not exist" / invalid model
+-> Old fallback wan2.1-i2v-plus is invalid. Fix: body.video_model || 'wan2.6-i2v-flash'
+
+Storyboard generates but immediately redirects back to homepage (GLM/Groq/OpenRouter)
+-> brain-provider.ts returning { content: "..." } instead of JSON directly
+-> Fixed in v3.8: MODE A (body.story set) now parses and returns storyboard JSON directly
+
+"Clerk: Failed to load Clerk" / failed_to_load_clerk_js
+-> Use pk_test_ keys for .pages.dev deployments (pk_live_ needs a real custom domain)
+-> CLERK_JWKS_URL must match key domain
+
+AWSCompromisedKeyQuarantineV3
+-> AWS IAM Console -> Users -> Xklaa-pmpt -> Permissions -> Detach quarantine policy
+-> Create new key. Never share keys in chat/screenshots.
 
 -----
 
-## v3.7 — Multi-Provider Brain Selector + Settings + Dashboard Tone Badges
+## CHANGELOG
 
-### New Brain Providers (total 6)
+### v4.0 (2026-03-08) — Queue in BottomNav + Bug Fixes
 
-All non-AWS/Dashscope models route to: POST /api/brain/provider
-Header pattern: X-{Provider}-Api-Key (e.g. X-Groq-Api-Key, X-Glm-Api-Key)
+Commits: 41be06e, 0d7bdcf, 9b4e8cc
 
-| Provider   | Header              | Key field        | Fallback |
-|------------|---------------------|------------------|----------|
-| gemini     | X-Gemini-Key        | geminiApiKey     | env GEMINI_API_KEY |
-| aws        | X-AWS-Access-Key-Id | awsAccessKeyId   | none (required) |
-| dashscope  | X-Dashscope-Api-Key | dashscopeApiKey  | none (required) |
-| groq       | X-Groq-Api-Key      | groqApiKey       | none (required) |
-| openrouter | X-Openrouter-Api-Key| openrouterApiKey | none (required) |
-| glm        | X-Glm-Api-Key       | glmApiKey        | none (required) |
+#### Feature — GenTaskBar merged into BottomNav Queue popup
 
-### Brain Model Selector (Home.tsx)
+Files changed:
+  src/components/BottomNav.tsx   <- Queue button + popup panel added; all 5 buttons flex:1 uniform
+  src/App.tsx                    <- Removed GenTaskBar import and render
 
-- Replaced `<select>` dropdown with grouped provider chip buttons
-- PROVIDER_ORDER = ['aws', 'dashscope', 'gemini', 'groq', 'openrouter', 'glm']
-- PROVIDER_META: emoji, color, label per provider
-- MODEL_GROUPS = getModelsByProvider() (from providerModels.ts — module-level constant)
-- Chips greyed + 🔒 if provider key missing; FREE badge if model.free
-- "No key" badge on provider header if no key for that provider
-- Selected model info bar: providerEmoji, providerLabel, speedLabel, bestFor
-- Gemini always unlocked (env fallback)
-- brainModel state type: string (was BrainModel union) — default: 'gemini-2.0-flash'
-- userSettings state loaded from localStorage fuzzy_settings_{userId}
+BottomNav now has 5 equal-width buttons: Create / Projects / Settings / Queue / Dark
+Queue button:
+  - Icon ⏳ when running, 📥 when idle
+  - Orange badge (running count) or green badge (done/minimized count)
+  - Tapping opens popup panel at bottom: 70px above nav, zIndex 199
+  - Backdrop at zIndex 198 dismisses on outside tap
+  - Popup shows minimized sessions + brain tasks with Resume/View/Remove actions
+  - runningTasks computed as: tasks.filter(task => task.status === 'running').length
+    (iterator named 'task' to avoid shadowing t = tk(isDark))
 
-### Tone System (8 tones)
+#### Feature — Duration slider removed from video card
 
-narrative_storytelling, documentary_viral, natural_genz, informative,
-product_ads, educational, entertainment, motivational
+Removed input[type=range] duration slider from the video output section in Storyboard.tsx.
+sceneDurations state is still maintained — used in video start payloads.
+The "Generate Video (Xs)" button label still reflects the current duration value.
 
-VEO_TONES (Veo 3.1 optimized): documentary_viral, natural_genz, informative, narrative_storytelling
+#### Fix — GLM image model cogview-4 invalid
 
-### Settings.tsx Changes (v3.7)
+Files: src/pages/Home.tsx, src/pages/Storyboard.tsx, worker/glm.ts
 
-- SecretInput: green border + ✓ checkmark when field has value
-- WORKER_URL: imported from src/lib/api.ts (removed local const)
-- Test buttons added for Groq, OpenRouter, GLM sections
-- Rate limit info: Groq (30 req/min), OpenRouter (free models), GLM (unlimited free)
-- testGroq/testOpenRouter/testGLM call POST /api/brain/provider with minimal prompt
+cogview-4 removed from IMAGE_MODELS arrays in both Home.tsx and Storyboard.tsx.
+Only cogview-3-flash remains — label corrected to "CogView-3 Flash", desc "Free & fast".
+worker/glm.ts default changed from 'cogview-4' to 'cogview-3-flash'.
 
-### Dashboard.tsx Changes (v3.7)
+#### Fix — Dashscope video invalid fallback model
 
-- StoryboardRow interface: added tone?: string
-- TONE_BADGES: emoji + color per tone (8 entries)
-- Tone pill shown in card before platform badge (only if tone present + in TONE_BADGES)
+File: worker/dashscope.ts
 
-### New Files (v3.5–v3.7)
+handleDashscopeVideoStart: body.video_model || 'wan2.1-i2v-plus' changed to
+body.video_model || 'wan2.6-i2v-flash' (wan2.1-i2v-plus is an invalid obsolete ID).
 
-src/lib/providerModels.ts    — 28 models, 6 providers, getModelsByProvider/getModelById/hasRequiredKey
-worker/lib/providers.ts       — provider registry for Worker (mirrors frontend)
-worker/handlers/brain-provider.ts — handles /api/brain/provider for Groq/OpenRouter/GLM/Gemini
-worker/veo/                   — Veo 3.1 prompt engine (8 sub-tones, VeoPromptSection)
+#### Fix — BottomNav button alignment
 
-### Scenes Slider
+File: src/components/BottomNav.tsx
 
-Label now shows estimate: `{scenes} (~{scenes * 7}s total)`
+Queue button: added flex: 1, changed padding from '10px 12px 7px' to '10px 0 7px'
+Dark toggle:  added flex: 1, changed padding from '10px 14px 7px' to '10px 0 7px'
+All 5 buttons now equal width and vertically consistent.
+
+#### Fix — Queue badge variable shadowing
+
+File: src/components/BottomNav.tsx
+
+tasks.filter(t => t.status === 'running') → tasks.filter(task => task.status === 'running')
+'t' was shadowing t = tk(isDark); filter was returning 0 always.
+
+#### Fix — Expand/Collapse button unreadable contrast
+
+File: src/pages/Storyboard.tsx
+
+Scene card expand/collapse button:
+  background: 'rgba(255,255,255,0.8)' → 'var(--input-bg)'
+  color: 'var(--text-secondary)'      → 'var(--text-primary)'
+  fontWeight: 500                      → 600
+
+-----
+
+### v3.9 (2026-03-08) — Dark Mode + UI Revamp + Qwen/GLM Fixes
+
+Key changes:
+  - Full dark mode system: src/lib/theme.tsx with ThemeProvider, useTheme(), tk(isDark)
+  - CSS variables set on :root by ThemeProvider; tk() returns CONSTANT_TOKENS (var refs)
+  - All pages themed: Home, Settings, Storyboard, Dashboard
+  - Scene navigation bar added (mobile, fixed bottom: 65px, above BottomNav)
+  - BottomNav: rounded top corners (borderRadius: '20px 20px 0 0')
+  - Qwen image fix: isQwenImage detection prevents prompt_extend/watermark for qwen-image models
+  - GLM image fix: cogview-4-flash → cogview-3-flash (previous fix, now fully cleaned up in v4.0)
+  - Wan 2.6 video models added: wan2.6-i2v-flash, wan2.6-t2v-flash
+  - VeoPromptSection copy button: context-aware (copy JSON vs plain text)
+  - brain-provider.ts MODE A/B distinction fixes GLM/Groq/OpenRouter storyboard routing
+
+### v3.8 (2026-03-07) — Bug Fixes + GLM-4.6V + Gen All Veo
+
+  - Gemini header standardized: X-Gemini-Key → X-Gemini-Api-Key everywhere
+  - brain-provider.ts MODE A returns storyboard JSON directly (fixes forced redirect to home)
+  - regenerate-veo-prompt.ts strips <think> blocks before JSON.parse
+  - Gen All Veo button added to Storyboard.tsx header
+  - GLM-4.6V model added to providers.ts and providerModels.ts
+
+### v3.7 (2026-03-07) — Multi-Provider Brain + UI Redesign
+
+  - 6 brain providers: AWS, Dashscope, Gemini, Groq, OpenRouter, GLM
+  - Home.tsx: provider pill row + model dropdown selector
+  - Settings.tsx: SecretInput checkmarks, test buttons for all providers
+  - Dashboard.tsx: tone badges per storyboard card
+  - New: src/lib/providerModels.ts, worker/lib/providers.ts, worker/handlers/brain-provider.ts
+
+### v3.3–v3.6 (2026-03) — Foundation
+
+  - v3.6: Veo 3.1 prompt engine (VeoPromptSection, 8 sub-tones, regenerate handler)
+  - v3.5: Brain system prompt rebuild (8 tones, brain-provider.ts)
+  - v3.4: Multi-provider foundation (providerModels.ts, providers.ts)
+  - v3.3: Security fix — env.AWS_ACCESS_KEY_ID no longer used as fallback
+
+-----
+
+## DEPLOYMENT
+
+npm run build          <- must show 0 TypeScript errors (npx tsc --noEmit first)
+wrangler deploy        <- deploy Worker (~10s)
+git push origin main   <- triggers Cloudflare Pages auto-deploy (~1-2 min)
+wrangler tail          <- live Worker logs for debugging
+
+NEVER use git add -A or git add . — always stage specific files only.
+Hard-refresh browser after deploy: Cmd+Shift+R / Ctrl+F5 (bypass CDN cache)
