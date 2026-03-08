@@ -12,21 +12,20 @@ export async function handleCfFlux(request: Request, env: any, corsHeaders: Reco
     }, { status: 503, headers: corsHeaders })
   }
 
-  const body: CfFluxRequest = await request.json()
-  const { prompt, scene_number, project_id, aspect_ratio = '9:16', negative_prompt } = body
-
-  if (!prompt?.trim()) {
-    return Response.json({ error: 'prompt is required' }, { status: 400, headers: corsHeaders })
-  }
-
-  // Map aspect ratio ke width/height
-  const { width, height } = getFluxDimensions(aspect_ratio)
-
   try {
+    const body: CfFluxRequest = await request.json()
+    const { prompt, scene_number, project_id, aspect_ratio = '9:16', negative_prompt } = body
+
+    if (!prompt?.trim()) {
+      return Response.json({ error: 'prompt is required' }, { status: 400, headers: corsHeaders })
+    }
+
+    // Map aspect ratio ke width/height
+    const { width, height } = getFluxDimensions(aspect_ratio)
+
     // CF Workers AI FLUX inference
     // Model: @cf/black-forest-labs/flux-1-schnell (fastest, free)
-    // AI.run returns binary data directly for image models
-    const imageBuffer = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', {
+    const response = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', {
       prompt: prompt,
       negative_prompt: negative_prompt || 'blurry, low quality, distorted, watermark',
       width: width,
@@ -34,15 +33,29 @@ export async function handleCfFlux(request: Request, env: any, corsHeaders: Reco
       num_steps: 4,    // schnell = 4 steps
     })
 
-    if (!imageBuffer) {
+    if (!response) {
       return Response.json({ error: 'No image from CF AI' }, { status: 500, headers: corsHeaders })
+    }
+
+    // Workers AI image output can be a Response, Uint8Array, or ReadableStream.
+    // Convert everything to a Blob which R2 definitely accepts.
+    let imageBlob: Blob
+    if (response instanceof Response) {
+      imageBlob = await response.blob()
+    } else if (response instanceof ReadableStream) {
+      const arrayBuffer = await new Response(response).arrayBuffer()
+      imageBlob = new Blob([arrayBuffer], { type: 'image/png' })
+    } else {
+      // response is usually Uint8Array
+      imageBlob = new Blob([response], { type: 'image/png' })
     }
 
     // Upload ke R2
     const fileName = `images/${project_id || 'default'}/scene_${scene_number || 0}_cfflux_${Date.now()}.png`
-    await env.STORY_STORAGE.put(fileName, imageBuffer, {
+    await env.STORY_STORAGE.put(fileName, imageBlob, {
       httpMetadata: { contentType: 'image/png' }
     })
+    
     const imageUrl = `${workerUrl}/api/storage/file/${fileName}`
 
     return Response.json({
@@ -53,9 +66,12 @@ export async function handleCfFlux(request: Request, env: any, corsHeaders: Reco
       height: height,
     }, { headers: corsHeaders })
 
-  } catch (err) {
+  } catch (err: any) {
     console.error('CF FLUX exception:', err)
-    return Response.json({ error: 'CF FLUX exception', message: String(err) }, { status: 500, headers: corsHeaders })
+    return Response.json({ 
+      error: 'CF FLUX exception', 
+      message: err.message || String(err)
+    }, { status: 500, headers: corsHeaders })
   }
 }
 
