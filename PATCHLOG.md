@@ -2,6 +2,159 @@
 
 ---
 
+## v4.0 — 2026-03-08
+
+**Feat: Queue popup in BottomNav + bug fixes (commits 41be06e, 0d7bdcf, 9b4e8cc)**
+
+### Feature — GenTaskBar merged into BottomNav Queue popup
+
+- **`src/components/BottomNav.tsx`** — 5 equal-width buttons added: Create / Projects / Settings / Queue / Dark. All `flex: 1`, `padding: '10px 0 7px'`.
+- **`src/App.tsx`** — Removed `GenTaskBar` import and render (`GenTaskBar.tsx` file still exists but is unused).
+- Queue button (4th slot): icon ⏳ when running, 📥 when idle. Orange badge = running count, green badge = done/minimized count.
+- Tapping Queue opens popup panel at `bottom: 70px`, `zIndex: 199`. Backdrop overlay at `zIndex: 198` dismisses on tap outside.
+- Popup lists minimized sessions (Resume + ✕) and brain tasks (colored by status). Done tasks with `sessionId` show "View" button → navigate to storyboard.
+
+### Feature — Duration slider removed from video card
+
+- **`src/pages/Storyboard.tsx`** — `input[type=range]` duration slider removed from video output section. `sceneDurations` state still maintained for video start payloads. "Generate Video (Xs)" button label still reflects current duration.
+
+### Fix — GLM image model `cogview-4` invalid
+
+- **`src/pages/Home.tsx`**, **`src/pages/Storyboard.tsx`** — `cogview-4` removed from `IMAGE_MODELS` arrays. Only `cogview-3-flash` remains (label: "CogView-3 Flash", desc: "Free & fast").
+- **`worker/glm.ts`** — default image model changed from `'cogview-4'` to `'cogview-3-flash'`.
+
+### Fix — Dashscope video invalid fallback model
+
+- **`worker/dashscope.ts`** — `handleDashscopeVideoStart` fallback changed from `'wan2.1-i2v-plus'` (invalid obsolete ID) to `'wan2.6-i2v-flash'`.
+
+### Fix — BottomNav button alignment
+
+- **`src/components/BottomNav.tsx`** — Queue button and Dark toggle both changed to `flex: 1`, `padding: '10px 0 7px'`. All 5 buttons now equal width.
+
+### Fix — Queue badge variable shadowing
+
+- **`src/components/BottomNav.tsx`** — `tasks.filter(t => t.status === 'running')` → `tasks.filter(task => task.status === 'running')`. `'t'` was shadowing `t = tk(isDark)`; filter always returned 0.
+
+### Fix — Expand/Collapse button unreadable in dark mode
+
+- **`src/pages/Storyboard.tsx`** — Scene card expand/collapse button:
+  - `background: 'rgba(255,255,255,0.8)'` → `'var(--input-bg)'`
+  - `color: 'var(--text-secondary)'` → `'var(--text-primary)'`
+  - `fontWeight: 500` → `600`
+
+### Files Changed
+`src/App.tsx` · `src/components/BottomNav.tsx` · `src/pages/Home.tsx` · `src/pages/Storyboard.tsx` · `worker/dashscope.ts` · `worker/glm.ts`
+
+---
+
+## v3.9 — 2026-03-08
+
+**Feat: full dark mode system + scene nav bar + Qwen/GLM model fixes + Wan 2.6 video**
+
+### Dark Mode System
+
+- **`src/lib/theme.tsx`** — `ThemeProvider`, `useTheme()` hook, `tk(isDark)` token function. 15 CSS variable tokens set on `:root`. Persisted to `localStorage('fuzzy_theme')`.
+- Dark mode toggle moved to BottomNav (5th button). Also accessible from Home header.
+- ALL page components (`Home.tsx`, `Storyboard.tsx`, `Settings.tsx`, `Dashboard.tsx`) use `useTheme()` + `tk(isDark)` — no hardcoded light-only colors.
+- Rules: `dropdownStyle` inside component; `.map(t => ...)` → `.map(tn => ...)`; `select option` bg via `<style>` JSX tag.
+
+### Scene Navigation Bar (mobile)
+
+- **`src/pages/Storyboard.tsx`** — Fixed bar `bottom: 65px`, `zIndex: 98`, shows `← Prev`, `N / total`, `Next →` buttons. Hidden on desktop or single-scene storyboards. Mobile `paddingBottom`: `130px`.
+
+### BottomNav rounded top corners
+
+- **`src/components/BottomNav.tsx`** — `borderRadius: '20px 20px 0 0'`.
+
+### Qwen image fix
+
+- **`worker/dashscope.ts`** — `isQwenImage` detection prevents `prompt_extend` and `watermark` params for `qwen-image-2.0-pro` and `qwen-image-2.0` (these models treat `prompt_extend` as a URL string field).
+
+### GLM model cleanup
+
+- `cogview-4-flash` removed; `cogview-3-flash` confirmed as only valid GLM image model.
+
+### Wan 2.6 video models added
+
+- **`worker/dashscope.ts`**, **`src/pages/Storyboard.tsx`** — `wan2.6-i2v-flash` and `wan2.6-t2v-flash` added as best-quality options.
+
+### VeoPromptSection copy button
+
+- **`src/components/VeoPromptSection.tsx`** — context-aware: copies full JSON when `showRaw=true`, plain text `full_veo_prompt` when `showRaw=false`.
+
+### brain-provider.ts MODE A/B fix
+
+- **`worker/handlers/brain-provider.ts`** — MODE A (`body.story` set) returns storyboard JSON directly. Fixes GLM/Groq/OpenRouter storyboards that were redirecting back to homepage.
+
+### Files Changed
+`src/lib/theme.tsx` (new) · `src/App.tsx` · `src/main.tsx` · `src/components/BottomNav.tsx` · `src/components/VeoPromptSection.tsx` · `src/pages/Home.tsx` · `src/pages/Storyboard.tsx` · `src/pages/Settings.tsx` · `src/pages/Dashboard.tsx` · `worker/dashscope.ts` · `worker/handlers/brain-provider.ts` · `worker/glm.ts`
+
+---
+
+## v3.8 — 2026-03-07
+
+**Fix: Gemini header + brain-provider MODE A JSON + Gen All Veo + GLM-4.6V**
+
+### Gemini header standardized
+
+- `X-Gemini-Key` → `X-Gemini-Api-Key` everywhere (frontend headers + worker extraction + CORS allowlist).
+
+### brain-provider.ts MODE A JSON fix
+
+- **`worker/handlers/brain-provider.ts`** — MODE A (`body.story` set, no `system_prompt`) now strips `<think>...</think>` and markdown fences, parses to JSON, and returns storyboard directly. Previously returned `{ content: "..." }` causing frontend to redirect back to homepage.
+
+### `<think>` stripping
+
+- **`worker/handlers/regenerate-veo-prompt.ts`** — strips `<think>...</think>` blocks from reasoning model outputs (GLM-Z1, DeepSeek R1) before `JSON.parse`.
+
+### Gen All Veo button
+
+- **`src/pages/Storyboard.tsx`** — "Gen All Veo" button added to header. Visible only when `isVeoTone(storyboard.tone) === true`. Iterates all scenes sequentially. State: `generatingAllVeo: boolean`.
+
+### GLM-4.6V model
+
+- **`worker/lib/providers.ts`**, **`src/lib/providerModels.ts`** — `glm-4.6v` (vision-language model) added to GLM provider.
+
+### Files Changed
+`src/lib/api.ts` · `src/lib/providerModels.ts` · `src/pages/Home.tsx` · `src/pages/Storyboard.tsx` · `src/pages/Settings.tsx` · `worker/index.ts` · `worker/handlers/brain-provider.ts` · `worker/handlers/regenerate-veo-prompt.ts` · `worker/lib/providers.ts`
+
+---
+
+## v3.7 — 2026-03-07
+
+**Feat: multi-provider brain selector (6 providers, 29 models) + Settings test buttons + Dashboard tone badges**
+
+### Multi-provider brain selector
+
+- **`src/lib/providerModels.ts`** (new) — 29 brain models across 6 providers: AWS, Dashscope, Gemini, Groq, OpenRouter, GLM. `getModelsByProvider()`, `getModelById()`, `hasRequiredKey()` exports.
+- **`src/pages/Home.tsx`** — Provider pill row (aws/dashscope/gemini/groq/openrouter/glm). Model `<select>` filtered by active provider. `brainModel: string` state (default `'gemini-2.0-flash'`).
+- Submit routing: `aws` → `/api/brain/generate`, `dashscope` → `/api/dashscope/brain`, all others → `/api/brain/provider`.
+
+### brain-provider.ts handler
+
+- **`worker/handlers/brain-provider.ts`** (new) — universal OpenAI-compatible handler for Gemini, Groq, OpenRouter, GLM. Reads provider key from request headers.
+- **`worker/lib/providers.ts`** (new) — `PROVIDERS` registry, `callProvider()`, `getProviderForModel()`.
+
+### Settings test buttons
+
+- **`src/pages/Settings.tsx`** — Test buttons for Gemini, Groq, OpenRouter, GLM. All call `/api/brain/provider` MODE B. `SecretInput` component with green border + checkmark when field has value.
+
+### Dashboard tone badges
+
+- **`src/pages/Dashboard.tsx`** — 8-tone color-coded pill per storyboard card. Credits badge in header.
+
+### Tone system (8 tones)
+
+- **`worker/lib/brain-system-prompt.ts`** (new) — `buildBrainSystemPrompt()` + `buildBrainUserPrompt()` with 8 tone presets: `documentary_viral, natural_genz, informative, narrative_storytelling, dramatic_cinematic, educational_explainer, comedy_entertainment, brand_commercial`.
+
+### New Files
+`src/lib/providerModels.ts` · `worker/handlers/brain-provider.ts` · `worker/lib/providers.ts` · `worker/lib/brain-system-prompt.ts`
+
+### Files Changed
+`src/pages/Home.tsx` · `src/pages/Settings.tsx` · `src/pages/Dashboard.tsx` · `worker/index.ts` · `worker/brain.ts`
+
+---
+
 ## v3.3 — 2026-03-06
 
 **Fix: Block Worker env key fallback + clear session on user change + API key warnings**

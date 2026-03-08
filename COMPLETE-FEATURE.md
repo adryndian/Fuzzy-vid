@@ -1,6 +1,6 @@
 # Fuzzy Short — Feature Implementation Reference
 
-# Version 3.9 — Updated 2026-03-08
+# Version 4.0 — Updated 2026-03-08
 
 # This file documents the CURRENT implemented state of all major features.
 # Read CLAUDE.md and GEMINI.md for project rules and deployment instructions.
@@ -56,7 +56,7 @@ SUCCEEDED → results[0].url → download → re-upload to R2 (URLs expire in 24
 FAILED → return { status: 'error', message }
 ```
 
-### Video Generation — 5 Models
+### Video Generation — 6 Models
 
 | Model | Provider | Route | Type |
 |---|---|---|---|
@@ -65,6 +65,11 @@ FAILED → return { status: 'error', message }
 | wanx2.1-i2v-turbo | Dashscope | `/api/dashscope/video/start` | async, task_id |
 | wan2.6-t2v-flash | Dashscope | `/api/dashscope/video/start` | async, text-only |
 | wan2.1-t2v-turbo | Dashscope | `/api/dashscope/video/start` | async, text-only |
+| cogvideox-2 | ZhipuAI GLM | `/api/glm/video/start` | async, task_id |
+
+GLM video routes:
+- POST `/api/glm/video/start` — CogVideoX-2 async start (requireGlmKey)
+- GET `/api/glm/video/status/:taskId` — CogVideoX-2 poll (requireGlmKey)
 
 Video polling flow:
 1. POST start → get `job_id` (ARN) or `task_id`
@@ -184,15 +189,31 @@ Mobile `paddingBottom`: `130px` (accounts for BottomNav 65px + scene nav bar)
 ### BottomNav
 
 File: `src/components/BottomNav.tsx`
-3 tabs: Home (`/`) / Dashboard (`/dashboard`) / Settings (`/settings`)
-Style: `position: fixed`, `bottom: 0`, `borderRadius: '24px 24px 0 0'`
+5 buttons (left to right): Create (`/`) / Projects (`/dashboard`) / Settings (`/settings`) / Queue (popup) / Dark (theme toggle)
+Style: `position: fixed`, `bottom: 0`, `borderRadius: '20px 20px 0 0'`, `zIndex: 200`
+All 5 buttons: `flex: 1`, `padding: '10px 0 7px'`
 Uses `useTheme()` internally — no theme props needed.
-z-index: lower than GenTaskBar (199).
+
+Queue button (4th slot):
+- Icon: ⏳ when tasks running, 📥 when idle
+- Orange badge: running task count; green badge: done/minimized count
+- Tapping opens popup panel: `bottom: 70px`, `zIndex: 199`
+- Backdrop overlay: `zIndex: 198`, tap to dismiss
+- Popup shows minimized sessions (Resume / ✕) + brain tasks (running=orange, done=green, error=red)
+- "View" button on done tasks with `sessionId` → navigates to storyboard
+
+CRITICAL: Queue badge computed as:
+```typescript
+const runningTasks = tasks.filter(task => task.status === 'running').length
+```
+Iterator MUST be `task` — NEVER `t` (shadows `t = tk(isDark)`)
+
+`GenTaskBar.tsx` — file still exists but is NOT rendered (removed from `App.tsx` in v4.0).
 
 ### Queue Mode (Minimize/Resume)
 
-1. "Minimize" button → `updateSession(id, { isMinimized: true })` + `navigate('/')`
-2. `GenTaskBar` shows minimized sessions with progress + "Resume" button
+1. User clicks "Minimize" → `updateSession(id, { isMinimized: true })` + `navigate('/')`
+2. BottomNav Queue popup shows minimized sessions + brain tasks
 3. "Resume" → `updateSession(id, { isMinimized: false })` + `navigate('/storyboard?id=ID')`
 4. Video polling auto-restarts on Storyboard mount for any `videoStatus: 'generating'`
 5. `activeSessionIdRef` (useRef) used in Storyboard to prevent stale closure in polling
@@ -256,7 +277,7 @@ z-index: lower than GenTaskBar (199).
 | `wanx2.1-t2i-turbo` | Dashscope | prompt_extend: true OK |
 | `cogview-3-flash` | GLM | Synchronous, free |
 
-REMOVED: `amazon.titan-image-generator-v2:0` (deprecated), `wanx-v1` (never valid on dashscope-intl), `wanx2.1-t2i-plus` (replaced by qwen-image-2.0-pro), `cogview-4-flash` (does not exist)
+REMOVED: `amazon.titan-image-generator-v2:0` (deprecated), `wanx-v1` (never valid on dashscope-intl), `wanx2.1-t2i-plus` (replaced by qwen-image-2.0-pro), `cogview-4` (does not exist), `cogview-4-flash` (does not exist)
 
 ### Video
 
@@ -297,9 +318,11 @@ After deploy:
 ```typescript
 const t = tk(isDark)
 // WRONG:
-TONES.map(t => ...)   // shadows outer t
+TONES.map(t => ...)          // shadows outer t
+tasks.filter(t => ...)       // shadows outer t — badge always returns 0
 // CORRECT:
-TONES.map(tn => ...)  // use different name
+TONES.map(tn => ...)         // use different name
+tasks.filter(task => ...)    // queue badge works correctly
 ```
 
 ### dropdownStyle must be inside component
@@ -331,7 +354,18 @@ if (!isQwenImage) {
 ### GLM image model name
 ```
 cogview-3-flash   <- CORRECT (free, valid)
+cogview-4         <- WRONG (does not exist, returns "模型不存在")
 cogview-4-flash   <- WRONG (does not exist, returns "模型不存在")
+```
+
+### Expand/Collapse button contrast in dark mode
+```typescript
+// WRONG — hardcoded white invisible in dark mode:
+background: 'rgba(255,255,255,0.8)'
+// CORRECT:
+background: 'var(--input-bg)'
+color: 'var(--text-primary)'
+fontWeight: 600
 ```
 
 ### brain-provider.ts MODE detection
@@ -390,6 +424,7 @@ const handleCopy = useCallback(async () => {
 
 | Version | Date | Key Changes |
 |---|---|---|
+| v4.0 | 2026-03-08 | GenTaskBar merged into BottomNav Queue popup, duration slider removed, cogview-4 fix, wan2.6-i2v-flash fallback fix, queue badge shadowing fix, expand button contrast fix |
 | v3.9 | 2026-03-08 | Dark mode system, scene nav bar, Qwen image fix, GLM model fix, VeoPromptSection copy, BottomNav rounded corners, Wan 2.6 video |
 | v3.8 | 2026-03-07 | Gemini header standardized, brain-provider MODE A JSON fix, <think> stripping, Gen All Veo, GLM-4.6V |
 | v3.7 | 2026-03-07 | Multi-provider brain selector (6 providers), tone system (8 tones), Settings test buttons, Dashboard tone badges |

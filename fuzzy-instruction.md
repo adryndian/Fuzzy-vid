@@ -1,6 +1,6 @@
 # Fuzzy-vid — Complete Architecture Reference
 
-# Version 3.9 — Updated 2026-03-08
+# Version 4.0 — Updated 2026-03-08
 
 ---
 
@@ -17,7 +17,7 @@ AI-powered short video production app. Users describe a story; the app generates
 | Auth | Clerk (Email OTP + Google OAuth) | pk_test_ for .pages.dev |
 | Brain AI | AWS Bedrock + Dashscope SG + Gemini + Groq + OpenRouter + ZhipuAI GLM | 6 providers, 29+ models |
 | Image AI | AWS Bedrock (Nova Canvas, SD 3.5) + Dashscope (Qwen-Image, Wanx) + ZhipuAI GLM (CogView) | |
-| Video AI | AWS Bedrock Nova Reel (async) + Dashscope Wan2.1/2.6 (async) | |
+| Video AI | AWS Bedrock Nova Reel (async) + Dashscope Wan2.1/2.6 (async) + ZhipuAI GLM CogVideoX-2 (async) | |
 | Audio | AWS Polly + ElevenLabs | |
 
 ---
@@ -37,8 +37,8 @@ AI-powered short video production app. Users describe a story; the app generates
 │   │   ├── Dashboard.tsx             # Cloud storyboard list, local history, credits badge
 │   │   └── Auth.tsx                  # Clerk SignIn/SignUp (routing="hash")
 │   ├── components/
-│   │   ├── BottomNav.tsx             # Fixed 3-tab nav (Home/Dashboard/Settings), rounded top
-│   │   ├── GenTaskBar.tsx            # Minimized brain generation sessions bar
+│   │   ├── BottomNav.tsx             # 5-button nav (Create/Projects/Settings/Queue/Dark) + Queue popup
+│   │   ├── GenTaskBar.tsx            # UNUSED — file exists but NOT rendered (removed in v4.0)
 │   │   ├── VeoPromptSection.tsx      # Per-scene Veo 3.1 prompt UI, sub-tone, copy/regen
 │   │   └── ErrorBoundary.tsx
 │   ├── lib/
@@ -63,6 +63,7 @@ AI-powered short video production app. Users describe a story; the app generates
 │   ├── video.ts                      # Nova Reel async-invoke + ARN polling (Bedrock)
 │   ├── audio.ts                      # AWS Polly + ElevenLabs TTS
 │   ├── dashscope.ts                  # ALL Qwen/Wanx/Wan2.1/2.6 (Dashscope Singapore)
+│   ├── glm.ts                        # ZhipuAI GLM image (CogView-3-Flash sync) + video (CogVideoX-2 async)
 │   ├── handlers/
 │   │   ├── brain-provider.ts         # /api/brain/provider — Gemini/Groq/OpenRouter/GLM
 │   │   └── regenerate-veo-prompt.ts  # /api/brain/regenerate-veo-prompt
@@ -103,7 +104,6 @@ App.tsx
     ├── Auth (public route)
     └── (protected routes — auth guard in App.tsx)
         ├── Home
-        │   └── GenTaskBar (fixed bottom bar for minimized sessions)
         ├── Storyboard
         │   ├── [SceneCard × N]
         │   │   ├── Image section (generate, preview, download)
@@ -131,8 +131,9 @@ Persisted to `localStorage('fuzzy_theme')`.
 Rules:
 - ALL page components use `const { isDark } = useTheme()` + `const t = tk(isDark)`
 - `dropdownStyle` must be defined INSIDE the component (after `tk()`) — never at module level
-- `.map(t => ...)` iterators must NOT shadow outer `t = tk(isDark)` — rename to `tn`
+- `.map(t => ...)` / `.filter(t => ...)` iterators must NOT shadow outer `t = tk(isDark)` — rename to `tn`, `task`, `tone`, etc.
 - `select option` bg: use `<style>` JSX tag (inline styles can't target option elements)
+- Interactive buttons in scene cards: `background: 'var(--input-bg)'`, `color: 'var(--text-primary)'` — never hardcode `rgba(255,255,255,...)`
 
 ### Brain Model Selector (Home.tsx)
 
@@ -212,7 +213,7 @@ interface GenTask {
 }
 ```
 
-Used by `GenTaskBar` to show minimized brain generation sessions.
+Used by BottomNav Queue popup to show minimized brain generation sessions.
 
 ### `costStore` — in-memory
 
@@ -326,6 +327,9 @@ interface Env {
 | POST | `/api/dashscope/image/start` | `dashscope.ts` | requireDashscopeKey |
 | POST | `/api/dashscope/video/start` | `dashscope.ts` | requireDashscopeKey |
 | GET | `/api/dashscope/task/:taskId` | `dashscope.ts` | none |
+| POST | `/api/glm/image/generate` | `glm.ts` | requireGlmKey |
+| POST | `/api/glm/video/start` | `glm.ts` | requireGlmKey |
+| GET | `/api/glm/video/status/:taskId` | `glm.ts` | requireGlmKey |
 | GET | `/api/user/*` | `db.ts` handlers | Clerk JWT |
 | GET/POST/DELETE | `/api/storyboards/*` | `db.ts` handlers | Clerk JWT |
 | GET | `/api/health` | inline | none |
@@ -593,10 +597,14 @@ Auth-protected D1 routes:
 ## 8. Queue Mode (Minimize/Resume)
 
 1. User clicks "Minimize" → `updateSession(id, { isMinimized: true })` + `navigate('/')`
-2. `GenTaskBar` renders fixed bar for all minimized sessions (shows progress)
-3. User clicks "Resume" → `updateSession(id, { isMinimized: false })` + `navigate('/storyboard?id=ID')`
-4. On Storyboard mount: video polling auto-restarts for any `videoStatus: 'generating'` assets
-5. `activeSessionIdRef` (useRef) in Storyboard.tsx — avoids stale closures in polling callbacks
+2. BottomNav Queue button (4th slot) shows badge with running/done count
+3. Tapping Queue → opens popup panel (`bottom: 70px`, `zIndex: 199`) listing minimized sessions + brain tasks
+4. "Resume" → `updateSession(id, { isMinimized: false })` + `navigate('/storyboard?id=ID')`
+5. "View" (done tasks with sessionId) → navigates to storyboard
+6. On Storyboard mount: video polling auto-restarts for any `videoStatus: 'generating'` assets
+7. `activeSessionIdRef` (useRef) in Storyboard.tsx — avoids stale closures in polling callbacks
+
+`GenTaskBar.tsx` file still exists in `src/components/` but is NOT imported or rendered anywhere (removed from `App.tsx` in v4.0).
 
 ---
 
@@ -754,7 +762,20 @@ wrangler tail
 → Fix: skip `prompt_extend` and `watermark` for `isQwenImage` models.
 
 **"模型不存在" (GLM image)**
-→ `cogview-4-flash` does not exist. Use `cogview-3-flash`.
+→ `cogview-4` and `cogview-4-flash` do not exist. Use `cogview-3-flash` only.
+→ `worker/glm.ts` default must be `'cogview-3-flash'`. Remove `cogview-4` from `IMAGE_MODELS` arrays in `Home.tsx` and `Storyboard.tsx`.
+
+**Queue badge always shows 0 (BottomNav)**
+→ `tasks.filter(t => t.status === 'running')` shadows `t = tk(isDark)` — filter returns token object, `.status` is undefined.
+→ Fix: `tasks.filter(task => task.status === 'running').length`
+
+**Expand/Collapse button invisible in dark mode (Storyboard scene cards)**
+→ `background: rgba(255,255,255,0.8)` hardcoded white blends with light text in dark mode.
+→ Fix: `background: 'var(--input-bg)'`, `color: 'var(--text-primary)'`, `fontWeight: 600`
+
+**Dashscope video "Model not exist" / invalid fallback model**
+→ `wan2.1-i2v-plus` is an invalid obsolete ID. Fallback must be `wan2.6-i2v-flash`.
+→ Fix in `worker/dashscope.ts`: `body.video_model || 'wan2.6-i2v-flash'`
 
 **GLM/Groq/OpenRouter storyboard generates then redirects to homepage**
 → `brain-provider.ts` was returning `{ content: "..." }` instead of parsed JSON.
