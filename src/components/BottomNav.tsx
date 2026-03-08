@@ -241,7 +241,8 @@ export function BottomNav() {
         <button
           onClick={() => hasTasks && setQueueOpen(o => !o)}
           style={{
-            padding: '10px 12px 7px',
+            flex: 1,
+            padding: '10px 0 7px',
             background: 'none',
             border: 'none',
             cursor: hasTasks ? 'pointer' : 'default',
@@ -300,7 +301,8 @@ export function BottomNav() {
         <button
           onClick={toggle}
           style={{
-            padding: '10px 14px 7px',
+            flex: 1,
+            padding: '10px 0 7px',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
