@@ -27,6 +27,9 @@ const PROVIDER_META: Record<string, { emoji: string; color: string; label: strin
   groq:       { emoji: '⚡',  color: '#f97316', label: 'Groq' },
   openrouter: { emoji: '🔀',  color: '#8b5cf6', label: 'OpenRouter' },
   glm:        { emoji: '🌐',  color: '#06b6d4', label: 'ZhipuAI GLM' },
+  cerebras:   { emoji: '🚀',  color: '#e11d48', label: 'Cerebras' },
+  mistral:    { emoji: '🌬️', color: '#0ea5e9', label: 'Mistral AI' },
+  siliconflow:{ emoji: '🔮',  color: '#9333ea', label: 'SiliconFlow' },
 }
 const MODEL_GROUPS = getModelsByProvider()
 type ArtStyle = 'cinematic_realistic' | 'anime_stylized' | 'comic_book' | '3d_render' | 'oil_painting' | 'pixel_art'
