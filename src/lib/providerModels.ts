@@ -285,17 +285,8 @@ export const ALL_BRAIN_MODELS: FrontendModel[] = [
   },
   // ─── CEREBRAS ───────────────────────────────────────────────────────
   {
-    id: 'llama-4-scout-17b-16e-instruct',
-    label: 'Llama 4 Scout 17B',
-    provider: 'cerebras', providerLabel: 'Cerebras',
-    providerColor: '#ff9500', providerEmoji: '⚡',
-    free: true, speed: 'fast', speedLabel: '2,600 tok/s (FASTEST)',
-    bestFor: ['storyboard', 'creative', 'speed'],
-    requiresKey: 'cerebras',
-  },
-  {
     id: 'llama-3.3-70b',
-    label: 'Llama 3.3 70B',
+    label: 'Llama 3.3 70B ⚡⚡',
     provider: 'cerebras', providerLabel: 'Cerebras',
     providerColor: '#ff9500', providerEmoji: '⚡',
     free: true, speed: 'fast', speedLabel: 'Ultra-fast 70B',

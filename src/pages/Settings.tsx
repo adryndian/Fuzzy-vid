@@ -362,6 +362,12 @@ export function Settings() {
       if (res.ok && data.content) {
         setGeminiStatus('success')
         setGeminiMsg('✅ Gemini connected!')
+      } else if (res.status === 429) {
+        setGeminiStatus('failed')
+        setGeminiMsg('❌ Quota exceeded — key is valid but free tier limit reached. Check aistudio.google.com/apikey')
+      } else if (res.status === 401 || res.status === 403) {
+        setGeminiStatus('failed')
+        setGeminiMsg('❌ Invalid API key — check your key at aistudio.google.com/apikey')
       } else {
         setGeminiStatus('failed')
         setGeminiMsg(`❌ ${data.error || `HTTP ${res.status}`}`)
@@ -482,11 +488,11 @@ export function Settings() {
       const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Cerebras-Api-Key': settings.cerebrasApiKey },
-        body: JSON.stringify({ 
-          brain_model: 'llama-4-scout-17b-16e-instruct', 
-          system_prompt: 'You are helpful.', 
-          user_prompt: 'Reply with: {"ok":true}', 
-          max_tokens: 20 
+        body: JSON.stringify({
+          brain_model: 'llama-3.3-70b',
+          system_prompt: 'You are helpful.',
+          user_prompt: 'Reply with: {"ok":true}',
+          max_tokens: 20
         }),
       })
       const data = await res.json() as { content?: string; error?: string }

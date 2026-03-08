@@ -248,16 +248,8 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     authHeader: (key) => ({ 'Authorization': `Bearer ${key}` }),
     models: [
       {
-        id: 'llama-4-scout-17b-16e-instruct',
-        label: 'Llama 4 Scout 17B ⚡⚡',
-        contextWindow: 131072,
-        free: true,
-        speed: 'fast',
-        bestFor: ['storyboard', 'creative', 'fast']
-      },
-      {
         id: 'llama-3.3-70b',
-        label: 'Llama 3.3 70B',
+        label: 'Llama 3.3 70B ⚡⚡',
         contextWindow: 131072,
         free: true,
         speed: 'fast',
@@ -366,9 +358,9 @@ export function getProviderForModel(modelId: string): ProviderConfig | null {
   }
 
   // Auto-detect by model ID patterns
-  if (modelId.startsWith('llama-4') || modelId.startsWith('llama-3.3') || modelId.startsWith('qwen-3')) {
-    // Could be cerebras or groq — check by prefix
-    if (['llama-4-scout-17b-16e-instruct', 'llama-3.3-70b', 'qwen-3-32b'].includes(modelId)) return PROVIDERS.cerebras
+  if (modelId.startsWith('llama-4') || modelId.startsWith('llama-3.3') || modelId.startsWith('llama-3.1') || modelId.startsWith('qwen-3')) {
+    // Could be cerebras or groq — check by exact Cerebras model list
+    if (['llama-3.3-70b', 'qwen-3-32b'].includes(modelId)) return PROVIDERS.cerebras
     return PROVIDERS.groq
   }
   if (modelId.startsWith('gemma2') || modelId.startsWith('qwen-qwq') || modelId.startsWith('deepseek-r1-distill')) {
