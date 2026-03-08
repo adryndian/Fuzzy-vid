@@ -1,4 +1,4 @@
-type AudioModel = 'polly' | 'elevenlabs' | 'gemini_tts'
+type AudioModel = 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'
 
 export function estimateBrainCost(model: string, scenesCount: number): number {
   // Rough estimate based on typical prompt/response sizes per scene
@@ -46,6 +46,7 @@ export function estimateAudioCost(model: AudioModel, charCount: number): number 
     case 'elevenlabs':
       return (charCount / 1000) * 0.18
     case 'gemini_tts':
+    case 'fish_audio':
       return 0
     default:
       return 0

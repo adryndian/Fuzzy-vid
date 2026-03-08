@@ -670,6 +670,34 @@ export function Settings() {
           </p>
         </div>
 
+        {/* ─── FISH AUDIO ───────────────────────────────────────────── */}
+        <div style={s.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 20 }}>🐟</span>
+            <span style={{ fontWeight: 600, fontSize: 16, color: thm.textPrimary }}>Fish Audio TTS</span>
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+              background: 'rgba(175,82,222,0.12)', color: '#af52de', border: '1px solid rgba(175,82,222,0.25)'
+            }}>#1 TTS Quality</span>
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+              background: 'rgba(52,199,89,0.12)', color: '#34c759', border: '1px solid rgba(52,199,89,0.25)'
+            }}>8K credits/mo free</span>
+          </div>
+          <p style={{ fontSize: 13, color: thm.textSecondary, margin: '0 0 10px' }}>
+            Kualitas TTS terbaik (#1 TTS-Arena2). Mendukung Bahasa Indonesia + emotion tags.
+            Daftar free di fish.audio
+          </p>
+          <SecretInput
+            label="Fish Audio API Key"
+            fieldKey="fishAudioApiKey"
+            placeholder="fish_sk_..."
+          />
+          <p style={{ fontSize: 12, color: thm.textTertiary, marginTop: 6 }}>
+            ℹ️ Tanpa key, Gemini TTS (gratis) digunakan sebagai default.
+          </p>
+        </div>
+
         {/* ── Groq ── */}
         <div style={s.card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>

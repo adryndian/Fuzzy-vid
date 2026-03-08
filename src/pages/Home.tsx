@@ -291,6 +291,7 @@ export function Home() {
             rawJson: metaText,
             title: storyData.title || title,
             imageModel,
+            imageEngine: 'cf-flux',  // Default to free CF FLUX
             audioEngine: audioModel,
             audioVoice: audioModel === 'polly' ? 'Ruth' : 'Bella',
             language,

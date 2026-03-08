@@ -45,6 +45,7 @@ export function getApiHeaders(userId?: string): Record<string, string> {
       if (keys.cerebrasApiKey)     headers['X-Cerebras-Api-Key'] = keys.cerebrasApiKey
       if (keys.mistralApiKey)      headers['X-Mistral-Api-Key'] = keys.mistralApiKey
       if (keys.siliconflowApiKey)  headers['X-Siliconflow-Api-Key'] = keys.siliconflowApiKey
+      if (keys.fishAudioApiKey)    headers['X-FishAudio-Api-Key'] = keys.fishAudioApiKey
     }
   } catch { /* ignore */ }
   return headers

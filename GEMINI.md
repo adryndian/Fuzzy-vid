@@ -62,6 +62,11 @@ worker/
   handlers/
     brain-provider.ts             <- /api/brain/provider — universal OpenAI-compat handler
     regenerate-veo-prompt.ts      <- /api/brain/regenerate-veo-prompt — per-scene Veo gen
+    gemini-tts.ts                 <- NEW: Gemini 2.5 Flash TTS
+    fish-tts.ts                   <- NEW: Fish Audio TTS
+    gemini-image.ts               <- NEW: Gemini Image Generation
+    siliconflow-image.ts          <- NEW: SiliconFlow FLUX
+    cf-flux.ts                    <- NEW: Cloudflare Workers AI FLUX
   lib/
     aws-signature.ts              <- HMAC SigV4 signing — CRITICAL RULE below
     providers.ts                  <- provider registry, callProvider(), getProviderForModel()
@@ -295,9 +300,14 @@ POST /api/brain/regenerate-veo-prompt      <- Veo 3.1 per-scene prompt (all prov
 POST /api/brain/regenerate-video-prompt    <- regen video_prompt (requireAwsKeys)
 POST /api/image/generate                   <- Nova Canvas or SD 3.5 (requireAwsKeys)
 POST /api/image/enhance-prompt             <- enhance prompt via Claude (requireAwsKeys)
+POST /api/image/gemini                     <- Gemini Image (X-Gemini-Api-Key, 500 img/day free) — v4.2
+POST /api/image/siliconflow                <- SiliconFlow FLUX (X-Siliconflow-Api-Key) — v4.2
+POST /api/image/cf-flux                    <- CF Workers AI FLUX (no key — 10K req/day free) — v4.2
 POST /api/video/start                      <- Nova Reel async (requireAwsKeys)
 GET  /api/video/status/:jobId              <- Nova Reel poll
-POST /api/audio/generate                   <- AWS Polly (requireAwsKeys)
+POST /api/audio/generate                   <- AWS Polly TTS (requireAwsKeys) — FIXED v4.1
+POST /api/audio/gemini-tts                 <- Gemini 2.5 Flash TTS (uses X-Gemini-Api-Key)
+POST /api/audio/fish-tts                   <- Fish Audio TTS (uses X-FishAudio-Api-Key)
 POST /api/dashscope/brain                  <- Qwen brain (requireDashscopeKey)
 POST /api/dashscope/image/start            <- Wanx image async (requireDashscopeKey)
 POST /api/dashscope/video/start            <- Wan2.1 video async (requireDashscopeKey)
@@ -326,6 +336,97 @@ Route order in index.ts (CRITICAL — specific routes BEFORE catch-alls):
   X-Openrouter-Api-Key  -> OpenRouter completion API
   X-Glm-Api-Key         -> ZhipuAI GLM API
   X-Gemini-Api-Key      -> Google Gemini API (falls back to env GEMINI_API_KEY)
+
+## IMAGE ENGINES (v4.2)
+
+6 engine tersedia:
+
+Engine          | Free  | Key Required         | Quality  | Speed
+----------------|-------|----------------------|----------|-------
+cf-flux         | ✅    | None (CF binding)    | Good     | Fast
+gemini-image    | ✅    | X-Gemini-Api-Key     | Good+    | Medium
+siliconflow-flux| ✅    | X-Siliconflow-Api-Key| Good     | Fast
+nova-canvas     | ❌    | AWS keys             | High     | Medium
+sd35            | ❌    | AWS keys (us-west-2) | High     | Slow
+wanx            | ❌    | Dashscope key        | High     | Async
+
+Default: cf-flux (no key needed)
+
+CF Workers AI binding: add [ai] to wrangler.toml
+SiliconFlow models: black-forest-labs/FLUX.1-schnell (4 steps), FLUX.1-dev (20 steps)
+Gemini model: gemini-2.0-flash-exp-image-generation
+
+Routes:
+### 1. CF FLUX (DEFAULT — free)
+Route: POST /api/image/cf-flux
+Key: None (uses internal CF AI binding)
+Model: @cf/black-forest-labs/flux-1-schnell
+Body: { prompt, scene_number, project_id, aspect_ratio, negative_prompt }
+Response: { image_url, engine, model, width, height }
+Free tier: 10,000 requests/day (included in CF Workers free tier)
+Note: No user key required, uses internal CF AI binding
+
+### 2. Gemini Image (free)
+Route: POST /api/image/gemini
+Key: X-Gemini-Api-Key (existing key, env fallback GEMINI_API_KEY)
+Model: gemini-2.0-flash-exp-image-generation
+Body: { prompt, scene_number, project_id, aspect_ratio, negative_prompt }
+Response: { image_url, engine, model, width, height }
+Free tier: 500 images/day
+Note: Uses existing Gemini key that user already has
+
+### 3. SiliconFlow FLUX (free models)
+Route: POST /api/image/siliconflow
+Key: X-Siliconflow-Api-Key (user key), env fallback SILICONFLOW_API_KEY
+Model: black-forest-labs/FLUX.1-schnell (free)
+Body: { prompt, model, scene_number, project_id, image_size, negative_prompt }
+Response: { image_url, engine, model, width, height }
+Free tier: FLUX.1-schnell available for free
+Note: Download and re-upload to R2 since SiliconFlow URLs expire
+
+### 4. AWS Bedrock (existing)
+Route: POST /api/image/generate
+Key: requireAwsKeys (X-AWS-Access-Key-Id + X-AWS-Secret-Access-Key)
+Models: Nova Canvas, SD 3.5
+Body: { prompt, model, scene_number, project_id, aspect_ratio, art_style }
+Response: { image_url }
+
+### 5. Dashscope Wanx (existing)
+Route: POST /api/dashscope/image/start
+Key: X-Dashscope-Api-Key (requireDashscopeKey guard)
+Models: Various Wanx/Qwen models
+Body: { prompt, model, scene_number, project_id, aspect_ratio }
+Response: { task_id } (async polling required)
+
+## AUDIO TTS ENGINES (v4.1)
+
+3 engine tersedia, dipilih via UI di Storyboard.tsx:
+
+### 1. Gemini TTS (DEFAULT — gratis)
+Route: POST /api/audio/gemini-tts
+Key: X-Gemini-Api-Key (existing key, env fallback GEMINI_API_KEY)
+Model: gemini-2.5-flash-preview-tts
+Body: { text, language, voice_name?, tone, scene_number, project_id }
+Response: { audio_url, engine, voice_used, language, estimated_duration }
+Voices: Kore, Charon, Aoede, Puck, Fenrir, Zephyr, Leda, Orus, Autonoe
+Voice selection: auto berdasarkan tone + language
+Note: Audio output dalam format WAV → diupload ke R2
+
+### 2. Fish Audio TTS (Premium quality)
+Route: POST /api/audio/fish-tts
+Key: X-FishAudio-Api-Key (user key), env fallback FISH_AUDIO_API_KEY
+Free tier: 8,000 credits/bulan (~7 menit audio S1-quality)
+Body: { text, language, voice_id?, tone, scene_number, project_id }
+Response: { audio_url, engine, voice_id, language, estimated_duration }
+Emotion tags: auto-inject dari tone (e.g., (cheerful), (news reporter))
+Voice IDs: HARUS di-update dengan ID asli dari fish.audio/voices
+
+### 3. AWS Polly (Legacy — requires AWS keys)
+Route: POST /api/audio/generate
+Key: requireAwsKeys (X-AWS-Access-Key-Id + X-AWS-Secret-Access-Key)
+Voices Indonesia: Permata (neural/female), Aruna (standard/female)
+Body: { text, voice?, language, engine?, scene_number, project_id, tone }
+Response: { audio_url, voice_used, language, engine, estimated_duration }
 
 -----
 
@@ -807,6 +908,17 @@ After deploy, hard-refresh browser (Cmd+Shift+R / Ctrl+F5) to bypass CDN cache.
 36. Expand/Collapse button in scene cards: background var(--input-bg), color var(--text-primary) — never hardcode rgba(255,255,255,0.8)
 37. Dashscope video fallback model: wan2.6-i2v-flash (NOT wan2.1-i2v-plus — that ID is invalid)
 38. Duration slider removed from video output display card in Storyboard.tsx (sceneDurations state still used internally)
+39. Default audio engine adalah 'gemini-tts' — tidak perlu AWS key
+40. Fish Audio voice IDs HARUS diganti dengan ID asli dari fish.audio/voices sebelum production
+41. VO script target: 25-35 kata (bukan 22 kata) untuk durasi natural 8-10 detik
+42. Brain VO style: disesuaikan per-tone di brain-system-prompt.ts — lihat switch case
+43. Gemini TTS output: WAV; Fish Audio output: MP3; Polly output: MP3
+44. wrangler.toml HARUS punya [ai] binding untuk cf-flux handler
+45. CF FLUX dimensions: 9:16 = 768x1344 (bukan 768*1280 Dashscope format)
+46. SiliconFlow image_size gunakan 'x' bukan '*': "768x1280"
+47. Gemini image output: format PNG/JPEG dari inlineData response, upload ke R2
+48. Default image engine: 'cf-flux' — tidak butuh key user
+49. Image engine selector hanya menampilkan engine yang tersedia (free atau punya key)
 
 -----
 
@@ -906,6 +1018,186 @@ AWSCompromisedKeyQuarantineV3
 -----
 
 ## CHANGELOG
+
+### v4.2 (2026-03-08) — Image Engine Expansion
+
+Added:
+- Gemini Image: /api/image/gemini (500 img/day gratis, pakai existing Gemini key)
+- SiliconFlow FLUX: /api/image/siliconflow (FLUX.1-schnell gratis)
+- CF Workers AI FLUX: /api/image/cf-flux (no key, 10K req/day CF free tier)
+- Image engine selector UI di Storyboard.tsx
+- IMAGE_ENGINES constant di schema.ts
+- [ai] binding di wrangler.toml
+
+Files changed:
+  wrangler.toml                          <- [ai] binding added
+  worker/handlers/gemini-image.ts        <- NEW
+  worker/handlers/siliconflow-image.ts   <- NEW
+  worker/handlers/cf-flux.ts             <- NEW
+  worker/index.ts                        <- 3 new routes
+  src/types/schema.ts                    <- imageEngine field + IMAGE_ENGINES
+  src/pages/Storyboard.tsx               <- engine selector + updated generateImage()
+  src/pages/Home.tsx                     <- updated createSession call
+
+#### Feature 1 — New Image Engine Handlers (worker/handlers/)
+
+Created new handler files:
+  worker/handlers/gemini-image.ts:
+    - POST /api/image/gemini endpoint
+    - Uses Gemini 2.5 Flash Image Generation API
+    - Supports aspect ratio instructions
+    - Uploads image to R2 storage
+    - Returns image URL and metadata
+    - Free: 500 images/day
+
+  worker/handlers/siliconflow-image.ts:
+    - POST /api/image/siliconflow endpoint
+    - Uses SiliconFlow FLUX models
+    - Supports FLUX.1-schnell (free) and other models
+    - Handles image download/re-upload to R2 (since SF URLs expire)
+    - Returns image URL and metadata
+
+  worker/handlers/cf-flux.ts:
+    - POST /api/image/cf-flux endpoint
+    - Uses Cloudflare Workers AI FLUX model
+    - No user key required (uses internal CF AI binding)
+    - Free: 10,000 requests/day included in CF Workers free tier
+    - Uploads image to R2 storage
+
+#### Feature 2 — Wrangler Configuration (wrangler.toml)
+
+Added [ai] binding to enable Cloudflare Workers AI:
+  [ai]
+  binding = "AI"
+
+This enables the env.AI binding used by cf-flux.ts handler.
+
+#### Feature 3 — Worker Integration (worker/index.ts)
+
+Added new routes and environment configuration:
+  - Import statements for new handlers
+  - Added [ai] to Env interface
+  - Added 3 new routes: /api/image/gemini, /api/image/siliconflow, /api/image/cf-flux
+  - Routes placed before catch-all image route
+
+#### Feature 4 — Schema Updates (src/types/schema.ts)
+
+Extended AppSettings interface:
+  - Added imageEngine field with options: 'nova-canvas' | 'sd35' | 'wanx' | 'gemini-image' | 'siliconflow-flux' | 'cf-flux'
+  - Added IMAGE_ENGINES constant with engine metadata (id, label, emoji, free status, key requirements)
+
+#### Feature 5 — Storyboard Integration (src/pages/Storyboard.tsx)
+
+Updated Storyboard page with new functionality:
+  - Added imageEngine state variable with default 'cf-flux'
+  - Updated session creation/loading to include imageEngine
+  - Updated generateImage function to handle multiple image engines
+  - Added Image Engine Selector UI component with conditional rendering based on key availability
+  - Engine selector shows only available engines (free or with required key)
+
+#### Feature 6 — Home Integration (src/pages/Home.tsx)
+
+Updated session creation to include imageEngine:
+  - Added imageEngine: 'cf-flux' to createSession call (default to free CF FLUX)
+
+### v4.1 (2026-03-08) — Audio TTS Fix & Expansion
+
+Fixed:
+- VO script word constraint: 22 kata → 25-35 kata (lebih natural)
+- Polly voice selection: auto berdasarkan language (Permata/Aruna untuk Indonesia)
+- VO duration: gunakan word_count / 3.0 konsisten di semua tempat
+- VO narasi style: dibedakan per-tone di brain-system-prompt.ts
+
+Added:
+- Gemini 2.5 Flash TTS: /api/audio/gemini-tts (gratis via existing key)
+- Fish Audio TTS: /api/audio/fish-tts (premium, 8K credits/mo free)
+- Audio engine selector UI di Storyboard.tsx (Gemini / Polly / Fish)
+- Language selector (🇮🇩 ID / 🇺🇸 EN) di Storyboard.tsx
+
+Files changed:
+  worker/lib/brain-system-prompt.ts   <- VO word limit fix + style per tone
+  worker/audio.ts                     <- Polly voice auto-select + request fix
+  worker/handlers/gemini-tts.ts       <- NEW
+  worker/handlers/fish-tts.ts         <- NEW
+  worker/index.ts                     <- 2 new routes + Env + extractCredentials
+  src/types/schema.ts                 <- fishAudioApiKey + audioEngine + audioLanguage
+  src/lib/api.ts                      <- X-FishAudio-Api-Key header
+  src/pages/Storyboard.tsx            <- engine selector UI + updated generateAudio()
+  src/pages/Settings.tsx              <- Fish Audio key section
+
+#### Feature 1 — Audio TTS Engine Selection (Storyboard.tsx)
+
+Added audio engine selector UI in header section of Storyboard.tsx:
+  - Audio Engine Selector component with pills for Gemini, Polly, Fish Audio
+  - Language selector (ID/EN) alongside engine selector
+  - Engine pills show FREE badge for Gemini and Fish Audio
+  - Visual design: purple theme (rgba(175,82,222,0.08) background)
+
+Updated generateAudio function to handle multiple TTS engines:
+  - Switch statement selects endpoint based on audioEngine state
+  - Supports gemini-tts, fish-audio, polly, and elevenlabs
+  - Proper headers and body construction for each engine
+  - Updated audio history tracking to include engine and voice info
+
+#### Feature 2 — New TTS Engine Handlers (worker/handlers/)
+
+Created new handler files:
+  worker/handlers/gemini-tts.ts:
+    - POST /api/audio/gemini-tts endpoint
+    - Uses Gemini 2.5 Flash TTS preview API
+    - Supports language-based voice selection
+    - Includes emotion/style instructions in TTS prompt
+    - Uploads WAV audio to R2 storage
+    - Returns audio URL and metadata
+
+  worker/handlers/fish-tts.ts:
+    - POST /api/audio/fish-tts endpoint
+    - Uses Fish Audio TTS API
+    - Supports emotion tags injection based on tone
+    - Language and tone-based voice selection
+    - Uploads MP3 audio to R2 storage
+    - Returns audio URL and metadata
+
+#### Feature 3 — AWS Polly Enhancement (worker/audio.ts)
+
+Updated AWS Polly implementation:
+  - Voice selection logic based on language (Indonesian: Permata/Aruna, English: Joanna)
+  - Proper Indonesian neural voice support (Permata)
+  - Updated request body format with SampleRate parameter
+  - Consistent duration calculation using word count / 3.0
+  - Proper response format with engine, voice, and duration info
+
+#### Feature 4 — VO Duration & Style Improvements (worker/lib/brain-system-prompt.ts)
+
+Updated brain system prompt:
+  - Changed VO word constraint from "MAX 22 WORDS" to "25-35 words (natural speech for 8-10 seconds)"
+  - Updated duration calculation to use "Math.ceil(vo_word_count / 3.0)" with typical 8-12 seconds
+  - Added VO style per tone with examples for each tone category
+  - Updated JSON schema to reflect new VO word count range
+  - Added rule about VO style matching tone characteristics
+
+#### Feature 5 — Settings Integration (Settings.tsx)
+
+Added Fish Audio TTS section:
+  - Fish Audio API key input with SecretInput component
+  - Visual indicators for quality (#1 TTS Quality) and pricing (8K credits/mo free)
+  - Indonesian language description
+  - Informational note about Gemini TTS as default fallback
+
+#### Feature 6 — Schema Updates (src/types/schema.ts)
+
+Extended AppSettings interface:
+  - Added fishAudioApiKey field
+  - Added audioEngine field with options: 'polly' | 'gemini-tts' | 'fish-audio'
+  - Added audioLanguage field with options: 'id' | 'en'
+  - Updated buildApiHeaders to include X-FishAudio-Api-Key header
+
+#### Feature 7 — API Integration (src/lib/api.ts)
+
+Updated getApiHeaders function:
+  - Added support for X-FishAudio-Api-Key header
+  - Reads fishAudioApiKey from localStorage settings
+  - Includes header when key is present
 
 ### v4.0 (2026-03-08) — Queue Merged into BottomNav + Bug Fixes
 

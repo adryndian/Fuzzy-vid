@@ -22,6 +22,9 @@ binding = "DB"
 database_name = "fuzzy-short-db"
 database_id = "690a4a7f-5885-4261-921b-2dba40dec104"
 
+[ai]
+binding = "AI"
+
 [assets]
 binding = "ASSETS"
 not_found_handling = "single-page-application"

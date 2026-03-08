@@ -24,7 +24,7 @@ export type BrainModel = 'gemini' | 'llama4_maverick' | 'claude_sonnet'
 export type ImageModel = 'gemini' | 'nova_canvas' | 'titan_v2'
 export type VideoModel = 'nova_reel' | 'runway_gen4' | 'runway_gen4_turbo'
 export type VoiceGender = 'male' | 'female'
-export type AudioModel = 'polly' | 'gemini_tts' | 'elevenlabs'
+export type AudioModel = 'polly' | 'gemini_tts' | 'elevenlabs' | 'fish_audio'
 
 export type AWSRegion = 
   | 'us-west-2' | 'us-east-1' | 'ap-southeast-1'
@@ -293,6 +293,7 @@ export interface AppSettings {
   elevenLabsApiKey: string
   runwayApiKey: string
   dashscopeApiKey: string
+  fishAudioApiKey?: string
   // Provider keys (OpenAI-compatible free-tier providers)
   groqApiKey: string
   openrouterApiKey: string
@@ -300,6 +301,11 @@ export interface AppSettings {
   cerebrasApiKey: string
   mistralApiKey: string
   siliconflowApiKey: string
+  // Audio engine settings
+  audioEngine?: 'polly' | 'gemini_tts' | 'fish_audio'  // default: 'gemini_tts'
+  audioLanguage?: 'id' | 'en'                            // default: 'id'
+  // Image engine settings
+  imageEngine?: 'nova-canvas' | 'sd35' | 'wanx' | 'gemini-image' | 'siliconflow-flux' | 'cf-flux'
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -335,6 +341,16 @@ export function saveSettings(settings: AppSettings): void {
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
 }
 
+// Available Image Engines
+export const IMAGE_ENGINES = [
+  { id: 'cf-flux',          label: 'CF FLUX',     emoji: '☁️', free: true,  requiresKey: null,              note: 'Gratis via CF Workers' },
+  { id: 'gemini-image',     label: 'Gemini',      emoji: '✨', free: true,  requiresKey: 'geminiApiKey',    note: '500 gambar/hari gratis' },
+  { id: 'siliconflow-flux', label: 'SF FLUX',     emoji: '🔥', free: true,  requiresKey: 'siliconflowApiKey', note: 'FLUX.1-schnell gratis' },
+  { id: 'nova-canvas',      label: 'Nova Canvas', emoji: '🎨', free: false, requiresKey: 'awsAccessKeyId',  note: 'AWS Bedrock' },
+  { id: 'sd35',             label: 'SD 3.5',      emoji: '🖼️', free: false, requiresKey: 'awsAccessKeyId',  note: 'us-west-2 only' },
+  { id: 'wanx',             label: 'Wanx',        emoji: '🌊', free: false, requiresKey: 'dashscopeApiKey', note: 'Dashscope async' },
+] as const
+
 export function buildApiHeaders(settings: AppSettings): Record<string, string> {
   const headers: Record<string, string> = {}
   if (settings.geminiApiKey) headers['X-Gemini-Api-Key'] = settings.geminiApiKey
@@ -352,5 +368,6 @@ export function buildApiHeaders(settings: AppSettings): Record<string, string> {
   if (settings.cerebrasApiKey) headers['X-Cerebras-Api-Key'] = settings.cerebrasApiKey
   if (settings.mistralApiKey) headers['X-Mistral-Api-Key'] = settings.mistralApiKey
   if (settings.siliconflowApiKey) headers['X-Siliconflow-Api-Key'] = settings.siliconflowApiKey
+  if (settings.fishAudioApiKey) headers['X-FishAudio-Api-Key'] = settings.fishAudioApiKey
   return headers
 }

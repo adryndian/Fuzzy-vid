@@ -2,6 +2,11 @@ import { verifyClerkJWT, ensureUser } from './lib/auth'
 import type { ClerkUser } from './lib/auth'
 import { handleProviderBrain } from './handlers/brain-provider'
 import { handleRegenerateVeoPrompt } from './handlers/regenerate-veo-prompt'
+import { handleGeminiTts } from './handlers/gemini-tts'
+import { handleFishTts }   from './handlers/fish-tts'
+import { handleGeminiImage }      from './handlers/gemini-image'
+import { handleSiliconflowImage } from './handlers/siliconflow-image'
+import { handleCfFlux }           from './handlers/cf-flux'
 import { getAllModelsForFrontend } from './lib/providers'
 import {
   handleGetProfile, handleUpdatePreferences,
@@ -36,6 +41,8 @@ export interface Env {
   CLERK_JWKS_URL: string;
   R2_BUCKET_NAME?: string;
   ENVIRONMENT: string;
+  FISH_AUDIO_API_KEY: string;    // optional env fallback
+  AI: any;  // CF Workers AI binding
 }
 
 export interface Credentials {
@@ -49,6 +56,7 @@ export interface Credentials {
   elevenLabsApiKey: string
   runwayApiKey: string
   dashscopeApiKey: string
+  fishAudioApiKey: string
   // Provider keys — user header takes priority, env fallback OK (shared free-tier keys)
   groqApiKey: string
   openrouterApiKey: string
@@ -104,6 +112,7 @@ export function extractCredentials(request: Request, env: Env): Credentials {
     elevenLabsApiKey:   h.get('X-ElevenLabs-Key')         || '',
     runwayApiKey:       h.get('X-Runway-Key')             || '',
     dashscopeApiKey:    h.get('X-Dashscope-Api-Key')      || '',
+    fishAudioApiKey:    h.get('X-FishAudio-Api-Key')      || '',
     // Provider keys — user key takes priority, env fallback OK (shared free-tier keys)
     groqApiKey:        h.get('X-Groq-Api-Key')        || env.GROQ_API_KEY        || '',
     openrouterApiKey:  h.get('X-Openrouter-Api-Key')  || env.OPENROUTER_API_KEY  || '',
@@ -283,6 +292,16 @@ export default {
           response = await handleEnhancePrompt(request, env, creds)
         }
       }
+      // NEW routes:
+      else if (path === '/api/image/gemini' && request.method === 'POST') {
+        response = await handleGeminiImage(request, env, corsHeaders)
+      }
+      else if (path === '/api/image/siliconflow' && request.method === 'POST') {
+        response = await handleSiliconflowImage(request, env, corsHeaders)
+      }
+      else if (path === '/api/image/cf-flux' && request.method === 'POST') {
+        response = await handleCfFlux(request, env, corsHeaders)
+      }
       else if (path.startsWith('/api/image/')) {
         const denied = requireAwsKeys(creds)
         if (denied) { response = denied }
@@ -387,7 +406,26 @@ export default {
         const { handleGlmVideoStatus } = await import('./glm')
         response = await handleGlmVideoStatus(request, env, taskId, creds)
       }
-      // ── Audio routes ──────────────────────────────────────────────────────
+      // ── AUDIO ROUTES ────────────────────────────────────────────────
+      if (path === '/api/audio/generate' && request.method === 'POST') {
+        const denied = requireAwsKeys(creds)
+        if (denied) { response = denied }
+        else {
+          const { handleAudioRequest } = await import('./audio')
+          response = await handleAudioRequest(request, env, url, ctx, creds)
+          if (clerkUser && env.DB && response.ok) {
+            ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'audio'))
+          }
+        }
+      }
+      else if (path === '/api/audio/gemini-tts' && request.method === 'POST') {
+        // No requireAwsKeys — uses Gemini key
+        response = await handleGeminiTts(request, env, corsHeaders)
+      }
+      else if (path === '/api/audio/fish-tts' && request.method === 'POST') {
+        // No requireAwsKeys — uses Fish Audio key
+        response = await handleFishTts(request, env, corsHeaders)
+      }
       else if (path.startsWith('/api/audio/')) {
         const denied = requireAwsKeys(creds)
         if (denied) { response = denied }

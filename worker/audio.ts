@@ -5,14 +5,12 @@ const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
 
 interface AudioRequestBody {
   text: string
-  language: string
-  scene_number: number
-  project_id: string
-  engine?: 'polly' | 'elevenlabs'
-  voice?: string
-  stability?: number
-  similarity_boost?: number
-  style?: number
+  voice?: string            // optional: override voice ID
+  language?: 'id' | 'en'   // detect language, default 'id'
+  engine?: 'neural' | 'standard'  // default 'neural'
+  scene_number?: number     // for naming files in R2
+  project_id?: string       // for path in R2
+  tone?: string             // for log/debug
 }
 
 export async function handleAudioRequest(
@@ -65,13 +63,25 @@ export async function handleAudioRequest(
       }
 
       // Upload to R2
-      const r2Key = `projects/${project_id}/scene_${scene_number}/audio_${Date.now()}.mp3`
+      const r2Key = `audio/${project_id || 'default'}/scene_${scene_number || 0}_polly_${Date.now()}.mp3`
       await env.STORY_STORAGE.put(r2Key, audioBuffer, {
         httpMetadata: { contentType: 'audio/mpeg' },
       })
 
       const audioUrl = `${WORKER_URL}/api/storage/file/${r2Key}`
-      return Response.json({ audio_url: audioUrl })
+      
+      // Calculate word count and duration
+      const wordCount = text.trim().split(/\s+/).length
+      const estimatedDuration = Math.ceil(wordCount / 3.0)
+      
+      return Response.json({
+        audio_url: audioUrl,
+        voice_used: voice || (language === 'id' ? 'Permata' : 'Joanna'),
+        language: language as 'id' | 'en',
+        engine: engine || 'neural',
+        text_length: text.length,
+        estimated_duration: estimatedDuration
+      })
 
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -88,9 +98,9 @@ export async function handleAudioRequest(
 
 // Voice metadata: LanguageCode + Engine for each supported voice
 const POLLY_VOICE_LANG: Record<string, { lang: string; engine: 'generative' | 'neural' | 'standard' }> = {
-  // Indonesian (id-ID) — neural only
-  Marlene: { lang: 'id-ID', engine: 'neural' },
-  Andika:  { lang: 'id-ID', engine: 'neural' },
+  // Indonesian (id-ID) — neural and standard
+  Permata: { lang: 'id-ID', engine: 'neural' },  // female neural voice for Indonesia
+  Aruna:   { lang: 'id-ID', engine: 'standard' }, // female standard voice for Indonesia
   // English (en-US) — generative
   Ruth:     { lang: 'en-US', engine: 'generative' },
   Danielle: { lang: 'en-US', engine: 'generative' },
@@ -114,17 +124,17 @@ async function generateWithPolly(
 ): Promise<ArrayBuffer> {
   const endpoint = `https://polly.${region}.amazonaws.com/v1/speech`
 
-  const defaultVoice = language === 'id' ? 'Marlene' : 'Ruth'
-  const voiceId = voice || defaultVoice
-  const voiceMeta = POLLY_VOICE_LANG[voiceId] || { lang: 'en-US', engine: 'neural' as const }
+  // Select voice based on language and engine preference
+  const selectedVoice = selectPollyVoice(language, voice)
+  const voiceMeta = POLLY_VOICE_LANG[selectedVoice.VoiceId] || { lang: selectedVoice.LanguageCode, engine: 'neural' as const }
 
   const pollyBody = JSON.stringify({
-    Engine: voiceMeta.engine,
-    LanguageCode: voiceMeta.lang,
-    OutputFormat: 'mp3',
     Text: text,
-    TextType: 'text',
-    VoiceId: voiceId,
+    OutputFormat: 'mp3',
+    VoiceId: selectedVoice.VoiceId,
+    LanguageCode: selectedVoice.LanguageCode,
+    Engine: selectedVoice.Engine || 'neural',
+    SampleRate: '22050'
   })
 
   const signer = new AwsV4Signer(
@@ -146,6 +156,35 @@ async function generateWithPolly(
   }
 
   return res.arrayBuffer()
+}
+
+function selectPollyVoice(language: string, voiceOverride?: string): { VoiceId: string; LanguageCode: string; Engine?: string } {
+  if (voiceOverride) {
+    // If voice is explicitly provided, use it
+    const voiceMeta = POLLY_VOICE_LANG[voiceOverride]
+    if (voiceMeta) {
+      return {
+        VoiceId: voiceOverride,
+        LanguageCode: voiceMeta.lang,
+        Engine: voiceMeta.engine
+      }
+    }
+    // If invalid voice provided, fall back to language-based selection
+  }
+
+  if (language === 'id' || language === 'id-ID') {
+    // Indonesia — use Indonesia-specific voices
+    return {
+      VoiceId: 'Permata',  // Default to neural voice for Indonesia
+      LanguageCode: 'id-ID'
+    }
+  }
+  
+  // Default to English
+  return {
+    VoiceId: 'Joanna',  // Default English neural voice
+    LanguageCode: 'en-US'
+  }
 }
 
 const ELEVENLABS_VOICE_MAP: Record<string, string> = {

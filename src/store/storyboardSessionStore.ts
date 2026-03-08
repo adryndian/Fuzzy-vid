@@ -10,7 +10,8 @@ export interface StoryboardSession {
   rawJson: string
   title: string
   imageModel: string
-  audioEngine: 'polly' | 'elevenlabs'
+  imageEngine: string
+  audioEngine: 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'
   audioVoice: string
   language: string
   assets: SceneAssetsMap
@@ -24,7 +25,8 @@ interface StoryboardSessionState {
     rawJson: string
     title: string
     imageModel: string
-    audioEngine: 'polly' | 'elevenlabs'
+    imageEngine: string
+    audioEngine: 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'
     audioVoice: string
     language: string
   }) => string

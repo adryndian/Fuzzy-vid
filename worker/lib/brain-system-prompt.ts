@@ -166,11 +166,12 @@ VO Style: ${toneDef.voStyle}
 Visual Style: ${toneDef.videoStyle}
 
 ## CRITICAL VO RULES
-1. Each vo_script MUST be MAX 22 WORDS (enforced — do not exceed)
+1. Each vo_script should be 25-35 words (natural speech for 8-10 seconds)
 2. Count words carefully. vo_word_count must be accurate.
-3. vo_duration_sec = Math.ceil(vo_word_count / 3) — always between 3-8
+3. vo_duration_sec = Math.ceil(vo_word_count / 3.0) — typically 8-12 seconds
 4. VO must DIRECTLY match what is happening visually in that scene
 5. No filler words. Every word must earn its place.
+6. VO style must match the tone characteristics (see below)
 
 ## MOVEMENT TYPES
 ${MOVEMENT_GUIDE}
@@ -218,7 +219,7 @@ Respond ONLY with valid JSON. No markdown, no explanation, no backticks.
   "scenes": [
     {
       "scene_number": 1,
-      "vo_script": "string — max 22 words, ${language === 'id' ? 'Bahasa Indonesia' : 'English'}",
+      "vo_script": "string — 25-35 words, natural speech, ${language === 'id' ? 'Bahasa Indonesia' : 'English'}",
       "vo_word_count": number,
       "vo_duration_sec": number,
       "scene_purpose": "hook|buildup|conflict|reveal|resolution|cta",

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import type { SceneAssets, SceneAssetsMap, GenerationStatus, AudioHistoryItem, VideoPromptData } from '../types/schema'
-import { defaultSceneAssets, saveVideoJob, loadVideoJob, clearVideoJob, redistributeDurations } from '../types/schema'
+import { defaultSceneAssets, saveVideoJob, loadVideoJob, clearVideoJob, redistributeDurations, IMAGE_ENGINES } from '../types/schema'
 import { useUser } from '@clerk/clerk-react'
 import { generateImage, generateAudio, checkVideoStatus, startVideoJob, enhancePrompt, rewriteVO, regenerateVideoPrompt, getApiHeaders, WORKER_URL } from '../lib/api'
 import { useUserApi } from '../lib/userApi'
@@ -85,10 +85,12 @@ export function Storyboard() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [rawJson, setRawJson] = useState('')
   const [imageModel, setImageModel] = useState<string>('nova_canvas')
+  const [imageEngine, setImageEngine] = useState<string>('cf-flux')
   const [videoModel, setVideoModel] = useState<Record<number, string>>({})
   const [defaultVideoModel, setDefaultVideoModel] = useState('nova_reel')
-  const [audioEngine, setAudioEngine] = useState<'polly' | 'elevenlabs'>('polly')
+  const [audioEngine, setAudioEngine] = useState<'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'>('gemini_tts')
   const [audioVoice, setAudioVoice] = useState('Ruth')
+  const [audioLanguage, setAudioLanguage] = useState<'id' | 'en'>('id')
   const [language, setLanguage] = useState('id')
 
   // Per-scene UI state
@@ -210,11 +212,11 @@ export function Storyboard() {
   // Reset voice when engine or language changes
   useEffect(() => {
     if (audioEngine === 'polly') {
-      setAudioVoice(language === 'id' ? 'Marlene' : 'Ruth')
+      setAudioVoice(audioLanguage === 'id' ? 'Marlene' : 'Ruth')
     } else {
       setAudioVoice('Bella')
     }
-  }, [audioEngine, language])
+  }, [audioEngine, audioLanguage])
 
   const handleSave = () => {
     if (!storyboard || !rawJson || isAlreadySaved) return
@@ -265,6 +267,7 @@ export function Storyboard() {
       raw = session.rawJson
       sid = sessionId
       setImageModel(session.imageModel)
+      setImageEngine(session.imageEngine || 'cf-flux')
       setAudioEngine(session.audioEngine)
       setAudioVoice(session.audioVoice)
       setLanguage(session.language)
@@ -305,11 +308,17 @@ export function Storyboard() {
         parsedTitle = data.title || 'Untitled'
       } catch { /* ignore */ }
 
+      // Load image engine from settings
+      const settingsStored = localStorage.getItem('fuzzy_short_settings')
+      const userSettings = settingsStored ? JSON.parse(settingsStored) : {}
+      const imgEngine = userSettings.imageEngine || 'cf-flux'  // Default ke free CF FLUX
+
       // Create a new session
       const newId = createSession({
         rawJson: raw,
         title: parsedTitle,
         imageModel: imgModel,
+        imageEngine: imgEngine,
         audioEngine: audModel,
         audioVoice: audModel === 'polly' ? 'Ruth' : 'Bella',
         language: localStorage.getItem('fuzzy_short_settings')
@@ -446,7 +455,12 @@ export function Storyboard() {
     if (activeSessionId) updateSession(activeSessionId, { imageModel: val })
   }
 
-  const handleAudioEngineChange = (val: 'polly' | 'elevenlabs') => {
+  const handleImageEngineChange = (val: string) => {
+    setImageEngine(val)
+    if (activeSessionId) updateSession(activeSessionId, { imageEngine: val })
+  }
+
+  const handleAudioEngineChange = (val: 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio') => {
     setAudioEngine(val)
     if (activeSessionId) updateSession(activeSessionId, { audioEngine: val })
   }
@@ -671,92 +685,88 @@ export function Storyboard() {
     const sceneNum = scene.scene_number as number
     const prompt = editedPrompts[sceneNum] ?? (scene.image_prompt as string)
     updateAsset(sceneNum, { imageStatus: 'generating', imageError: undefined })
-    try {
-      const data = storyboard as Record<string, unknown>
-      const artStyle = (data.art_style as string) || 'cinematic_realistic'
-      const aspectRatio = (data.aspect_ratio as string) || '9_16'
+    
+    const headers = { ...getApiHeaders(user?.id), 'Content-Type': 'application/json' }
+    const body = {
+      prompt: prompt,
+      scene_number: sceneNum,
+      project_id: ((storyboard as any)?.project_id as string) || 'storyboard',
+      aspect_ratio: ((storyboard as any)?.aspect_ratio as string) || '9:16',
+      negative_prompt: 'blurry, low quality, text, watermark, distorted'
+    }
 
-      // Enhance prompt via Claude first
-      let finalPrompt = prompt
-      try {
-        const enhanced = await enhancePrompt({
-          raw_prompt: prompt,
-          art_style: artStyle,
-          aspect_ratio: aspectRatio,
-          mood: scene.mood as string | undefined,
-        })
-        finalPrompt = enhanced.enhanced_prompt
-        updateAsset(sceneNum, { enhancedPrompt: finalPrompt })
-      } catch { /* fall through with original prompt */ }
-
-      const selectedImageModel = IMAGE_MODELS.find(m => m.id === imageModel) || IMAGE_MODELS[0]
-
-      if (selectedImageModel.provider === 'glm') {
-        // Synchronous GLM CogView image generation
-        const res = await fetch(`${WORKER_URL}/api/glm/image/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getApiHeaders(user?.id) },
-          body: JSON.stringify({
-            prompt: finalPrompt,
-            image_model: selectedImageModel.id,
-            aspect_ratio: aspectRatio,
-            scene_number: sceneNum,
-            project_id: (data.project_id as string) || 'storyboard',
-          }),
-        })
-        const result = await res.json() as { image_url?: string; error?: string }
-        if (!res.ok || !result.image_url) throw new Error(result.error || 'CogView image failed')
-        updateAsset(sceneNum, { imageStatus: 'done', imageUrl: result.image_url })
-        toast.success(`Scene ${sceneNum} image ready (CogView)!`)
-        saveSceneAsset({
-          storyboard_id: (data.project_id as string) || activeSessionId || 'storyboard',
-          scene_number: sceneNum,
-          image_url: result.image_url,
-          image_model: imageModel,
-          enhanced_prompt: finalPrompt,
-        }).catch(console.error)
-      } else if (selectedImageModel.provider === 'dashscope') {
-        // Async Dashscope image generation
-        const startRes = await fetch(`${WORKER_URL}/api/dashscope/image/start`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getApiHeaders(user?.id) },
-          body: JSON.stringify({
-            prompt: finalPrompt,
-            image_model: selectedImageModel.id,
-            aspect_ratio: aspectRatio,
-            scene_number: sceneNum,
-            project_id: (data.project_id as string) || 'storyboard',
-          }),
-        })
-        const startData = await startRes.json() as { task_id?: string; error?: string }
-        if (!startRes.ok || !startData.task_id) {
-          throw new Error(startData.error || 'Failed to start Dashscope image task')
+    // Pilih endpoint berdasarkan engine
+    let endpoint: string
+    let finalBody: any = body
+    
+    switch (imageEngine) {
+      case 'gemini-image':
+        endpoint = `${WORKER_URL}/api/image/gemini`
+        finalBody = { ...body }
+        break
+      case 'siliconflow-flux':
+        endpoint = `${WORKER_URL}/api/image/siliconflow`
+        finalBody = { 
+          prompt: body.prompt,
+          model: 'black-forest-labs/FLUX.1-schnell',
+          scene_number: body.scene_number,
+          project_id: body.project_id,
+          image_size: '768x1280',
+          negative_prompt: body.negative_prompt
         }
-        toast(`Scene ${sceneNum} image started (Qwen) · polling every 5s`, { icon: '🖼️', duration: 4000 })
-        startDashscopePolling(sceneNum, startData.task_id, 'image')
-      } else {
-        // AWS Bedrock image generation
-        const result = await generateImage({
-          prompt: finalPrompt,
-          scene_number: sceneNum,
-          project_id: (data.project_id as string) || 'storyboard',
-          aspect_ratio: aspectRatio,
-          art_style: artStyle,
-          image_model: imageModel as 'nova_canvas' | 'sd35',
-        })
-        const imgCost = estimateImageCost(imageModel)
-        const modelLabel = imageModel === 'sd35' ? 'SD 3.5 Large' : 'Nova Canvas'
-        updateAsset(sceneNum, { imageStatus: 'done', imageUrl: result.image_url })
-        addCostEntry({ service: 'image', model: modelLabel, cost: imgCost })
-        toast.success(`Scene ${sceneNum} image ready · ${formatCost(imgCost)}`)
-        saveSceneAsset({
-          storyboard_id: (data.project_id as string) || activeSessionId || 'storyboard',
-          scene_number: sceneNum,
-          image_url: result.image_url,
-          image_model: imageModel,
-          enhanced_prompt: finalPrompt,
-        }).catch(console.error)
+        break
+      case 'cf-flux':
+        endpoint = `${WORKER_URL}/api/image/cf-flux`
+        finalBody = { ...body }
+        break
+      case 'nova-canvas':
+      case 'sd35':
+        endpoint = `${WORKER_URL}/api/image/generate`
+        finalBody = { ...body, model: imageModel as 'nova_canvas' | 'sd35' }
+        break
+      case 'wanx':
+        endpoint = `${WORKER_URL}/api/dashscope/image/start`
+        finalBody = { ...body }
+        break
+      default:
+        endpoint = `${WORKER_URL}/api/image/generate`
+        finalBody = { ...body, model: imageModel as 'nova_canvas' | 'sd35' }
+        break
+    }
+
+    try {
+      const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(finalBody) })
+      const data = await res.json()
+
+      if (!res.ok) throw new Error(data.error || 'Image generation failed')
+
+      // Wanx adalah async — handle polling separately
+      if (imageEngine === 'wanx' && data.task_id) {
+        toast(`Scene ${sceneNum} image started (Wanx) · polling every 5s`, { icon: '🖼️', duration: 4000 })
+        startDashscopePolling(sceneNum, data.task_id, 'image')
+        return
       }
+
+      const imageUrl = data.image_url || data.imageUrl
+      if (!imageUrl) throw new Error('No image URL in response')
+
+      updateAsset(sceneNum, { imageStatus: 'done', imageUrl: imageUrl })
+      
+      const imgCost = estimateImageCost(imageModel)
+      const modelLabel = imageEngine === 'gemini-image' ? 'Gemini Image' :
+                        imageEngine === 'siliconflow-flux' ? 'SF FLUX' :
+                        imageEngine === 'cf-flux' ? 'CF FLUX' :
+                        imageModel === 'sd35' ? 'SD 3.5 Large' : 'Nova Canvas'
+      addCostEntry({ service: 'image', model: modelLabel, cost: imgCost })
+      toast.success(`Scene ${sceneNum} image ready · ${formatCost(imgCost)}`)
+      
+      saveSceneAsset({
+        storyboard_id: ((storyboard as any)?.project_id as string) || activeSessionId || 'storyboard',
+        scene_number: sceneNum,
+        image_url: imageUrl,
+        image_model: imageEngine,
+        enhanced_prompt: prompt,
+      }).catch(console.error)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       const isKeyError = msg.toLowerCase().includes('credentials') || msg.toLowerCase().includes('api key required')
@@ -947,47 +957,75 @@ export function Storyboard() {
       || (language === 'id'
         ? (scene.text_id as string) || (scene.text_en as string)
         : (scene.text_en as string) || (scene.text_id as string))
-    if (!text) return
+    if (!text) {
+      setPageToast({ msg: 'VO script kosong — generate storyboard dulu', type: 'error' })
+      return
+    }
     updateAsset(sceneNum, { audioStatus: 'generating', audioError: undefined })
+    
+    const headers = { ...getApiHeaders(user?.id), 'Content-Type': 'application/json' }
+    const body = {
+      text: text,
+      language: audioLanguage,
+      tone: (storyboard as any)?.tone || 'informative',
+      scene_number: sceneNum,
+      project_id: ((storyboard as any)?.project_id as string) || 'storyboard',
+    }
+
+    // Pilih endpoint berdasarkan engine
+    let endpoint: string
+    switch (audioEngine) {
+      case 'gemini_tts':
+        endpoint = `${WORKER_URL}/api/audio/gemini-tts`
+        break
+      case 'fish_audio':
+        endpoint = `${WORKER_URL}/api/audio/fish-tts`
+        break
+      case 'polly':
+      case 'elevenlabs':
+      default:
+        endpoint = `${WORKER_URL}/api/audio/generate`
+        break
+    }
+
     try {
-      const data = storyboard as Record<string, unknown>
-      const result = await generateAudio({
-        text,
-        language,
+      const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) })
+      const data = await res.json()
+
+      if (!res.ok) throw new Error(data.error || 'Audio generation failed')
+
+      // Save audio URL ke scene asset
+      await saveSceneAsset({
+        storyboard_id: ((storyboard as any)?.project_id as string) || activeSessionIdRef.current || 'storyboard',
         scene_number: sceneNum,
-        project_id: (data.project_id as string) || 'storyboard',
-        engine: audioEngine,
-        voice: audioVoice,
-        ...(audioEngine === 'elevenlabs' ? {
-          stability: elStability,
-          similarity_boost: elSimilarity,
-          style: elStyle,
-        } : {}),
+        audio_url: data.audio_url,
+        audio_engine: data.engine,
+        audio_voice: data.voice_used || data.voice_id,
+        audio_language: audioLanguage,
       })
-      const audCost = estimateAudioCost(audioEngine, text.length)
-      const modelLabel = audioEngine === 'elevenlabs' ? 'ElevenLabs' : 'Polly'
+
+      // Update local state
       const newHistoryItem: AudioHistoryItem = {
-        url: result.audio_url,
-        engine: audioEngine,
-        voice: audioVoice,
+        url: data.audio_url,
+        engine: data.engine || audioEngine,
+        voice: data.voice_used || data.voice_id || audioVoice,
         timestamp: new Date().toISOString(),
       }
       const current = storedAssets[sceneNum] || defaultSceneAssets()
       const newHistory = [newHistoryItem, ...(current.audioHistory || [])].slice(0, 5)
+      
       updateAsset(sceneNum, {
         audioStatus: 'done',
-        audioUrl: result.audio_url,
+        audioUrl: data.audio_url,
         audioHistory: newHistory,
       })
+
+      const audCost = estimateAudioCost(audioEngine, text.length)
+      const modelLabel = audioEngine === 'elevenlabs' ? 'ElevenLabs' : 
+                        audioEngine === 'gemini_tts' ? 'Gemini TTS' : 
+                        audioEngine === 'fish_audio' ? 'Fish Audio' : 'Polly'
       addCostEntry({ service: 'audio', model: modelLabel, cost: audCost })
       toast.success(`Scene ${sceneNum} audio ready · ${formatCost(audCost)}`)
-      saveSceneAsset({
-        storyboard_id: (data.project_id as string) || activeSessionIdRef.current || 'storyboard',
-        scene_number: sceneNum,
-        audio_url: result.audio_url,
-        audio_voice: audioVoice,
-        custom_vo: customVO[sceneNum] || null,
-      }).catch(console.error)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       const isKeyError = msg.toLowerCase().includes('credentials') || msg.toLowerCase().includes('api key required')
@@ -2025,23 +2063,15 @@ export function Storyboard() {
                 </p>
               )}
 
-              {/* Engine + voice dropdowns */}
+              {/* Voice dropdown only (engine is selected in header) */}
               <div style={{ display: 'flex', gap: '6px', marginBottom: '7px', flexWrap: 'wrap' }}>
-                <select
-                  value={audioEngine}
-                  onChange={e => handleAudioEngineChange(e.target.value as 'polly' | 'elevenlabs')}
-                  style={dropdownStyle}
-                >
-                  <option value="polly">AWS Polly</option>
-                  <option value="elevenlabs">ElevenLabs</option>
-                </select>
                 <select
                   value={audioVoice}
                   onChange={e => handleAudioVoiceChange(e.target.value)}
                   style={dropdownStyle}
                 >
                   {audioEngine === 'polly' ? (
-                    language === 'id' ? (
+                    audioLanguage === 'id' ? (
                       POLLY_VOICES_ID.map(v => <option key={v} value={v}>{v}</option>)
                     ) : (
                       POLLY_VOICES_EN.map(v => <option key={v} value={v}>{v}</option>)
@@ -2342,6 +2372,121 @@ export function Storyboard() {
             </div>
           </div>
         )}
+
+        {/* Image Engine Selector */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 14px', borderRadius: 14,
+          background: 'rgba(0,122,255,0.08)',
+          border: '1px solid rgba(0,122,255,0.2)',
+          marginBottom: 8, flexWrap: 'wrap'
+        }}>
+          <span style={{ fontSize: 16 }}>🎨</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#007aff' }}>Image Engine:</span>
+
+          {IMAGE_ENGINES.map(eng => {
+            // Check apakah key tersedia
+            const settingsFromStorage = localStorage.getItem('fuzzy_short_settings')
+            const userSettings = settingsFromStorage ? JSON.parse(settingsFromStorage) : {}
+            const hasKey = !eng.requiresKey || !!userSettings[eng.requiresKey]
+            if (!hasKey && !eng.free) return null  // Sembunyikan engine yang tidak ada keynya
+
+            return (
+              <button
+                key={eng.id}
+                onClick={() => setImageEngine(eng.id)}
+                title={eng.note}
+                style={{
+                  padding: '4px 12px', borderRadius: 20,
+                  border: imageEngine === eng.id
+                    ? '1.5px solid #007aff'
+                    : '1px solid rgba(60,60,67,0.15)',
+                  background: imageEngine === eng.id
+                    ? 'rgba(0,122,255,0.12)'
+                    : 'rgba(255,255,255,0.6)',
+                  color: imageEngine === eng.id ? '#007aff' : 'rgba(60,60,67,0.6)',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 4
+                }}
+              >
+                <span>{eng.emoji}</span>
+                <span>{eng.label}</span>
+                {eng.free && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700,
+                    background: 'rgba(52,199,89,0.2)', color: '#34c759',
+                    padding: '1px 4px', borderRadius: 6
+                  }}>FREE</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Audio Engine Selector */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 14px', borderRadius: 14,
+          background: 'rgba(175,82,222,0.08)',
+          border: '1px solid rgba(175,82,222,0.2)',
+          marginBottom: 8
+        }}>
+          <span style={{ fontSize: 16 }}>🎙️</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#af52de' }}>TTS Engine:</span>
+
+          {/* Engine Pills */}
+          {[
+            { id: 'gemini_tts', label: 'Gemini', emoji: '✨', free: true },
+            { id: 'polly',      label: 'Polly',  emoji: '🔊', free: false },
+            { id: 'fish_audio', label: 'Fish',   emoji: '🐟', free: true },
+          ].map(eng => (
+            <button
+              key={eng.id}
+              onClick={() => setAudioEngine(eng.id as any)}
+              style={{
+                padding: '4px 12px', borderRadius: 20,
+                border: audioEngine === eng.id
+                  ? '1.5px solid #af52de'
+                  : '1px solid rgba(60,60,67,0.15)',
+                background: audioEngine === eng.id
+                  ? 'rgba(175,82,222,0.15)'
+                  : 'rgba(255,255,255,0.6)',
+                color: audioEngine === eng.id ? '#af52de' : 'rgba(60,60,67,0.6)',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 4
+              }}
+            >
+              <span>{eng.emoji}</span>
+              <span>{eng.label}</span>
+              {eng.free && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700,
+                  background: 'rgba(52,199,89,0.2)', color: '#34c759',
+                  padding: '1px 4px', borderRadius: 6
+                }}>FREE</span>
+              )}
+            </button>
+          ))}
+
+          {/* Language selector */}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+            {(['id', 'en'] as const).map(lang => (
+              <button
+                key={lang}
+                onClick={() => setAudioLanguage(lang)}
+                style={{
+                  padding: '4px 10px', borderRadius: 16, fontSize: 12, fontWeight: 600,
+                  border: audioLanguage === lang ? '1.5px solid #af52de' : '1px solid rgba(60,60,67,0.15)',
+                  background: audioLanguage === lang ? 'rgba(175,82,222,0.12)' : 'rgba(255,255,255,0.6)',
+                  color: audioLanguage === lang ? '#af52de' : 'rgba(60,60,67,0.6)',
+                  cursor: 'pointer'
+                }}
+              >
+                {lang === 'id' ? '🇮🇩 ID' : '🇺🇸 EN'}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Row 2: Veo action buttons (only shown for Veo-compatible tones) */}
         {isVeoTone((storyboard.tone as string) || '') && (
