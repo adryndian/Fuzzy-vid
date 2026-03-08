@@ -55,7 +55,17 @@ export async function handleGeminiTts(request: Request, env: any, corsHeaders: R
       return Response.json({ error: 'Gemini TTS failed', details: errData }, { status: geminiRes.status, headers: corsHeaders })
     }
 
-    const geminiData = await geminiRes.json()
+    const geminiData = await geminiRes.json() as {
+      candidates?: Array<{
+        content?: {
+          parts?: Array<{
+            inlineData?: {
+              data?: string
+            }
+          }>
+        }
+      }>
+    }
 
     // Extract audio bytes from response
     const audioBase64 = geminiData?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data
@@ -66,12 +76,14 @@ export async function handleGeminiTts(request: Request, env: any, corsHeaders: R
     // Convert base64 to binary
     const audioBuffer = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0))
 
+    const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
+
     // Upload to R2
     const fileName = `audio/${project_id || 'default'}/scene_${scene_number || 0}_gemini_${Date.now()}.wav`
-    await env.R2_BUCKET?.put(fileName, audioBuffer, {
+    await env.STORY_STORAGE.put(fileName, audioBuffer, {
       httpMetadata: { contentType: 'audio/wav' }
     })
-    const audioUrl = `${env.R2_PUBLIC_URL}/${fileName}`
+    const audioUrl = `${WORKER_URL}/api/storage/file/${fileName}`
 
     return Response.json({
       audio_url: audioUrl,

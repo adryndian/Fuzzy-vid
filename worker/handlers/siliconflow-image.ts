@@ -47,10 +47,13 @@ export async function handleSiliconflowImage(request: Request, env: any, corsHea
       return Response.json({ error: 'SiliconFlow Image failed', details: errData }, { status: sfRes.status, headers: corsHeaders })
     }
 
-    const sfData = await sfRes.json()
+    const sfData = await sfRes.json() as {
+      data?: Array<{ url: string }>
+      images?: Array<{ url: string }>
+    }
 
-    // SiliconFlow returns: { images: [{ url: "..." }] }
-    const imageUrl = sfData?.images?.[0]?.url
+    // SiliconFlow/OpenAI-compat returns: { data: [{ url: "..." }] } or sometimes { images: [...] }
+    const imageUrl = sfData?.data?.[0]?.url || sfData?.images?.[0]?.url
     if (!imageUrl) {
       return Response.json({ error: 'No image URL from SiliconFlow', raw: sfData }, { status: 500, headers: corsHeaders })
     }
@@ -59,11 +62,13 @@ export async function handleSiliconflowImage(request: Request, env: any, corsHea
     const imgRes = await fetch(imageUrl)
     const imgBuffer = await imgRes.arrayBuffer()
 
+    const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
+
     const fileName = `images/${project_id || 'default'}/scene_${scene_number || 0}_sf_${Date.now()}.png`
-    await env.R2_BUCKET?.put(fileName, imgBuffer, {
+    await env.STORY_STORAGE.put(fileName, imgBuffer, {
       httpMetadata: { contentType: 'image/png' }
     })
-    const r2ImageUrl = `${env.R2_PUBLIC_URL}/${fileName}`
+    const r2ImageUrl = `${WORKER_URL}/api/storage/file/${fileName}`
 
     // Parse dimensions dari image_size
     const [width, height] = image_size.split('x').map(Number)

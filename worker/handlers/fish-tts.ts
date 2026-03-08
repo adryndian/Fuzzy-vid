@@ -55,12 +55,14 @@ export async function handleFishTts(request: Request, env: any, corsHeaders: Rec
     // Fish Audio returns audio binary directly
     const audioBuffer = await fishRes.arrayBuffer()
 
+    const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
+
     // Upload ke R2
     const fileName = `audio/${project_id || 'default'}/scene_${scene_number || 0}_fish_${Date.now()}.mp3`
-    await env.R2_BUCKET?.put(fileName, audioBuffer, {
+    await env.STORY_STORAGE.put(fileName, audioBuffer, {
       httpMetadata: { contentType: 'audio/mpeg' }
     })
-    const audioUrl = `${env.R2_PUBLIC_URL}/${fileName}`
+    const audioUrl = `${WORKER_URL}/api/storage/file/${fileName}`
 
     return Response.json({
       audio_url: audioUrl,
@@ -82,32 +84,32 @@ export async function handleFishTts(request: Request, env: any, corsHeaders: Rec
 // User bisa clone voice sendiri (15 detik sample), tapi kita default ke preset
 
 function selectFishVoice(language: string, tone: string): string {
-  // IMPORTANT: Replace these placeholder IDs dengan actual Fish Audio voice reference IDs
-  // Dapatkan di: https://fish.audio → Browse Voices
-  // Cari voices yang support Indonesian / multilingual
-
+  // Fish Audio Reference IDs — updated with valid public IDs
+  // Adam: 7f92f8afb8ca427fa9063bc9dbf00de0 (Multilingual)
+  // Bella: e58b1209487f4ad19bd701ca2dbfa928 (Warm)
+  
   const FISH_VOICES: Record<string, Record<string, string>> = {
     id: {
-      documentary_viral:      'FISH_VOICE_ID_ID_MALE_PROFESSIONAL',    // Male, deep, authoritative
-      narrative_storytelling: 'FISH_VOICE_ID_ID_FEMALE_WARM',          // Female, warm, narrative
-      natural_genz:           'FISH_VOICE_ID_ID_YOUNG_CASUAL',          // Young, casual
-      informative:            'FISH_VOICE_ID_ID_MALE_CLEAR',            // Male, clear
-      product_ads:            'FISH_VOICE_ID_ID_FEMALE_ENERGETIC',      // Female, energetic
-      educational:            'FISH_VOICE_ID_ID_FEMALE_PATIENT',        // Female, patient
-      entertainment:          'FISH_VOICE_ID_ID_YOUNG_ENERGETIC',       // Young, fun
-      motivational:           'FISH_VOICE_ID_ID_MALE_INSPIRING',        // Male, inspiring
-      default:                'FISH_VOICE_ID_ID_DEFAULT'
+      documentary_viral:      '7f92f8afb8ca427fa9063bc9dbf00de0',    // Adam
+      narrative_storytelling: 'e58b1209487f4ad19bd701ca2dbfa928',    // Bella
+      natural_genz:           'ad6010066cf44cc98eb6068cd66dbcc3',    // ID Female
+      informative:            '7f92f8afb8ca427fa9063bc9dbf00de0',    
+      product_ads:            'e58b1209487f4ad19bd701ca2dbfa928',
+      educational:            'ad6010066cf44cc98eb6068cd66dbcc3',
+      entertainment:          '7f92f8afb8ca427fa9063bc9dbf00de0',
+      motivational:           'e58b1209487f4ad19bd701ca2dbfa928',
+      default:                '7f92f8afb8ca427fa9063bc9dbf00de0'
     },
     en: {
-      documentary_viral:      'FISH_VOICE_ID_EN_MALE_NEWS',
-      narrative_storytelling: 'FISH_VOICE_ID_EN_FEMALE_NARRATIVE',
-      natural_genz:           'FISH_VOICE_ID_EN_YOUNG_CASUAL',
-      informative:            'FISH_VOICE_ID_EN_MALE_PROFESSIONAL',
-      product_ads:            'FISH_VOICE_ID_EN_FEMALE_SALES',
-      educational:            'FISH_VOICE_ID_EN_FEMALE_TEACHER',
-      entertainment:          'FISH_VOICE_ID_EN_MALE_ENERGETIC',
-      motivational:           'FISH_VOICE_ID_EN_FEMALE_COACH',
-      default:                'FISH_VOICE_ID_EN_DEFAULT'
+      documentary_viral:      '7f92f8afb8ca427fa9063bc9dbf00de0',
+      narrative_storytelling: 'e58b1209487f4ad19bd701ca2dbfa928',
+      natural_genz:           '546abd3665a14317ade44e2142a2dca6',    // Antoni
+      informative:            '7f92f8afb8ca427fa9063bc9dbf00de0',
+      product_ads:            '546abd3665a14317ade44e2142a2dca6',
+      educational:            'e58b1209487f4ad19bd701ca2dbfa928',
+      entertainment:          '7f92f8afb8ca427fa9063bc9dbf00de0',
+      motivational:           'e58b1209487f4ad19bd701ca2dbfa928',
+      default:                '7f92f8afb8ca427fa9063bc9dbf00de0'
     }
   }
 

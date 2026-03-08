@@ -250,12 +250,18 @@ export async function generateBrain(params: {
   const { brainModel, userId } = params
   const headers = getApiHeaders(userId)
 
-  // Route: AWS Bedrock (us.*) and explicit Dashscope models → /api/brain/generate
+  // Route: AWS Bedrock (us.*) → /api/brain/generate
+  // Dashscope models → /api/dashscope/brain
   // All other models (Groq, GLM, Gemini, OpenRouter IDs) → /api/brain/provider
   const DASHSCOPE_BRAIN_MODELS = ['qwen3-max', 'qwen-plus', 'qwen-flash', 'qwen-turbo', 'qwq-plus', 'qwen3-235b-a22b']
   const isDashscopeBrain = DASHSCOPE_BRAIN_MODELS.includes(brainModel)
-  const isProvider = !brainModel.startsWith('us.') && !isDashscopeBrain
-  const endpoint = isProvider ? '/api/brain/provider' : '/api/brain/generate'
+  
+  let endpoint = '/api/brain/provider'
+  if (brainModel.startsWith('us.')) {
+    endpoint = '/api/brain/generate'
+  } else if (isDashscopeBrain) {
+    endpoint = '/api/dashscope/brain'
+  }
 
   const res = await fetch(`${WORKER_URL}${endpoint}`, {
     method: 'POST',

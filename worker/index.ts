@@ -106,7 +106,7 @@ export function extractCredentials(request: Request, env: Env): Credentials {
   const h = request.headers
   return {
     // User-supplied keys — NO env fallback (each user uses their own)
-    geminiApiKey:        h.get('X-Gemini-Api-Key') || h.get('X-Gemini-Key') || '',
+    geminiApiKey:        h.get('X-Gemini-Api-Key') || h.get('X-Gemini-Key') || env.GEMINI_API_KEY || '',
     awsAccessKeyId:     h.get('X-AWS-Access-Key-Id')      || '',
     awsSecretAccessKey: h.get('X-AWS-Secret-Access-Key')  || '',
     elevenLabsApiKey:   h.get('X-ElevenLabs-Key')         || '',

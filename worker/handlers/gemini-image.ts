@@ -47,13 +47,24 @@ export async function handleGeminiImage(request: Request, env: any, corsHeaders:
       return Response.json({ error: 'Gemini Image failed', details: errData }, { status: geminiRes.status, headers: corsHeaders })
     }
 
-    const geminiData = await geminiRes.json()
+    const geminiData = await geminiRes.json() as {
+      candidates?: Array<{
+        content?: {
+          parts?: Array<{
+            inlineData?: {
+              mimeType?: string
+              data?: string
+            }
+          }>
+        }
+      }>
+    }
 
     // Extract image from response
     const parts = geminiData?.candidates?.[0]?.content?.parts || []
     const imagePart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'))
 
-    if (!imagePart) {
+    if (!imagePart || !imagePart.inlineData?.data) {
       return Response.json({ error: 'No image in Gemini response', raw: geminiData }, { status: 500, headers: corsHeaders })
     }
 
@@ -64,12 +75,14 @@ export async function handleGeminiImage(request: Request, env: any, corsHeaders:
     // Convert base64 to binary
     const imageBuffer = Uint8Array.from(atob(imageBase64), c => c.charCodeAt(0))
 
+    const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
+
     // Upload ke R2
     const fileName = `images/${project_id || 'default'}/scene_${scene_number || 0}_gemini_${Date.now()}.${ext}`
-    await env.R2_BUCKET?.put(fileName, imageBuffer, {
+    await env.STORY_STORAGE.put(fileName, imageBuffer, {
       httpMetadata: { contentType: mimeType }
     })
-    const imageUrl = `${env.R2_PUBLIC_URL}/${fileName}`
+    const imageUrl = `${WORKER_URL}/api/storage/file/${fileName}`
 
     return Response.json({
       image_url: imageUrl,

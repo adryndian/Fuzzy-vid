@@ -285,8 +285,7 @@ export async function handleBrainRequest(
             })
             let responseText: string
 
-            if (model === 'claude_sonnet' || model === 'gemini') {
-              // Use Claude as primary (also fallback for gemini when Gemini is down)
+            if (model === 'claude_sonnet') {
               responseText = await callBedrock(
                 creds,
                 'us.anthropic.claude-sonnet-4-6',
@@ -296,6 +295,7 @@ export async function handleBrainRequest(
             } else if (model === 'llama4_maverick') {
               responseText = await callBedrockLlama(creds, promptWithContext, systemPrompt)
             } else {
+              // Fallback to Claude for any other Bedrock models
               responseText = await callBedrock(
                 creds,
                 'us.anthropic.claude-sonnet-4-6',

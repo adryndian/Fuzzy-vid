@@ -7,10 +7,13 @@ interface AudioRequestBody {
   text: string
   voice?: string            // optional: override voice ID
   language?: 'id' | 'en'   // detect language, default 'id'
-  engine?: 'neural' | 'standard'  // default 'neural'
+  engine?: 'neural' | 'standard' | 'elevenlabs' | 'polly'  // updated to include all engines
   scene_number?: number     // for naming files in R2
   project_id?: string       // for path in R2
   tone?: string             // for log/debug
+  stability?: number
+  similarity_boost?: number
+  style?: number
 }
 
 export async function handleAudioRequest(
@@ -45,7 +48,7 @@ export async function handleAudioRequest(
             { status: 400 }
           )
         }
-        audioBuffer = await generateWithElevenLabs(text, language, apiKey, voice, {
+        audioBuffer = await generateWithElevenLabs(text, language || 'id', apiKey, voice, {
           stability: body.stability,
           similarity_boost: body.similarity_boost,
           style: body.style,
@@ -59,7 +62,7 @@ export async function handleAudioRequest(
           )
         }
         const region = creds.audioRegion || 'us-west-2'
-        audioBuffer = await generateWithPolly(text, language, region, creds, voice)
+        audioBuffer = await generateWithPolly(text, language || 'id', region, creds, voice)
       }
 
       // Upload to R2

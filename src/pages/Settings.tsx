@@ -72,6 +72,7 @@ export function Settings() {
               cerebrasApiKey:     keys.cerebras_api_key      || prev.cerebrasApiKey,
               mistralApiKey:      keys.mistral_api_key       || prev.mistralApiKey,
               siliconflowApiKey:  keys.siliconflow_api_key   || prev.siliconflowApiKey,
+              fishAudioApiKey:    keys.fish_audio_api_key    || prev.fishAudioApiKey,
             }
             localStorage.setItem(storageKey, JSON.stringify(merged))
             return merged
@@ -114,6 +115,7 @@ export function Settings() {
         cerebras_api_key: settings.cerebrasApiKey || '',
         mistral_api_key: settings.mistralApiKey || '',
         siliconflow_api_key: settings.siliconflowApiKey || '',
+        fish_audio_api_key: settings.fishAudioApiKey || '',
       })
       await updatePreferences({
         brain_region: settings.brainRegion,

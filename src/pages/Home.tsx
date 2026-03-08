@@ -197,6 +197,9 @@ export function Home() {
         if (s.groqApiKey) apiHeaders['X-Groq-Api-Key'] = s.groqApiKey
         if (s.openrouterApiKey) apiHeaders['X-Openrouter-Api-Key'] = s.openrouterApiKey
         if (s.glmApiKey) apiHeaders['X-Glm-Api-Key'] = s.glmApiKey
+        if (s.cerebrasApiKey) apiHeaders['X-Cerebras-Api-Key'] = s.cerebrasApiKey
+        if (s.mistralApiKey) apiHeaders['X-Mistral-Api-Key'] = s.mistralApiKey
+        if (s.siliconflowApiKey) apiHeaders['X-Siliconflow-Api-Key'] = s.siliconflowApiKey
       }
     } catch { /* ignore */ }
 
@@ -227,6 +230,21 @@ export function Home() {
       setError('Please add your GLM API key in Settings first')
       setLoading(false); setCurrentStep(-1)
       updateTask(taskId, { status: 'error', error: 'Missing GLM key' }); return
+    }
+    if (modelProvider === 'cerebras' && !apiHeaders['X-Cerebras-Api-Key']) {
+      setError('Please add your Cerebras API key in Settings first')
+      setLoading(false); setCurrentStep(-1)
+      updateTask(taskId, { status: 'error', error: 'Missing Cerebras key' }); return
+    }
+    if (modelProvider === 'mistral' && !apiHeaders['X-Mistral-Api-Key']) {
+      setError('Please add your Mistral AI API key in Settings first')
+      setLoading(false); setCurrentStep(-1)
+      updateTask(taskId, { status: 'error', error: 'Missing Mistral key' }); return
+    }
+    if (modelProvider === 'siliconflow' && !apiHeaders['X-Siliconflow-Api-Key']) {
+      setError('Please add your SiliconFlow API key in Settings first')
+      setLoading(false); setCurrentStep(-1)
+      updateTask(taskId, { status: 'error', error: 'Missing SiliconFlow key' }); return
     }
 
     stepTimerRef.current = setTimeout(() => {
@@ -855,10 +873,12 @@ export function Home() {
           <span style={labelStyle}>Audio Engine</span>
           <select
             value={audioModel}
-            onChange={e => setAudioModel(e.target.value as 'polly' | 'elevenlabs')}
+            onChange={e => setAudioModel(e.target.value as any)}
             style={dropdownStyle}
           >
+            <option value="gemini_tts">Google Gemini — Free Default</option>
             <option value="polly">AWS Polly — Low Cost</option>
+            <option value="fish_audio">Fish Audio — Premium Quality</option>
             <option value="elevenlabs">ElevenLabs — Premium Voice</option>
           </select>
         </div>

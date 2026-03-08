@@ -265,21 +265,56 @@ export function Storyboard() {
     let raw: string | null = null
     let sid: string | null = null
 
-    // Try to load from session store by ID
+    // Determine raw and sid first
     if (sessionId && sessions[sessionId]) {
       const session = sessions[sessionId]
       raw = session.rawJson
       sid = sessionId
+    } else {
+      raw = sessionStorage.getItem('storyboard_result')
+    }
+
+    if (!raw) {
+      navigate('/')
+      return
+    }
+
+    // Parse raw early to get data and scenes
+    let data: any = null
+    try {
+      const parsed = JSON.parse(raw)
+      data = parsed
+      if (!data.scenes) {
+        if (Array.isArray(parsed.storyboard?.scenes)) data = parsed.storyboard
+        else if (Array.isArray(parsed.data?.scenes)) data = parsed.data
+        else if (Array.isArray(parsed.project?.scenes)) data = parsed.project
+      }
+    } catch (e) {
+      console.error('Failed to parse storyboard JSON', e)
+      navigate('/')
+      return
+    }
+
+    if (!data || !data.scenes || !Array.isArray(data.scenes) || data.scenes.length === 0) {
+      navigate('/')
+      return
+    }
+
+    const currentScenes = data.scenes as Record<string, unknown>[]
+
+    // Load from existing session
+    if (sessionId && sessions[sessionId]) {
+      const session = sessions[sessionId]
       setImageModel(session.imageModel)
       setImageEngine(session.imageEngine || 'cf-flux')
+      
       // Load per-scene audio settings if they exist, otherwise fallback to old format
       if (session.audioEngine && typeof session.audioEngine === 'object') {
         setAudioEngine(session.audioEngine as Record<number, 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'>)
       } else {
         // Convert old single value to per-scene format (apply to all scenes)
-        const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
         const newAudioEngine: Record<number, 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio'> = {}
-        scenes.forEach(scene => {
+        currentScenes.forEach(scene => {
           const sceneNum = scene.scene_number as number
           newAudioEngine[sceneNum] = (session.audioEngine as 'polly' | 'elevenlabs' | 'gemini_tts' | 'fish_audio') || 'gemini_tts'
         })
@@ -290,9 +325,8 @@ export function Storyboard() {
         setAudioVoice(session.audioVoice as Record<number, string>)
       } else {
         // Convert old single value to per-scene format (apply to all scenes)
-        const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
         const newAudioVoice: Record<number, string> = {}
-        scenes.forEach(scene => {
+        currentScenes.forEach(scene => {
           const sceneNum = scene.scene_number as number
           newAudioVoice[sceneNum] = (session.audioVoice as string) || 'Ruth'
         })
@@ -304,9 +338,8 @@ export function Storyboard() {
         setAudioLanguage(session.audioLanguage as Record<number, 'id' | 'en'>)
       } else {
         // Convert old single value to per-scene format (apply to all scenes)
-        const scenes = (storyboard.scenes as Record<string, unknown>[]) || []
         const newAudioLanguage: Record<number, 'id' | 'en'> = {}
-        scenes.forEach(scene => {
+        currentScenes.forEach(scene => {
           const sceneNum = scene.scene_number as number
           newAudioLanguage[sceneNum] = ((session.audioLanguage as string) || 'id') as 'id' | 'en'
         })
@@ -316,9 +349,6 @@ export function Storyboard() {
       setLanguage(session.language)
     } else {
       // Fallback: create new session from sessionStorage
-      raw = sessionStorage.getItem('storyboard_result')
-      if (!raw) { navigate('/'); return }
-
       const storedImageModel = sessionStorage.getItem('fuzzy_gen_imageModel')
       const imgModel = storedImageModel && IMAGE_MODELS.some(m => m.id === storedImageModel)
         ? storedImageModel : 'nova_canvas'
@@ -329,35 +359,23 @@ export function Storyboard() {
       if (storedVideoModel) setDefaultVideoModel(storedVideoModel)
 
       setImageModel(imgModel)
-      // Initialize audio engine with default for all scenes (will be converted when scenes are loaded)
+      // Initialize audio engine with default for all scenes
       setAudioEngine({})
       setAudioVoice({})
       setAudioLanguage({})
 
       // Load language from settings
-      const stored = localStorage.getItem('fuzzy_short_settings')
-      if (stored) {
-        const keys = JSON.parse(stored)
+      const storedSettings = localStorage.getItem('fuzzy_short_settings')
+      if (storedSettings) {
+        const keys = JSON.parse(storedSettings)
         if (keys.language) setLanguage(keys.language)
       }
 
-      // Parse to get title
-      let parsedTitle = 'Untitled'
-      try {
-        const parsed = JSON.parse(raw)
-        let data = parsed
-        if (!data.scenes) {
-          if (Array.isArray(parsed.storyboard?.scenes)) data = parsed.storyboard
-          else if (Array.isArray(parsed.data?.scenes)) data = parsed.data
-          else if (Array.isArray(parsed.project?.scenes)) data = parsed.project
-        }
-        parsedTitle = data.title || 'Untitled'
-      } catch { /* ignore */ }
+      const parsedTitle = data.title || 'Untitled'
 
       // Load image engine from settings
-      const settingsStored = localStorage.getItem('fuzzy_short_settings')
-      const userSettings = settingsStored ? JSON.parse(settingsStored) : {}
-      const imgEngine = userSettings.imageEngine || 'cf-flux'  // Default ke free CF FLUX
+      const userSettings = storedSettings ? JSON.parse(storedSettings) : {}
+      const imgEngine = userSettings.imageEngine || 'cf-flux'
 
       // Create a new session
       const newId = createSession({
@@ -367,15 +385,10 @@ export function Storyboard() {
         imageEngine: imgEngine,
         audioEngine: audModel,
         audioVoice: audModel === 'polly' ? 'Ruth' : 'Bella',
-        audioLanguage: localStorage.getItem('fuzzy_short_settings')
-          ? (JSON.parse(localStorage.getItem('fuzzy_short_settings')!).language || 'id')
-          : 'id',
-        language: localStorage.getItem('fuzzy_short_settings')
-          ? JSON.parse(localStorage.getItem('fuzzy_short_settings')!).language || 'id'
-          : 'id',
+        audioLanguage: userSettings.language || 'id',
+        language: userSettings.language || 'id',
       })
       sid = newId
-      // Update URL with new session ID without navigating away
       window.history.replaceState(null, '', `/storyboard?id=${newId}`)
     }
 
@@ -383,43 +396,32 @@ export function Storyboard() {
     setActiveSessionId(sid)
     activeSessionIdRef.current = sid
 
-    try {
-      const parsed = JSON.parse(raw)
-      let data = parsed
-      if (!data.scenes) {
-        if (Array.isArray(parsed.storyboard?.scenes)) data = parsed.storyboard
-        else if (Array.isArray(parsed.data?.scenes)) data = parsed.data
-        else if (Array.isArray(parsed.project?.scenes)) data = parsed.project
+    setStoryboard(data)
+    if (data.brain_model) setVeoBrainModel(data.brain_model as string)
+    if (data.selected_video_model) setDefaultVideoModel(data.selected_video_model as string)
+
+    // Initialize scene durations evenly across 60s default
+    const initDurations: Record<number, number> = {}
+    currentScenes.forEach((_, i) => { initDurations[i + 1] = Math.max(2, Math.min(6, Math.round(60 / currentScenes.length))) })
+    setSceneDurations(initDurations)
+
+    // Pre-populate video prompts from brain-generated JSON
+    currentScenes.forEach((scene) => {
+      const sceneNum = scene.scene_number as number
+      const brainVideoPrompt = scene.video_prompt as VideoPromptData | undefined
+      if (brainVideoPrompt && sid) {
+        updateAssetInStore(sid, sceneNum, {
+          videoPrompt: brainVideoPrompt,
+          customVideoPrompt: brainVideoPrompt.full_prompt,
+        })
       }
-      if (!data.scenes || !Array.isArray(data.scenes) || data.scenes.length === 0) {
-        navigate('/')
-        return
+      const brainVeoPrompt = scene.veo_prompt as Record<string, unknown> | undefined
+      if (brainVeoPrompt && sid) {
+        updateAssetInStore(sid, sceneNum, { veoPrompt: brainVeoPrompt as SceneAssets['veoPrompt'] })
       }
-      setStoryboard(data)
-      if (data.brain_model) setVeoBrainModel(data.brain_model as string)
-      if (data.selected_video_model) setDefaultVideoModel(data.selected_video_model as string)
-      // Initialize scene durations evenly across 60s default
-      const scenes = (data.scenes as Record<string, unknown>[]) || []
-      const initDurations: Record<number, number> = {}
-      scenes.forEach((_, i) => { initDurations[i + 1] = Math.max(2, Math.min(6, Math.round(60 / scenes.length))) })
-      setSceneDurations(initDurations)
-      // Pre-populate video prompts from brain-generated JSON
-      scenes.forEach((scene) => {
-        const sceneNum = scene.scene_number as number
-        const brainVideoPrompt = scene.video_prompt as VideoPromptData | undefined
-        if (brainVideoPrompt && sid) {
-          updateAssetInStore(sid, sceneNum, {
-            videoPrompt: brainVideoPrompt,
-            customVideoPrompt: brainVideoPrompt.full_prompt,
-          })
-        }
-        const brainVeoPrompt = scene.veo_prompt as Record<string, unknown> | undefined
-        if (brainVeoPrompt && sid) {
-          updateAssetInStore(sid, sceneNum, { veoPrompt: brainVeoPrompt as SceneAssets['veoPrompt'] })
-        }
-      })
-    } catch { navigate('/') }
+    })
   }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // Auto re-poll any videos that were in 'generating' state when we load
   useEffect(() => {

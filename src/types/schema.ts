@@ -20,11 +20,11 @@ export type Mood =
   | 'epic' | 'mysterious' | 'romantic' | 'horror' | 'comedy'
   | 'inspirational' | 'melancholic' | 'action'
 
-export type BrainModel = 'gemini' | 'llama4_maverick' | 'claude_sonnet'
-export type ImageModel = 'gemini' | 'nova_canvas' | 'titan_v2'
-export type VideoModel = 'nova_reel' | 'runway_gen4' | 'runway_gen4_turbo'
+export type BrainModel = string
+export type ImageModel = string
+export type VideoModel = string
 export type VoiceGender = 'male' | 'female'
-export type AudioModel = 'polly' | 'gemini_tts' | 'elevenlabs' | 'fish_audio'
+export type AudioModel = 'polly' | 'gemini_tts' | 'elevenlabs' | 'fish_audio' | string
 
 export type AWSRegion = 
   | 'us-west-2' | 'us-east-1' | 'ap-southeast-1'
@@ -36,7 +36,7 @@ export type GenerationStatus = 'idle' | 'generating' | 'done' | 'error'
 
 export interface AudioHistoryItem {
   url: string
-  engine: 'polly' | 'elevenlabs'
+  engine: string
   voice: string
   timestamp: string
 }

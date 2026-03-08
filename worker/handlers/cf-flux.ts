@@ -25,7 +25,8 @@ export async function handleCfFlux(request: Request, env: any, corsHeaders: Reco
   try {
     // CF Workers AI FLUX inference
     // Model: @cf/black-forest-labs/flux-1-schnell (fastest, free)
-    const result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', {
+    // AI.run returns binary data directly for image models
+    const imageBuffer = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', {
       prompt: prompt,
       negative_prompt: negative_prompt || 'blurry, low quality, distorted, watermark',
       width: width,
@@ -33,20 +34,18 @@ export async function handleCfFlux(request: Request, env: any, corsHeaders: Reco
       num_steps: 4,    // schnell = 4 steps
     })
 
-    // CF AI returns: { image: base64String }
-    if (!result?.image) {
+    if (!imageBuffer) {
       return Response.json({ error: 'No image from CF AI' }, { status: 500, headers: corsHeaders })
     }
 
-    // Convert base64 to binary
-    const imageBuffer = Uint8Array.from(atob(result.image), c => c.charCodeAt(0))
+    const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
 
     // Upload ke R2
     const fileName = `images/${project_id || 'default'}/scene_${scene_number || 0}_cfflux_${Date.now()}.png`
-    await env.R2_BUCKET?.put(fileName, imageBuffer, {
+    await env.STORY_STORAGE.put(fileName, imageBuffer, {
       httpMetadata: { contentType: 'image/png' }
     })
-    const imageUrl = `${env.R2_PUBLIC_URL}/${fileName}`
+    const imageUrl = `${WORKER_URL}/api/storage/file/${fileName}`
 
     return Response.json({
       image_url: imageUrl,
