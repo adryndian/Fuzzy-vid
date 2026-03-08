@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import type { VideoPromptData } from '../types/schema'
+import { loadSettings, buildApiHeaders } from '../types/schema'
 
 export const api = {
   get: async (path: string) => {
@@ -19,36 +20,8 @@ export const api = {
 export const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
 
 export function getApiHeaders(userId?: string): Record<string, string> {
-  const headers: Record<string, string> = {}
-  try {
-    // 1. Try user-specific key
-    let stored = userId ? localStorage.getItem(`fuzzy_settings_${userId}`) : null
-    // 2. Fallback: scan for any fuzzy_settings_* key (covers api.ts helpers that don't receive userId)
-    if (!stored) {
-      const anyKey = Object.keys(localStorage).find(k => k.startsWith('fuzzy_settings_'))
-      if (anyKey) stored = localStorage.getItem(anyKey)
-    }
-    // 3. Last resort: legacy shared key
-    if (!stored) stored = localStorage.getItem('fuzzy_short_settings')
-    if (stored) {
-      const keys = JSON.parse(stored)
-      if (keys.awsAccessKeyId)     headers['X-AWS-Access-Key-Id'] = keys.awsAccessKeyId
-      if (keys.awsSecretAccessKey) headers['X-AWS-Secret-Access-Key'] = keys.awsSecretAccessKey
-      if (keys.imageRegion)        headers['X-Image-Region'] = keys.imageRegion
-      if (keys.audioRegion)        headers['X-Audio-Region'] = keys.audioRegion
-      if (keys.elevenLabsApiKey)   headers['X-ElevenLabs-Key'] = keys.elevenLabsApiKey
-      if (keys.dashscopeApiKey)    headers['X-Dashscope-Api-Key'] = keys.dashscopeApiKey
-      if (keys.groqApiKey)         headers['X-Groq-Api-Key'] = keys.groqApiKey
-      if (keys.openrouterApiKey)   headers['X-Openrouter-Api-Key'] = keys.openrouterApiKey
-      if (keys.glmApiKey)          headers['X-Glm-Api-Key'] = keys.glmApiKey
-      if (keys.geminiApiKey)       headers['X-Gemini-Api-Key'] = keys.geminiApiKey
-      if (keys.cerebrasApiKey)     headers['X-Cerebras-Api-Key'] = keys.cerebrasApiKey
-      if (keys.mistralApiKey)      headers['X-Mistral-Api-Key'] = keys.mistralApiKey
-      if (keys.siliconflowApiKey)  headers['X-Siliconflow-Api-Key'] = keys.siliconflowApiKey
-      if (keys.fishAudioApiKey)    headers['X-FishAudio-Api-Key'] = keys.fishAudioApiKey
-    }
-  } catch { /* ignore */ }
-  return headers
+  const settings = loadSettings(userId)
+  return buildApiHeaders(settings)
 }
 
 // Clear current user's in-memory session data on sign-out
@@ -205,16 +178,7 @@ export async function callProviderBrain(
   brainModel: string,
   userId?: string
 ): Promise<string> {
-  const storageKey = userId ? `fuzzy_settings_${userId}` : 'fuzzy_short_settings'
-  const settings = JSON.parse(localStorage.getItem(storageKey) || '{}')
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (settings.groqApiKey)        headers['X-Groq-Api-Key'] = settings.groqApiKey
-  if (settings.openrouterApiKey)  headers['X-Openrouter-Api-Key'] = settings.openrouterApiKey
-  if (settings.glmApiKey)         headers['X-Glm-Api-Key'] = settings.glmApiKey
-  if (settings.geminiApiKey)      headers['X-Gemini-Api-Key'] = settings.geminiApiKey
-  if (settings.cerebrasApiKey)    headers['X-Cerebras-Api-Key'] = settings.cerebrasApiKey
-  if (settings.mistralApiKey)     headers['X-Mistral-Api-Key'] = settings.mistralApiKey
-  if (settings.siliconflowApiKey) headers['X-Siliconflow-Api-Key'] = settings.siliconflowApiKey
+  const headers = { ...getApiHeaders(userId), 'Content-Type': 'application/json' }
 
   const res = await fetch(`${WORKER_URL}/api/brain/provider`, {
     method: 'POST',
@@ -283,15 +247,7 @@ export async function generateBrain(params: {
     throw new Error(err.error || `Brain failed: ${res.status}`)
   }
 
-  const data = await res.json() as { content?: string; scenes?: unknown[] }
-
-  // Handle provider response (returns {content: "json string"})
-  if (data.content) {
-    const clean = data.content.replace(/```json|```/g, '').trim()
-    return JSON.parse(clean)
-  }
-
-  return data
+  return res.json()
 }
 
 export async function generateAudio(params: {

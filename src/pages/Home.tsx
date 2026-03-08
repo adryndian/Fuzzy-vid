@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import type { AspectRatio } from '../types/schema'
+import type { AspectRatio, AppSettings } from '../types/schema'
+import { getSettingsKey, loadSettings, TONES, VEO_TONES, ASPECT_RATIOS } from '../types/schema'
 import { estimateBrainCost, formatCost } from '../lib/costEstimate'
 import { useCostStore } from '../store/costStore'
 import { useHistoryStore } from '../store/historyStore'
@@ -43,18 +44,6 @@ const IMAGE_MODELS = [
   { id: 'wanx2.1-t2i-turbo', label: 'Wanx 2.1 Turbo',     tag: 'Qwen', desc: 'Fast (legacy)',       provider: 'dashscope' },
   { id: 'cogview-3-flash',    label: 'CogView-3 Flash',    tag: 'GLM',  desc: 'Free & fast',         provider: 'glm' },
 ]
-
-const TONES = [
-  { id: 'narrative_storytelling', label: '📖 Narrative Story', desc: 'Story arc with emotional beats' },
-  { id: 'documentary_viral',      label: '📰 Documentary Viral', desc: 'Journalistic + Veo 3.1 optimized' },
-  { id: 'natural_genz',           label: '✌️ Natural Gen Z',  desc: 'Casual, relatable, authentic' },
-  { id: 'informative',            label: '💡 Informative',    desc: 'Factual, clear, structured' },
-  { id: 'product_ads',            label: '🛍️ Product Ads',   desc: 'Benefit-focused with CTA' },
-  { id: 'educational',            label: '🎓 Educational',   desc: 'Step-by-step explanation' },
-  { id: 'entertainment',          label: '🎉 Entertainment', desc: 'Fun, energetic, surprising' },
-  { id: 'motivational',           label: '💪 Motivational',  desc: 'Empowering and uplifting' },
-]
-const VEO_TONES = ['documentary_viral', 'natural_genz', 'informative', 'narrative_storytelling']
 
 const VIDEO_MODELS_HOME = [
   { id: 'nova_reel',          label: 'Nova Reel',        tag: 'AWS',  desc: 'Up to 6s',          provider: 'bedrock' },
@@ -145,8 +134,7 @@ export function Home() {
   const elapsedMs = useElapsedTimer(loading)
 
   useEffect(() => {
-    if (!user?.id) return
-    const storageKey = `fuzzy_settings_${user.id}`
+    const storageKey = getSettingsKey(user?.id)
     const stored = localStorage.getItem(storageKey)
     if (!stored) {
       setError('Please set your API keys in Settings first')
@@ -181,7 +169,7 @@ export function Home() {
 
     let apiHeaders: Record<string, string> = {}
     try {
-      const storageKey = user?.id ? `fuzzy_settings_${user.id}` : 'fuzzy_short_settings'
+      const storageKey = getSettingsKey(user?.id)
       const stored = localStorage.getItem(storageKey)
       if (stored) {
         const s = JSON.parse(stored)

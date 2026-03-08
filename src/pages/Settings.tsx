@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useUser, UserButton } from '@clerk/clerk-react'
 import type { AppSettings } from '../types/schema'
-import { DEFAULT_SETTINGS } from '../types/schema'
+import { DEFAULT_SETTINGS, getSettingsKey } from '../types/schema'
 import { useUserApi } from '../lib/userApi'
 import { WORKER_URL } from '../lib/api'
 import { useTheme, tk } from '../lib/theme'
@@ -45,7 +45,7 @@ export function Settings() {
   useEffect(() => {
     if (!user?.id) return
 
-    const storageKey = `fuzzy_settings_${user.id}`
+    const storageKey = getSettingsKey(user.id)
 
     // One-time migration: remove old shared localStorage key
     if (localStorage.getItem('fuzzy_short_settings') &&
@@ -101,7 +101,7 @@ export function Settings() {
 
   const handleSave = async () => {
     if (!user?.id) return
-    const storageKey = `fuzzy_settings_${user.id}`
+    const storageKey = getSettingsKey(user.id)
     try {
       await saveApiKeys({
         aws_access_key_id: settings.awsAccessKeyId || '',

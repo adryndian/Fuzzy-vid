@@ -14,6 +14,18 @@ export const ASPECT_RATIOS: { id: AspectRatio; label: string; desc: string; icon
   { id: '4_5', label: '4:5', desc: 'Portrait', icon: '🖼️' },
 ]
 
+export const TONES = [
+  { id: 'narrative_storytelling', label: '📖 Narrative Story', desc: 'Story arc with emotional beats' },
+  { id: 'documentary_viral',      label: '📰 Documentary Viral', desc: 'Journalistic + Veo 3.1 optimized' },
+  { id: 'natural_genz',           label: '✌️ Natural Gen Z',  desc: 'Casual, relatable, authentic' },
+  { id: 'informative',            label: '💡 Informative',    desc: 'Factual, clear, structured' },
+  { id: 'product_ads',            label: '🛍️ Product Ads',   desc: 'Benefit-focused with CTA' },
+  { id: 'educational',            label: '🎓 Educational',   desc: 'Step-by-step explanation' },
+  { id: 'entertainment',          label: '🎉 Entertainment', desc: 'Fun, energetic, surprising' },
+  { id: 'motivational',           label: '💪 Motivational',  desc: 'Empowering and uplifting' },
+]
+export const VEO_TONES = ['documentary_viral', 'natural_genz', 'informative', 'narrative_storytelling']
+
 export const RESOLUTION = '1080p'
 
 export type Mood = 
@@ -327,18 +339,22 @@ export const DEFAULT_SETTINGS: AppSettings = {
   siliconflowApiKey: '',
 }
 
-export const SETTINGS_STORAGE_KEY = 'fuzzy_short_settings'
+export function getSettingsKey(userId?: string): string {
+  return userId ? `fuzzy_settings_${userId}` : 'fuzzy_short_settings'
+}
 
-export function loadSettings(): AppSettings {
+export function loadSettings(userId?: string): AppSettings {
   try {
-    const stored = localStorage.getItem(SETTINGS_STORAGE_KEY)
+    const key = getSettingsKey(userId)
+    const stored = localStorage.getItem(key)
     if (stored) return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) }
   } catch {}
   return DEFAULT_SETTINGS
 }
 
-export function saveSettings(settings: AppSettings): void {
-  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+export function saveSettings(settings: AppSettings, userId?: string): void {
+  const key = getSettingsKey(userId)
+  localStorage.setItem(key, JSON.stringify(settings))
 }
 
 // Available Image Engines
