@@ -335,36 +335,6 @@ export function BottomNav() {
             }} />
           )}
         </button>
-
-        {/* Dark mode toggle button */}
-        <button
-          onClick={toggle}
-          style={{
-            flex: 1,
-            padding: '10px 0 7px',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '3px',
-            position: 'relative',
-            WebkitTapHighlightColor: 'transparent',
-          }}
-        >
-          <span style={{ fontSize: '21px', lineHeight: 1 }}>
-            {isDark ? '🌙' : '☀️'}
-          </span>
-          <span style={{
-            fontSize: '10px',
-            fontWeight: 400,
-            color: t.textSecondary,
-            letterSpacing: '-0.01em',
-          }}>
-            Theme
-          </span>
-        </button>
       </nav>
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
