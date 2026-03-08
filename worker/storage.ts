@@ -19,17 +19,44 @@ export async function handleStorageRequest(
         return Response.json({ error: 'Missing file key' }, { status: 400 })
       }
 
-      const object = await env.STORY_STORAGE.get(key)
+      // Check for Range header (critical for audio/video streaming)
+      const rangeHeader = request.headers.get('Range')
+      
+      const object = await env.STORY_STORAGE.get(key, {
+        range: rangeHeader || undefined,
+        onlyIf: {
+          etagMatches: request.headers.get('If-None-Match') || undefined,
+        }
+      })
+
       if (!object) {
         return Response.json({ error: 'File not found' }, { status: 404 })
       }
 
-      const headers = new Headers()
-      headers.set('Content-Type', object.httpMetadata?.contentType || 'application/octet-stream')
-      headers.set('Cache-Control', 'public, max-age=86400')
-      // CORS handled by index.ts wrapper
+      // Check if body exists (it won't if conditional match failed)
+      const hasBody = 'body' in object && object.body
 
-      return new Response(object.body, { headers })
+      const headers = new Headers()
+      object.writeHttpMetadata(headers)
+      headers.set('ETag', object.httpEtag)
+      headers.set('Accept-Ranges', 'bytes')
+      headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+      
+      // Ensure content type is set
+      if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/octet-stream')
+      }
+
+      if (!hasBody) {
+        return new Response(null, { headers, status: 304 })
+      }
+
+      const status = rangeHeader ? 206 : 200
+
+      return new Response(object.body, { 
+        headers,
+        status 
+      })
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
       return Response.json({ error: 'Failed to serve file', message: msg }, { status: 500 })

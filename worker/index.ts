@@ -137,20 +137,20 @@ let seenUsersCache = new Set<string>()
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url)
+    const path = url.pathname
+    const workerUrl = `${url.protocol}//${url.host}`
 
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Gemini-Key, X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key, X-Brain-Region, X-Image-Region, X-Audio-Region, X-ElevenLabs-Key, X-Runway-Key, X-Dashscope-Api-Key, X-R2-Account-Id, X-R2-Access-Key-Id, X-R2-Secret-Access-Key, X-R2-Bucket, X-Groq-Api-Key, X-Openrouter-Api-Key, X-Glm-Api-Key, X-Gemini-Api-Key, X-Cerebras-Api-Key, X-Mistral-Api-Key, X-Siliconflow-Api-Key',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Gemini-Key, X-AWS-Access-Key-Id, X-AWS-Secret-Access-Key, X-Brain-Region, X-Image-Region, X-Audio-Region, X-ElevenLabs-Key, X-Runway-Key, X-Dashscope-Api-Key, X-R2-Account-Id, X-R2-Access-Key-Id, X-R2-Secret-Access-Key, X-R2-Bucket, X-Groq-Api-Key, X-Openrouter-Api-Key, X-Glm-Api-Key, X-Gemini-Api-Key, X-Cerebras-Api-Key, X-Mistral-Api-Key, X-Siliconflow-Api-Key, X-FishAudio-Api-Key',
       'Access-Control-Max-Age': '86400',
     }
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders })
     }
-
-    const url = new URL(request.url)
-    const path = url.pathname
 
     const creds = extractCredentials(request, env)
     let response: Response
@@ -294,20 +294,20 @@ export default {
       }
       // NEW routes:
       else if (path === '/api/image/gemini' && request.method === 'POST') {
-        response = await handleGeminiImage(request, env, corsHeaders)
+        response = await handleGeminiImage(request, env, corsHeaders, workerUrl)
       }
       else if (path === '/api/image/siliconflow' && request.method === 'POST') {
-        response = await handleSiliconflowImage(request, env, corsHeaders)
+        response = await handleSiliconflowImage(request, env, corsHeaders, workerUrl)
       }
       else if (path === '/api/image/cf-flux' && request.method === 'POST') {
-        response = await handleCfFlux(request, env, corsHeaders)
+        response = await handleCfFlux(request, env, corsHeaders, workerUrl)
       }
       else if (path.startsWith('/api/image/')) {
         const denied = requireAwsKeys(creds)
         if (denied) { response = denied }
         else {
           const { handleImageRequest } = await import('./image')
-          response = await handleImageRequest(request, env, url, ctx, creds)
+          response = await handleImageRequest(request, env, url, ctx, creds, workerUrl)
           if (clerkUser && env.DB && response.ok) {
             ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'image'))
           }
@@ -319,7 +319,7 @@ export default {
         if (denied) { response = denied }
         else {
           const { handleVideoStart } = await import('./video')
-          response = await handleVideoStart(request, env, url, ctx, creds)
+          response = await handleVideoStart(request, env, url, ctx, creds, workerUrl)
           if (clerkUser && env.DB && response.ok) {
             ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'video'))
           }
@@ -328,11 +328,11 @@ export default {
       else if (path.startsWith('/api/video/status/')) {
         const jobId = decodeURIComponent(path.replace('/api/video/status/', ''))
         const { handleVideoStatus } = await import('./video')
-        response = await handleVideoStatus(request, env, jobId, creds)
+        response = await handleVideoStatus(request, env, jobId, creds, workerUrl)
       }
       else if (path.startsWith('/api/video/')) {
         const { handleVideoRequest } = await import('./video')
-        response = await handleVideoRequest(request, env, url, ctx, creds)
+        response = await handleVideoRequest(request, env, url, ctx, creds, workerUrl)
       }
       // ── Dashscope routes ──────────────────────────────────────────────────
       else if (path === '/api/dashscope/brain') {
@@ -356,7 +356,7 @@ export default {
         if (denied) { response = denied }
         else {
           const { handleDashscopeImageStart } = await import('./dashscope')
-          response = await handleDashscopeImageStart(request, env, creds)
+          response = await handleDashscopeImageStart(request, env, creds, workerUrl)
           if (clerkUser && env.DB && response.ok) {
             ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'image'))
           }
@@ -367,7 +367,7 @@ export default {
         if (denied) { response = denied }
         else {
           const { handleDashscopeVideoStart } = await import('./dashscope')
-          response = await handleDashscopeVideoStart(request, env, creds)
+          response = await handleDashscopeVideoStart(request, env, creds, workerUrl)
           if (clerkUser && env.DB && response.ok) {
             ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'video'))
           }
@@ -376,7 +376,7 @@ export default {
       else if (path.startsWith('/api/dashscope/task/')) {
         const taskId = path.replace('/api/dashscope/task/', '')
         const { handleDashscopeTaskStatus } = await import('./dashscope')
-        response = await handleDashscopeTaskStatus(request, env, taskId, creds)
+        response = await handleDashscopeTaskStatus(request, env, taskId, creds, workerUrl)
       }
       // ── GLM routes ────────────────────────────────────────────────────────
       else if (path === '/api/glm/image/generate') {
@@ -384,7 +384,7 @@ export default {
         if (denied) { response = denied }
         else {
           const { handleGlmImageGenerate } = await import('./glm')
-          response = await handleGlmImageGenerate(request, env, creds)
+          response = await handleGlmImageGenerate(request, env, creds, workerUrl)
           if (clerkUser && env.DB && response.ok) {
             ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'image'))
           }
@@ -395,7 +395,7 @@ export default {
         if (denied) { response = denied }
         else {
           const { handleGlmVideoStart } = await import('./glm')
-          response = await handleGlmVideoStart(request, env, creds)
+          response = await handleGlmVideoStart(request, env, creds, workerUrl)
           if (clerkUser && env.DB && response.ok) {
             ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'video'))
           }
@@ -404,7 +404,7 @@ export default {
       else if (path.startsWith('/api/glm/video/status/')) {
         const taskId = path.replace('/api/glm/video/status/', '')
         const { handleGlmVideoStatus } = await import('./glm')
-        response = await handleGlmVideoStatus(request, env, taskId, creds)
+        response = await handleGlmVideoStatus(request, env, taskId, creds, workerUrl)
       }
       // ── AUDIO ROUTES ────────────────────────────────────────────────
       else if (path === '/api/audio/generate' && request.method === 'POST') {
@@ -412,7 +412,7 @@ export default {
         if (denied) { response = denied }
         else {
           const { handleAudioRequest } = await import('./audio')
-          response = await handleAudioRequest(request, env, url, ctx, creds)
+          response = await handleAudioRequest(request, env, url, ctx, creds, workerUrl)
           if (clerkUser && env.DB && response.ok) {
             ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'audio'))
           }
@@ -420,18 +420,18 @@ export default {
       }
       else if (path === '/api/audio/gemini-tts' && request.method === 'POST') {
         // No requireAwsKeys — uses Gemini key
-        response = await handleGeminiTts(request, env, corsHeaders)
+        response = await handleGeminiTts(request, env, corsHeaders, workerUrl)
       }
       else if (path === '/api/audio/fish-tts' && request.method === 'POST') {
         // No requireAwsKeys — uses Fish Audio key
-        response = await handleFishTts(request, env, corsHeaders)
+        response = await handleFishTts(request, env, corsHeaders, workerUrl)
       }
       else if (path.startsWith('/api/audio/')) {
         const denied = requireAwsKeys(creds)
         if (denied) { response = denied }
         else {
           const { handleAudioRequest } = await import('./audio')
-          response = await handleAudioRequest(request, env, url, ctx, creds)
+          response = await handleAudioRequest(request, env, url, ctx, creds, workerUrl)
           if (clerkUser && env.DB && response.ok) {
             ctx.waitUntil(deductCredits(env.DB, clerkUser.id, 'audio'))
           }
@@ -467,15 +467,11 @@ export default {
       )
     }
 
-    const finalHeaders = new Headers(response.headers)
+    const finalResponse = new Response(response.body, response)
     Object.entries(corsHeaders).forEach(([key, value]) => {
-      finalHeaders.set(key, value)
+      finalResponse.headers.set(key, value)
     })
 
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: finalHeaders,
-    })
+    return finalResponse
   }
 }

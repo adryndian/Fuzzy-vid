@@ -4,7 +4,7 @@
 // FREE: 10,000 requests/day (included in Workers free tier)
 // No user API key needed — uses internal CF AI binding
 
-export async function handleCfFlux(request: Request, env: any, corsHeaders: Record<string, string>): Promise<Response> {
+export async function handleCfFlux(request: Request, env: any, corsHeaders: Record<string, string>, workerUrl: string): Promise<Response> {
   // Check if CF AI binding exists
   if (!env.AI) {
     return Response.json({
@@ -38,14 +38,12 @@ export async function handleCfFlux(request: Request, env: any, corsHeaders: Reco
       return Response.json({ error: 'No image from CF AI' }, { status: 500, headers: corsHeaders })
     }
 
-    const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
-
     // Upload ke R2
     const fileName = `images/${project_id || 'default'}/scene_${scene_number || 0}_cfflux_${Date.now()}.png`
     await env.STORY_STORAGE.put(fileName, imageBuffer, {
       httpMetadata: { contentType: 'image/png' }
     })
-    const imageUrl = `${WORKER_URL}/api/storage/file/${fileName}`
+    const imageUrl = `${workerUrl}/api/storage/file/${fileName}`
 
     return Response.json({
       image_url: imageUrl,

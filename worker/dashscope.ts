@@ -24,7 +24,7 @@ export const QWEN_BRAIN_MODELS = [
 
 export async function handleDashscopeBrain(
   request: Request,
-  _env: Env,
+  env: Env,
   creds: Credentials
 ): Promise<Response> {
   const apiKey = creds.dashscopeApiKey
@@ -110,8 +110,9 @@ function getWanxSize(aspectRatio: string): string {
 
 export async function handleDashscopeImageStart(
   request: Request,
-  _env: Env,
-  creds: Credentials
+  env: Env,
+  creds: Credentials,
+  workerUrl: string
 ): Promise<Response> {
   const apiKey = creds.dashscopeApiKey
   if (!apiKey) {
@@ -184,7 +185,8 @@ export async function handleDashscopeTaskStatus(
   _request: Request,
   env: Env,
   taskId: string,
-  creds: Credentials
+  creds: Credentials,
+  workerUrl: string
 ): Promise<Response> {
   const apiKey = creds.dashscopeApiKey
   if (!apiKey) {
@@ -236,7 +238,7 @@ export async function handleDashscopeTaskStatus(
   const ext = isVideo ? 'mp4' : 'jpg'
 
   try {
-    const r2Url = await downloadAndUploadToR2(outputUrl, ext, env)
+    const r2Url = await downloadAndUploadToR2(outputUrl, ext, env, workerUrl)
     return Response.json({
       status: 'done',
       url: r2Url,
@@ -252,9 +254,9 @@ export async function handleDashscopeTaskStatus(
   }
 }
 
-const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
 
-async function downloadAndUploadToR2(sourceUrl: string, ext: string, env: Env): Promise<string> {
+
+async function downloadAndUploadToR2(sourceUrl: string, ext: string, env: Env, workerUrl: string): Promise<string> {
   const res = await fetch(sourceUrl)
   if (!res.ok) throw new Error(`Failed to download from Dashscope: ${res.status}`)
 
@@ -265,7 +267,7 @@ async function downloadAndUploadToR2(sourceUrl: string, ext: string, env: Env): 
     httpMetadata: { contentType },
   })
 
-  return `${WORKER_URL}/api/storage/file/${fileName}`
+  return `${workerUrl}/api/storage/file/${fileName}`
 }
 
 // ─── VIDEO GENERATION (Wan2.1 i2v / t2v) ──────────────────────────
@@ -288,8 +290,9 @@ function getWanVideoSize(aspectRatio: string): string {
 
 export async function handleDashscopeVideoStart(
   request: Request,
-  _env: Env,
-  creds: Credentials
+  env: Env,
+  creds: Credentials,
+  workerUrl: string
 ): Promise<Response> {
   const apiKey = creds.dashscopeApiKey
   if (!apiKey) {

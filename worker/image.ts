@@ -1,7 +1,7 @@
 import type { Env, Credentials } from './index'
 import { AwsV4Signer } from './lib/aws-signature'
 
-const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
+
 
 interface ImageRequestBody {
   prompt: string
@@ -97,7 +97,8 @@ export async function handleImageRequest(
   env: Env,
   url: URL,
   _ctx: ExecutionContext,
-  creds: Credentials
+  creds: Credentials,
+  workerUrl: string
 ): Promise<Response> {
   const path = url.pathname
 
@@ -199,7 +200,7 @@ export async function handleImageRequest(
         httpMetadata: { contentType: isSd35 ? 'image/jpeg' : 'image/png' },
       })
 
-      const imageUrl = `${WORKER_URL}/api/storage/file/${r2Key}`
+      const imageUrl = `${workerUrl}/api/storage/file/${r2Key}`
       return Response.json({ image_url: imageUrl })
 
     } catch (e: unknown) {

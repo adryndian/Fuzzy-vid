@@ -35,7 +35,8 @@ function getGlmVideoSize(aspectRatio: string): string {
 export async function handleGlmImageGenerate(
   request: Request,
   env: Env,
-  creds: Credentials
+  creds: Credentials,
+  workerUrl: string
 ): Promise<Response> {
   const apiKey = creds.glmApiKey
   if (!apiKey) {
@@ -81,7 +82,7 @@ export async function handleGlmImageGenerate(
 
   // Download and re-upload to R2 (GLM URLs expire)
   try {
-    const r2Url = await downloadAndUploadToR2(imageUrl, 'jpg', env)
+    const r2Url = await downloadAndUploadToR2(imageUrl, 'jpg', env, workerUrl)
     return Response.json({ image_url: r2Url }, { headers: cors })
   } catch {
     // Fallback: return direct GLM URL
@@ -94,8 +95,9 @@ export async function handleGlmImageGenerate(
 
 export async function handleGlmVideoStart(
   request: Request,
-  _env: Env,
-  creds: Credentials
+  env: Env,
+  creds: Credentials,
+  workerUrl: string
 ): Promise<Response> {
   const apiKey = creds.glmApiKey
   if (!apiKey) {
@@ -161,10 +163,11 @@ export async function handleGlmVideoStart(
 // → { task_status: "SUCCESS"|"PROCESSING"|"FAIL", video_result: [{ url, cover_image_url }] }
 
 export async function handleGlmVideoStatus(
-  _request: Request,
+  request: Request,
   env: Env,
   taskId: string,
-  creds: Credentials
+  creds: Credentials,
+  workerUrl: string
 ): Promise<Response> {
   const apiKey = creds.glmApiKey
   if (!apiKey) {
@@ -203,7 +206,7 @@ export async function handleGlmVideoStatus(
   }
 
   try {
-    const r2Url = await downloadAndUploadToR2(videoUrl, 'mp4', env)
+    const r2Url = await downloadAndUploadToR2(videoUrl, 'mp4', env, workerUrl)
     return Response.json({ status: 'done', url: r2Url, type: 'video' }, { headers: cors })
   } catch {
     // Fallback: return direct GLM URL
@@ -213,9 +216,9 @@ export async function handleGlmVideoStatus(
 
 // ─── Shared R2 upload helper ─────────────────────────────────────────────────
 
-const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
 
-async function downloadAndUploadToR2(sourceUrl: string, ext: string, env: Env): Promise<string> {
+
+async function downloadAndUploadToR2(sourceUrl: string, ext: string, env: Env, workerUrl: string): Promise<string> {
   const res = await fetch(sourceUrl)
   if (!res.ok) throw new Error(`Failed to download from GLM: ${res.status}`)
 
@@ -226,5 +229,5 @@ async function downloadAndUploadToR2(sourceUrl: string, ext: string, env: Env): 
     httpMetadata: { contentType },
   })
 
-  return `${WORKER_URL}/api/storage/file/${fileName}`
+  return `${workerUrl}/api/storage/file/${fileName}`
 }

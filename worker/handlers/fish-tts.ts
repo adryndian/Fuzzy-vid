@@ -2,7 +2,7 @@
 // Fish Audio TTS — #1 TTS-Arena2, Indonesia support, emotion tags
 // POST /api/audio/fish-tts
 
-export async function handleFishTts(request: Request, env: any, corsHeaders: Record<string, string>): Promise<Response> {
+export async function handleFishTts(request: Request, env: any, corsHeaders: Record<string, string>, workerUrl: string): Promise<Response> {
   const h = request.headers
 
   const fishApiKey = h.get('X-FishAudio-Api-Key') || env.FISH_AUDIO_API_KEY || ''
@@ -55,14 +55,12 @@ export async function handleFishTts(request: Request, env: any, corsHeaders: Rec
     // Fish Audio returns audio binary directly
     const audioBuffer = await fishRes.arrayBuffer()
 
-    const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
-
     // Upload ke R2
     const fileName = `audio/${project_id || 'default'}/scene_${scene_number || 0}_fish_${Date.now()}.mp3`
     await env.STORY_STORAGE.put(fileName, audioBuffer, {
       httpMetadata: { contentType: 'audio/mpeg' }
     })
-    const audioUrl = `${WORKER_URL}/api/storage/file/${fileName}`
+    const audioUrl = `${workerUrl}/api/storage/file/${fileName}`
 
     return Response.json({
       audio_url: audioUrl,

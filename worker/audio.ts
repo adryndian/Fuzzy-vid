@@ -1,7 +1,7 @@
 import type { Env, Credentials } from './index'
 import { AwsV4Signer } from './lib/aws-signature'
 
-const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
+
 
 interface AudioRequestBody {
   text: string
@@ -21,7 +21,8 @@ export async function handleAudioRequest(
   env: Env,
   url: URL,
   _ctx: ExecutionContext,
-  creds: Credentials
+  creds: Credentials,
+  workerUrl: string
 ): Promise<Response> {
   const path = url.pathname
 
@@ -71,7 +72,7 @@ export async function handleAudioRequest(
         httpMetadata: { contentType: 'audio/mpeg' },
       })
 
-      const audioUrl = `${WORKER_URL}/api/storage/file/${r2Key}`
+      const audioUrl = `${workerUrl}/api/storage/file/${r2Key}`
       
       // Calculate word count and duration
       const wordCount = text.trim().split(/\s+/).length

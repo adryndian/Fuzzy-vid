@@ -3,7 +3,7 @@
 // POST /api/image/siliconflow
 // Free models: FLUX.1-schnell, FLUX.1-lite, stable-diffusion-3-5-large
 
-export async function handleSiliconflowImage(request: Request, env: any, corsHeaders: Record<string, string>): Promise<Response> {
+export async function handleSiliconflowImage(request: Request, env: any, corsHeaders: Record<string, string>, workerUrl: string): Promise<Response> {
   const h = request.headers
   const siliconflowApiKey = h.get('X-Siliconflow-Api-Key') || env.SILICONFLOW_API_KEY || ''
 
@@ -62,13 +62,11 @@ export async function handleSiliconflowImage(request: Request, env: any, corsHea
     const imgRes = await fetch(imageUrl)
     const imgBuffer = await imgRes.arrayBuffer()
 
-    const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
-
     const fileName = `images/${project_id || 'default'}/scene_${scene_number || 0}_sf_${Date.now()}.png`
     await env.STORY_STORAGE.put(fileName, imgBuffer, {
       httpMetadata: { contentType: 'image/png' }
     })
-    const r2ImageUrl = `${WORKER_URL}/api/storage/file/${fileName}`
+    const r2ImageUrl = `${workerUrl}/api/storage/file/${fileName}`
 
     // Parse dimensions dari image_size
     const [width, height] = image_size.split('x').map(Number)

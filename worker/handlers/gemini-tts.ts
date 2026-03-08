@@ -2,7 +2,7 @@
 // Gemini 2.5 Flash TTS — gratis via existing Gemini API key
 // POST /api/audio/gemini-tts
 
-export async function handleGeminiTts(request: Request, env: any, corsHeaders: Record<string, string>): Promise<Response> {
+export async function handleGeminiTts(request: Request, env: any, corsHeaders: Record<string, string>, workerUrl: string): Promise<Response> {
   const h = request.headers
 
   // Get Gemini API key (user key atau env fallback)
@@ -76,14 +76,12 @@ export async function handleGeminiTts(request: Request, env: any, corsHeaders: R
     // Convert base64 to binary
     const audioBuffer = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0))
 
-    const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
-
     // Upload to R2
     const fileName = `audio/${project_id || 'default'}/scene_${scene_number || 0}_gemini_${Date.now()}.wav`
     await env.STORY_STORAGE.put(fileName, audioBuffer, {
       httpMetadata: { contentType: 'audio/wav' }
     })
-    const audioUrl = `${WORKER_URL}/api/storage/file/${fileName}`
+    const audioUrl = `${workerUrl}/api/storage/file/${fileName}`
 
     return Response.json({
       audio_url: audioUrl,

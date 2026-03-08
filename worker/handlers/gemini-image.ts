@@ -3,7 +3,7 @@
 // POST /api/image/gemini
 // Free: 500 images/day at 1024x1024
 
-export async function handleGeminiImage(request: Request, env: any, corsHeaders: Record<string, string>): Promise<Response> {
+export async function handleGeminiImage(request: Request, env: any, corsHeaders: Record<string, string>, workerUrl: string): Promise<Response> {
   const h = request.headers
   const geminiApiKey = h.get('X-Gemini-Api-Key') || h.get('X-Gemini-Key') || env.GEMINI_API_KEY || ''
 
@@ -75,14 +75,12 @@ export async function handleGeminiImage(request: Request, env: any, corsHeaders:
     // Convert base64 to binary
     const imageBuffer = Uint8Array.from(atob(imageBase64), c => c.charCodeAt(0))
 
-    const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
-
     // Upload ke R2
     const fileName = `images/${project_id || 'default'}/scene_${scene_number || 0}_gemini_${Date.now()}.${ext}`
     await env.STORY_STORAGE.put(fileName, imageBuffer, {
       httpMetadata: { contentType: mimeType }
     })
-    const imageUrl = `${WORKER_URL}/api/storage/file/${fileName}`
+    const imageUrl = `${workerUrl}/api/storage/file/${fileName}`
 
     return Response.json({
       image_url: imageUrl,

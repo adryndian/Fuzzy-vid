@@ -1,7 +1,7 @@
 import type { Env, Credentials } from './index'
 import { AwsV4Signer } from './lib/aws-signature'
 
-const WORKER_URL = 'https://fuzzy-vid-worker.officialdian21.workers.dev'
+
 
 interface VideoRequestBody {
   image_url: string
@@ -25,7 +25,8 @@ export async function handleVideoStart(
   _env: Env,
   _url: URL,
   _ctx: ExecutionContext,
-  creds: Credentials
+  creds: Credentials,
+  workerUrl: string
 ): Promise<Response> {
   const body = await request.json() as {
     prompt: string
@@ -121,7 +122,8 @@ export async function handleVideoStatus(
   request: Request,
   env: Env,
   jobId: string,
-  creds: Credentials
+  creds: Credentials,
+  workerUrl: string
 ): Promise<Response> {
   // If jobId is an ARN (new flow: startVideoJob), poll Bedrock directly
   if (jobId.startsWith('arn:aws:')) {
@@ -175,7 +177,7 @@ export async function handleVideoStatus(
           await env.STORY_STORAGE.put(s3Key, s3Res.body, {
              httpMetadata: { contentType: 'video/mp4' },
           })
-          const videoUrl = `${WORKER_URL}/api/storage/file/${s3Key}`
+          const videoUrl = `${workerUrl}/api/storage/file/${s3Key}`
           return Response.json({ status: 'done', video_url: videoUrl })
         }
       }
@@ -191,7 +193,7 @@ export async function handleVideoStatus(
 
   // Otherwise it's a KV short-key (old flow: generateVideo), delegate to legacy handler
   const url = new URL(request.url)
-  return handleVideoRequest(request, env, url, {} as ExecutionContext, creds)
+  return handleVideoRequest(request, env, url, {} as ExecutionContext, creds, workerUrl)
 }
 
 export async function handleVideoRequest(
@@ -199,7 +201,8 @@ export async function handleVideoRequest(
   env: Env,
   url: URL,
   _ctx: ExecutionContext,
-  creds: Credentials
+  creds: Credentials,
+  workerUrl: string
 ): Promise<Response> {
   const path = url.pathname
 
@@ -375,7 +378,7 @@ export async function handleVideoRequest(
                httpMetadata: { contentType: 'video/mp4' },
             })
 
-            const videoUrl = `${WORKER_URL}/api/storage/file/${s3Key}`
+            const videoUrl = `${workerUrl}/api/storage/file/${s3Key}`
             await env.JOB_STATUS.put(jobId, JSON.stringify({
               ...jobData,
               status: 'done',
